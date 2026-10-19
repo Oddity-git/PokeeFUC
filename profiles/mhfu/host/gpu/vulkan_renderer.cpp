@@ -4,6 +4,7 @@
 #include "frame_pacing.hpp"
 #include "game/damage_numbers.hpp"
 #include "game/gather_icon.hpp"
+#include "title.hpp"
 #include "game/item_atlas.hpp"
 #include "game/sharpness_gauge.hpp"
 #include "game_hud.hpp"
@@ -7518,8 +7519,8 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     if (!impl.ready) return;
     // Damage numbers and the lock-on marker sit on the monster. The perspective
     // draw with the most vertices is the world camera, follow or aim; the HUD
-    // is orthographic and is ignored.
-    if (!call.through && !call.clear_mode &&
+    // is orthographic and is ignored. All three read Freedom Unite (title.hpp).
+    if (mhfu::kFreedomUniteExtras && !call.through && !call.clear_mode &&
         (mhfu::game::damage_numbers_watching() || settings::current().gather_icon ||
             (settings::current().lock_on_marker && mhfu::camera::lock_on_marker_wanted()))) {
         const std::uint32_t vertices = call.vertices_reused
@@ -7539,7 +7540,8 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     }
     // The gather mark draws item icons from the game's own atlas, decoded
     // with the palette the HUD last drew it with.
-    if (call.through && call.texture.address == mhfu::game::kItemAtlasAddress && settings::current().gather_icon)
+    if (mhfu::kFreedomUniteExtras && call.through && call.texture.address == mhfu::game::kItemAtlasAddress &&
+        settings::current().gather_icon)
         mhfu::game::note_item_atlas(call.texture);
     const perf::SplitScope split(perf::Split::Draw);
     if (!impl.recording) begin_frame();
@@ -8297,7 +8299,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     // 0x08841400 turns a frame counter into 64 + 64*sin(...), so a full pulse
     // is alpha 128. AABBGGRR as the GE colour word packs it. The gauge moves
     // the pulse above that (game::sharpness::glow_alpha).
-    const bool glow_colour = settings::current().sharpness_gauge;
+    const bool glow_colour = mhfu::kFreedomUniteExtras && settings::current().sharpness_gauge;
     if ((cut_bar || cut_colour || glow_colour) && through_quads && !named.is_name &&
         framebuffer_source.target == nullptr && impl.shows(call.target.color_address)) {
         const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;

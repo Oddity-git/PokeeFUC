@@ -477,6 +477,10 @@ int main(int argc, char **argv) {
 
         const std::string sha256 = psprecomp::sha256_file(executable);
         const mhfu::install::SupportedRelease *release = mhfu::install::find_release_by_executable_hash(sha256);
+        // A plain executable pins no hash (game_identity.hpp); the installer
+        // checked the disc it came from.
+        if (release == nullptr && mhfu::install::kBuildRelease.plain_executable)
+            release = &mhfu::install::kBuildRelease;
         if (release == nullptr) std::cerr << "warning: unsupported executable hash " << sha256 << "\n";
         const std::uint32_t guest_ram = release != nullptr ? release->guest_ram_bytes : mhfu::kGuestRamBytes;
 
@@ -484,7 +488,7 @@ int main(int argc, char **argv) {
         if (elf.required_ram_size(mhfu::kLoadBase) != guest_ram)
             throw psprecomp::Error(
                 release != nullptr ? std::string(release->title) + " does not match its guest RAM layout"
-                                   : "Executable is not USA Freedom Unite");
+                                   : std::string("Executable is not ") + mhfu::install::kGameTitle);
 
         psprecomp::Runtime runtime(guest_ram);
         for (const EmbeddedNid &entry : kEmbeddedNids) runtime.nids().add(entry.library, entry.nid, entry.name);

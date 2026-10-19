@@ -1,12 +1,34 @@
 set(MHFU_PROFILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# The game this build runs (host/title.hpp). FU is USA Freedom Unite; FUC is
+# FUComplete, a patched Monster Hunter Portable 2nd G with an executable of
+# its own. Each title keeps its generated corpus and recompiled overlays in
+# its own directories, so one checkout can hold both, in two build
+# directories.
+set(MHFU_TITLE "FU" CACHE STRING "Game this build runs: FU (USA Freedom Unite) or FUC (FUComplete)")
+set_property(CACHE MHFU_TITLE PROPERTY STRINGS FU FUC)
+string(TOUPPER "${MHFU_TITLE}" MHFU_TITLE_UPPER)
+if(MHFU_TITLE_UPPER STREQUAL "FU")
+    set(MHFU_GENERATED_DIR "${MHFU_PROFILE_DIR}/generated")
+    set(MHFU_OVERLAY_SOURCE_DIR "${MHFU_PROFILE_DIR}/overlays")
+    set(MHFU_GAME_SOURCE_DIR "${MHFU_PROFILE_DIR}/game")
+elseif(MHFU_TITLE_UPPER STREQUAL "FUC")
+    set(MHFU_GENERATED_DIR "${MHFU_PROFILE_DIR}/generated_fuc")
+    set(MHFU_OVERLAY_SOURCE_DIR "${MHFU_PROFILE_DIR}/overlays_fuc")
+    set(MHFU_GAME_SOURCE_DIR "${MHFU_PROFILE_DIR}/game_fuc")
+    add_compile_definitions(MHFU_TITLE_FUC=1)
+else()
+    message(FATAL_ERROR "MHFU_TITLE must be FU or FUC, not ${MHFU_TITLE}")
+endif()
+message(STATUS "mhfu: title ${MHFU_TITLE_UPPER}, corpus in ${MHFU_GENERATED_DIR}")
+
 # The AOT corpus is derived from the user's executable and is not committed.
 # Until scripts/generate.sh has produced it, link an empty registry instead.
 if(PSPRECOMP_COVERAGE)
     # Public coverage never compiles the user's game-derived corpus.
     set(MHFU_GENERATED)
 else()
-    file(GLOB MHFU_GENERATED CONFIGURE_DEPENDS "${MHFU_PROFILE_DIR}/generated/*.cpp")
+    file(GLOB MHFU_GENERATED CONFIGURE_DEPENDS "${MHFU_GENERATED_DIR}/*.cpp")
 endif()
 if(MHFU_GENERATED)
     list(LENGTH MHFU_GENERATED MHFU_GENERATED_COUNT)
@@ -21,7 +43,10 @@ if(MHFU_GENERATED)
         set(MHFU_GENERATED_OPTIONS "-O${PSPRECOMP_GENERATED_OPT_LEVEL};-g0")
     endif()
     set_source_files_properties(${MHFU_GENERATED} PROPERTIES COMPILE_OPTIONS "${MHFU_GENERATED_OPTIONS}")
-
+endif()
+# The camera, HUD and layered armor hooks below name functions by their
+# Freedom Unite addresses. Another executable has other code there.
+if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
     # The analog camera wraps the camera update, and main.cpp has to hand it
     # the generated unit that update was compiled into. Which unit that is
     # depends on how the generator partitions the code, so read it from the
@@ -75,6 +100,8 @@ if(MHFU_GENERATED)
     endforeach()
     set(MHFU_LAYERED_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_hooks/layered_armor_functions.inc")
     file(CONFIGURE OUTPUT "${MHFU_LAYERED_INC}" CONTENT "${layered_lines}" @ONLY)
+endif()
+if(MHFU_GENERATED)
     # A regenerated corpus with the same file names must be read again.
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${MHFU_GENERATED})
 else()
@@ -286,7 +313,7 @@ set_source_files_properties(third_party/tiny_aes/aes.c PROPERTIES LANGUAGE CXX)
 add_library(mhfu_generated OBJECT ${MHFU_GENERATED})
 target_include_directories(mhfu_generated PRIVATE
     "${PROJECT_SOURCE_DIR}/include"
-    "${MHFU_PROFILE_DIR}/generated")
+    "${MHFU_GENERATED_DIR}")
 set_target_properties(mhfu_generated PROPERTIES JOB_POOL_COMPILE psprecomp_generated)
 
 # An Android app is a shared library, libmain.so, that SDL's Java activity
@@ -333,7 +360,7 @@ target_include_directories(Pokee PRIVATE
     # generated/ is first. main.cpp includes <corpus_identity.hpp> so this
     # directory wins over host/corpus_identity.hpp, which sits beside main.cpp
     # and would otherwise be found by a quoted include.
-    "${MHFU_PROFILE_DIR}/generated"
+    "${MHFU_GENERATED_DIR}"
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/third_party")
 target_link_libraries(Pokee PRIVATE psprecomp_core ${CMAKE_DL_LIBS})
@@ -386,7 +413,7 @@ if(NOT MHFU_RELEASE)
     # on every generated unit's command line, so moving the checkout would
     # rebuild all of them and no other checkout could reuse their cache entries.
     set_property(SOURCE host/main.cpp APPEND PROPERTY COMPILE_DEFINITIONS
-        MHFU_DEFAULT_GAME_DIR="${MHFU_PROFILE_DIR}/game")
+        MHFU_DEFAULT_GAME_DIR="${MHFU_GAME_SOURCE_DIR}")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set_target_properties(Pokee PROPERTIES
         BUILD_WITH_INSTALL_RPATH TRUE
@@ -1065,7 +1092,7 @@ function(mhfu_add_overlay meta_path)
     endif()
 endfunction()
 
-file(GLOB MHFU_OVERLAY_METADATA CONFIGURE_DEPENDS "${MHFU_PROFILE_DIR}/overlays/*/meta.txt")
+file(GLOB MHFU_OVERLAY_METADATA CONFIGURE_DEPENDS "${MHFU_OVERLAY_SOURCE_DIR}/*/meta.txt")
 foreach(meta IN LISTS MHFU_OVERLAY_METADATA)
     mhfu_add_overlay("${meta}")
 endforeach()

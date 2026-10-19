@@ -632,6 +632,21 @@ void io_contracts() {
     check(call("sceIoRename", {Fixture::text, Fixture::output}) == missing, "rename missing source fails");
     f.string(Fixture::text, "disc0:/public.txt");
     check(call("sceIoRename", {Fixture::text, Fixture::output}) == readonly, "cross-device rename rejected");
+    // FUComplete's loader makes PSP/SAVEDATA/FUCDAT on a stick that has never
+    // held a save.
+    constexpr unsigned exists = 0x80010011u;
+    check(path_call("sceIoMkdir", "ms0:/PSP/SAVEDATA/FUCDAT", 0777) == 0 &&
+            std::filesystem::is_directory(files.root / "ms/PSP/SAVEDATA/FUCDAT"),
+        "mkdir makes a save folder, with the PSP/SAVEDATA every stick has");
+    check(path_call("sceIoMkdir", "ms0:/PSP/SAVEDATA/FUCDAT", 0777) == exists, "mkdir of an existing folder fails");
+    check(path_call("sceIoMkdir", "ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP", 0777) == 0 &&
+            std::filesystem::is_directory(files.root / "ms/PSP/SAVEDATA/FUCDAT/NATIVEPSP"),
+        "mkdir inside a made folder");
+    check(path_call("sceIoMkdir", "ms0:/absent/child", 0777) == missing &&
+            !std::filesystem::exists(files.root / "ms/absent"),
+        "mkdir needs its parent elsewhere");
+    check(path_call("sceIoMkdir", "disc0:/folder", 0777) == readonly, "mkdir on the disc is refused");
+    check(path_call("sceIoMkdir", "unknown:/folder", 0777) == device, "mkdir on an unknown device is refused");
     mhfu::register_io(hle, files.iso(), files.root / "ms");
     check(f.call("sceUmdUser", "sceUmdGetDriveStat") == 0x32 && f.call("sceUmdUser", "sceUmdActivate") == 0 &&
             f.call("sceUmdUser", "sceUmdGetErrorStat") == 0,

@@ -16,6 +16,9 @@ the code overlays among them, can be read offline.
 `<archive>` is either DATA.BIN itself or a PSP ISO, in which case
 /PSP_GAME/USRDIR/DATA.BIN is located inside it and read in place.
 
+An archive stored without the obfuscation, as FUComplete's image keeps it,
+is recognised by its directory and read as it is.
+
 The cipher constants and the substitution table below were recovered from this
 game's own data by a known-plaintext comparison between DATA.BIN and overlay
 images captured from guest memory; no third-party source was used.
@@ -153,7 +156,13 @@ class Archive:
             located = iso_find(self.stream, "/PSP_GAME/USRDIR/DATA.BIN")
             if located:
                 self.base, self.size = located
-            self.blocks, self.sizes = self._read_directory()
+            # The game's own archive is obfuscated; FUComplete stores it plain.
+            try:
+                self.plain = False
+                self.blocks, self.sizes = self._read_directory()
+            except ValueError:
+                self.plain = True
+                self.blocks, self.sizes = self._read_directory()
         except Exception:
             self.stream.close()
             raise
@@ -162,14 +171,17 @@ class Archive:
         self.stream.seek(self.base + offset)
         return self.stream.read(length)
 
+    def _decode(self, raw, block):
+        return raw if self.plain else decrypt(raw, block)
+
     def _read_directory(self):
         # The first word is the number of blocks the directory itself occupies.
-        head = decrypt(self._raw(0, 4), 0)
+        head = self._decode(self._raw(0, 4), 0)
         directory_size = struct.unpack("<I", head)[0] * BLOCK
         if not 0 < directory_size <= 1 << 20:
             raise ValueError("implausible directory size; not an MHFU DATA.BIN?")
         words = struct.unpack(
-            "<%dI" % (directory_size // 4), decrypt(self._raw(0, directory_size), 0)
+            "<%dI" % (directory_size // 4), self._decode(self._raw(0, directory_size), 0)
         )
 
         # Block table: entry n spans blocks[n] .. blocks[n + 1], terminated by
@@ -211,7 +223,7 @@ class Archive:
         # PSMF movies. Deobfuscating them turns them into noise.
         if raw[:4] in VERBATIM_MAGICS:
             return raw
-        return decrypt(raw, block)
+        return self._decode(raw, block)
 
     def overlay(self, index):
         """Return the overlay header fields, or None if the entry is not one."""

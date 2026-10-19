@@ -2,7 +2,7 @@
 
 This page covers building the port from source on every platform. It explains where the time goes and how to work on the code without paying for a full build each time. The settings and environment variables of the running game are described in the [profile README](../profiles/mhfu/README.md).
 
-You need your own copy of *Monster Hunter Freedom Unite* (USA, `ULUS-10391`, version 1.01) as a disc image. Nothing else from the game is needed, and nothing from it is ever committed.
+You need your own copy of *Monster Hunter Freedom Unite* (USA, `ULUS-10391`, version 1.01) as a disc image. Nothing else from the game is needed, and nothing from it is ever committed. A build for FUComplete (a patched *Portable 2nd G*) is configured with `-DMHFU_TITLE=FUC` and keeps its files apart; see [FUComplete](../profiles/mhfu/README.md#fucomplete-work-in-progress).
 
 ## How the build works
 

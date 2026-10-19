@@ -40,12 +40,16 @@ overlay_*.bin
 
 # User-owned game data and reverse-engineering workspace
 /profiles/*/game/
+/profiles/*/game_fuc/
 /profiles/*/analysis/
+/profiles/*/analysis_fuc/
 /profiles/*/progress/
 /profiles/*/captures/
 # The MHFU AOT corpora are derived from the user's executable
 /profiles/mhfu/generated/
 /profiles/mhfu/overlays/
+/profiles/mhfu/generated_fuc/
+/profiles/mhfu/overlays_fuc/
 
 # Local dumps next to the repository root
 /dump/

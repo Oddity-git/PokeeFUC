@@ -42,6 +42,32 @@ Tested on macOS (Apple Silicon, Vulkan through MoltenVK), on a Steam Deck in Gam
 
 The encrypted header uses tag `0xC0CB167C`. `generate.sh` translates the resident code (3095 functions, 67 C++ units) and stamps the executable SHA-256. Launch registers that corpus only when the prepared executable has the same hash. The ELF names overlay sections (`game_task.ovl`, `em01.ovl`, `stage000.ovl`, and the rest) but those sections have no file bytes, so they are not part of this corpus. The analog camera's follow driver, its bow and bowgun aim, lock-on, the projection, hiding the HUD and layered armor were read from this executable. The lock-on marker places the monster from the follow camera's eye and look-at. Armor names are read from the text block at `0x089CC560` (head, chest, arms, waist and legs in tables 7, 9, 11, 13 and 15). Portable 3rd, its PSP release (`ULJM-05800`), and other Freedom Unite regions are refused.
 
+## FUComplete (work in progress)
+
+[FUComplete](https://github.com/FUComplete/Patch) is not a Freedom Unite mod: it patches **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) with an English translation, built-in event quests and its own mod loader. It is a different executable, so it gets a build of its own, configured with `-DMHFU_TITLE=FUC`:
+
+```bash
+cmake -S . -B out/fuc -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSPRECOMP_PROFILE=mhfu -DMHFU_TITLE=FUC
+cmake --build out/fuc --target Pokee -j 2
+out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"          # the image FUCTool made
+MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.ELF" profiles/mhfu/scripts/generate.sh out/fuc
+cmake -S . -B out/fuc && cmake --build out/fuc --target Pokee -j 2
+```
+
+What differs from the Freedom Unite build:
+
+| | Freedom Unite (`FU`, default) | FUComplete (`FUC`) |
+| --- | --- | --- |
+| Disc | `ULUS10391`, encrypted `EBOOT.BIN` pinned by hash | `ULJM05500` with FUComplete's `FUC/PRELOAD.BIN`; `EBOOT.BIN` is already a plain ELF, not pinned (every FUComplete version changes it) |
+| Data folder | `Pokee/MHFU` | `Pokee/FUC` |
+| Corpus, overlays, game, analysis | `generated/`, `overlays/`, `game/`, `analysis/` | `generated_fuc/`, `overlays_fuc/`, `game_fuc/`, `analysis_fuc/` |
+| Overlay slots | the four read from Freedom Unite's `DATA.BIN` | the load addresses of the executable's `*.ovl` sections |
+| `DATA.BIN` | obfuscated | stored plain; `databin.py` and `build_overlays.sh` read either |
+| Extras (analog camera, HUD hiding, layered armor, damage numbers, gather icon, sharpness gauge, item box, lock-on) | on | off: they use Freedom Unite's addresses |
+| Mods page | the community's `DATA.BIN` mods | off: FUComplete has its own file replacer (`ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP`) |
+
+The scripts (`generate.sh`, `build_overlays.sh`, `bootstrap_overlays.sh`, `add_overlay.py`) read the title from the build directory they are given; `prepare_game.sh` reads `MHFU_TITLE` from the environment. FUComplete's own loader copies `PRELOAD.BIN` and `MODLOAD.BIN` to `ms0:/PSP/SAVEDATA/FUCDAT` on the first start and runs them from there; that code is not in the corpus and runs in the interpreter. Booting FUComplete has not been tested yet.
+
 ## Requirements
 
 - CMake 3.20 or newer, Ninja and a C++20 compiler

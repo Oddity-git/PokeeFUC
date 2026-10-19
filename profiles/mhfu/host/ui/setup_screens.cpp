@@ -106,9 +106,13 @@ bool SetupScreens::introduce(const fs::path &data_dir) {
             begin_panel("##welcome", "Welcome to Pokee", kSubtitle, false);
             begin_content();
             ImGui::Dummy({0.0f, font() * 0.3f});
-            paragraph("Pokee plays Monster Hunter Freedom Unite from your own copy of the game. It needs an unmodified "
-                      ".iso of " +
-                install::supported_release_list() + ".");
+            if constexpr (kTitle == Title::FUComplete)
+                paragraph("Pokee plays FUComplete from your own copy of the game. It needs an .iso of Monster Hunter "
+                          "Portable 2nd G (ULJM-05500) patched with FUComplete's FUCTool.");
+            else
+                paragraph("Pokee plays Monster Hunter Freedom Unite from your own copy of the game. It needs an "
+                          "unmodified .iso of " +
+                    install::supported_release_list() + ".");
             ImGui::Dummy({0.0f, font() * 0.4f});
 #if defined(MHFU_ANDROID_APP)
             paragraph("Choose the image next, in Android's file picker. Pokee copies it into its own storage (an "

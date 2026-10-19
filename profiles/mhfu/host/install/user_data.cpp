@@ -1,6 +1,7 @@
 #include "install/user_data.hpp"
 
 #include "app_paths.hpp"
+#include "install/game_identity.hpp"
 #include "psprecomp/common.hpp"
 
 #include <fstream>
@@ -18,7 +19,8 @@ namespace mhfu::install {
 namespace {
 
 constexpr const char *kOrganization = "Pokee";
-constexpr const char *kApplication = "MHFU";
+// "MHFU", or "FUC" for a FUComplete build, so the two keep their own data.
+constexpr const char *kApplication = kBuildRelease.data_folder;
 
 std::string trim(const std::string &text) {
     const auto first = text.find_first_not_of(" \t\r\n");

@@ -17,8 +17,9 @@ profile_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$profile_dir/../.." && pwd)"
 build_dir="${1:-$repo_dir/out/mhfu}"
 jobs="${2:-2}"
-iso="$profile_dir/game/disc.iso"
-extract_dir="$profile_dir/analysis/overlays"
+source "$profile_dir/scripts/title_dirs.sh"
+iso="$game_dir/disc.iso"
+extract_dir="$analysis_dir/overlays"
 library_dir="$build_dir/bin/overlays"
 
 if [[ ! -e "$iso" ]]; then
@@ -52,14 +53,14 @@ for image in "${images[@]}"; do
         skipped=$((skipped + 1))
         continue
     fi
-    if ! compgen -G "$profile_dir/overlays/ovl${base}_${name}_*/meta.txt" > /dev/null; then
+    if ! compgen -G "$overlay_source_dir/ovl${base}_${name}_*/meta.txt" > /dev/null; then
         echo "[$((${#targets[@]} + skipped + ${#failed[@]} + 1))/$total] recompiling $name at 0x$base"
         if ! python3 "$profile_dir/tools/add_overlay.py" --no-build "$build_dir" "$image" "0x$base" > /dev/null 2>&1; then
             failed+=("$name")
             continue
         fi
     fi
-    for meta in "$profile_dir/overlays/ovl${base}_${name}_"*/meta.txt; do
+    for meta in "$overlay_source_dir/ovl${base}_${name}_"*/meta.txt; do
         targets+=("overlay_$(basename "$(dirname "$meta")")")
     done
 done

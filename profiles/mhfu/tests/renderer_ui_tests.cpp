@@ -14,6 +14,7 @@
 #include "fonts/game_font.hpp"
 #include "mods/mhfu_mods.hpp"
 #include "mods/mhfu_data_bin.hpp"
+#include "title.hpp"
 #include "kernel/iso_image.hpp"
 #include "ui/mods_screen.hpp"
 #include "ui/texture_pack_screen.hpp"
@@ -1782,6 +1783,12 @@ void mods_screen_contracts(
     IsoImage disc(iso_path);
     mods::attach_disc(&disc);
     auto *session = mods::session();
+    if constexpr (kTitle == Title::FUComplete) {
+        // FUComplete replaces files with its own loader (mhfu_mods.cpp).
+        expect(session == nullptr, "a FUComplete build opens no mod session");
+        mods::attach_disc(nullptr);
+        return;
+    }
     expect(session && session->library().mods().size() == 1, "public synthetic archive creates a real mod session");
     if (!session || session->library().mods().empty()) {
         mods::attach_disc(nullptr);

@@ -45,6 +45,7 @@ InterruptManager,0xCA04A2B9,sceKernelRegisterSubIntrHandler
 InterruptManager,0xD61E6961,sceKernelReleaseSubIntrHandler
 InterruptManager,0xFB8E22EC,sceKernelEnableSubIntr
 IoFileMgrForUser,0x779103A0,sceIoRename
+IoFileMgrForUser,0x06A70004,sceIoMkdir
 Kernel_Library,0x092968F4,sceKernelCpuSuspendIntr
 Kernel_Library,0x293B45B8,sceKernelGetThreadId
 Kernel_Library,0x5F10D406,sceKernelCpuResumeIntr

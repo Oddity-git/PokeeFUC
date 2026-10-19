@@ -5,9 +5,12 @@
 #include <string>
 #include <string_view>
 
+#include "title.hpp"
+
 // The disc image the installer accepts, pinned by the disc id in PARAM.SFO and
 // by the SHA-256 of the encrypted executable and of the executable prepared
-// from it. USA Freedom Unite is the only accepted release.
+// from it. A build accepts one release: USA Freedom Unite, or FUComplete when
+// configured with -DMHFU_TITLE=FUC (title.hpp).
 namespace mhfu::install {
 
 struct SupportedRelease {
@@ -22,6 +25,15 @@ struct SupportedRelease {
     // Guest RAM the prepared executable's load image fits in. Portable 3rd
     // needs the 64 MiB layout; Freedom Unite fits in 32 MiB.
     std::uint32_t guest_ram_bytes;
+    // The disc's EBOOT.BIN is already a plain ELF, decrypted and patched by
+    // the tool that made the image. Nothing is pinned by hash then: every
+    // version of the patch changes the executable, and the corpus stamp
+    // (corpus_identity.hpp) still ties generated code to the one it came from.
+    bool plain_executable = false;
+    // A file only this release's image has, or null.
+    const char *marker_on_disc = nullptr;
+    // The folder under Pokee/ in the per-user data directory.
+    const char *data_folder = "MHFU";
 };
 
 // Monster Hunter Portable 3rd HD Ver. The installer does not accept it.
@@ -46,16 +58,36 @@ inline constexpr SupportedRelease kFreedomUniteUsa{
     32u * 1024u * 1024u,
 };
 
-inline constexpr SupportedRelease kSupportedReleases[] = {kFreedomUniteUsa};
+// FUComplete: Monster Hunter Portable 2nd G (Japan, ULJM-05500) patched with
+// an English translation, built-in event quests and its own mod loader
+// (https://github.com/FUComplete/Patch). The patch leaves the disc id alone,
+// replaces EBOOT.BIN with a decrypted, patched ELF, stores DATA.BIN decrypted
+// and adds the mod loader's files under FUC/ on the disc.
+inline constexpr SupportedRelease kFUComplete{
+    "ULJM05500",
+    "ULJM-05500",
+    "Monster Hunter Freedom Unite Complete (FUComplete)",
+    "",
+    "",
+    0u,
+    32u * 1024u * 1024u,
+    true,
+    "FUC/PRELOAD.BIN",
+    "FUC",
+};
+
+inline constexpr const SupportedRelease &kBuildRelease = kTitle == Title::FUComplete ? kFUComplete : kFreedomUniteUsa;
+
+inline constexpr SupportedRelease kSupportedReleases[] = {kBuildRelease};
 
 // Names of the release this build runs. Texture packs and the in-game menu
 // use them. The analog camera, the projection, hiding the HUD, layered armor
-// and the armor name tables read this executable.
-inline constexpr const char *kDiscId = kFreedomUniteUsa.disc_id;
-inline constexpr const char *kDiscIdDisplay = kFreedomUniteUsa.disc_id_display;
-inline constexpr const char *kGameTitle = kFreedomUniteUsa.title;
-inline constexpr const char *kEncryptedExecutableSha256 = kFreedomUniteUsa.encrypted_sha256;
-inline constexpr const char *kExecutableSha256 = kFreedomUniteUsa.executable_sha256;
+// and the armor name tables read Freedom Unite's executable only.
+inline constexpr const char *kDiscId = kBuildRelease.disc_id;
+inline constexpr const char *kDiscIdDisplay = kBuildRelease.disc_id_display;
+inline constexpr const char *kGameTitle = kBuildRelease.title;
+inline constexpr const char *kEncryptedExecutableSha256 = kBuildRelease.encrypted_sha256;
+inline constexpr const char *kExecutableSha256 = kBuildRelease.executable_sha256;
 
 inline constexpr const char *kExecutablePathOnDisc = "PSP_GAME/SYSDIR/EBOOT.BIN";
 inline constexpr const char *kParamSfoPathOnDisc = "PSP_GAME/PARAM.SFO";
@@ -66,16 +98,22 @@ inline constexpr const char *kParamSfoPathOnDisc = "PSP_GAME/PARAM.SFO";
     return nullptr;
 }
 
+// A release with a plain executable pins no hash, so neither lookup finds it.
 [[nodiscard]] inline const SupportedRelease *find_release_by_encrypted_hash(std::string_view hash) {
     for (const SupportedRelease &release : kSupportedReleases)
-        if (hash == release.encrypted_sha256) return &release;
+        if (!release.plain_executable && hash == release.encrypted_sha256) return &release;
     return nullptr;
 }
 
 [[nodiscard]] inline const SupportedRelease *find_release_by_executable_hash(std::string_view hash) {
     for (const SupportedRelease &release : kSupportedReleases)
-        if (hash == release.executable_sha256) return &release;
+        if (!release.plain_executable && hash == release.executable_sha256) return &release;
     return nullptr;
+}
+
+// Whether bytes start like an ELF file.
+[[nodiscard]] inline bool looks_like_elf(const std::uint8_t *data, std::size_t size) {
+    return size >= 4u && data[0] == 0x7Fu && data[1] == 'E' && data[2] == 'L' && data[3] == 'F';
 }
 
 // "Title (ID)", for messages that say what the installer accepts.

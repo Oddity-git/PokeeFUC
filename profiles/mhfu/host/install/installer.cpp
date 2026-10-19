@@ -144,6 +144,11 @@ Inspection inspect(const std::filesystem::path &path) {
             what += " This is the original PSP release of Portable 3rd, which Pokee does not support.";
         else if (disc_id->second == "NPJB40001")
             what += " This is Portable 3rd HD, which Pokee does not support.";
+        else if (disc_id->second == kFUComplete.disc_id)
+            what += " Portable 2nd G and FUComplete run in a FUComplete build of Pokee (configured with "
+                    "-DMHFU_TITLE=FUC).";
+        else if (disc_id->second == kFreedomUniteUsa.disc_id)
+            what += " USA Freedom Unite runs in the standard build of Pokee.";
         else
             what += " Other releases and regions are not supported.";
         throw InstallError(what);
@@ -156,7 +161,16 @@ Inspection inspect(const std::filesystem::path &path) {
             "disc.");
     Inspection result;
     result.eboot_bin = read_file(*iso, *eboot_entry);
-    if (psprecomp::sha256_bytes(result.eboot_bin) != release->encrypted_sha256)
+    if (release->plain_executable) {
+        // FUComplete leaves the disc id alone, so an unpatched Portable 2nd G
+        // has the same one. Its executable is still encrypted and it has no
+        // FUC folder.
+        const auto marker = iso->find(release->marker_on_disc);
+        if (!looks_like_elf(result.eboot_bin.data(), result.eboot_bin.size()) || !marker || marker->directory)
+            throw InstallError("\"" + name + "\" is " + release->disc_id_display +
+                " but is not patched with FUComplete. Patch it with FUCTool first "
+                "(https://fucomplete.github.io/docs/setup.html), then choose the _FUC image it makes.");
+    } else if (psprecomp::sha256_bytes(result.eboot_bin) != release->encrypted_sha256)
         throw InstallError("\"" + name + "\" is " + release->title + " (" + release->disc_id_display +
             "), but its executable is not the version Pokee supports. The image may be patched, "
             "modified or damaged; make it again from an unmodified disc.");

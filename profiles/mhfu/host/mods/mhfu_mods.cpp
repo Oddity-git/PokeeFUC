@@ -1,4 +1,5 @@
 #include "mods/mhfu_mods.hpp"
+#include "title.hpp"
 
 #include "mods/file_overlay.hpp"
 #include "mods/mhfu_data_bin.hpp"
@@ -201,6 +202,13 @@ void attach_disc(IsoImage *disc) {
     s = State{};
     s.disc = disc;
     if (disc == nullptr) return;
+    // FUComplete stores DATA.BIN plain and replaces files with its own loader
+    // (ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP). These mods are made for Freedom
+    // Unite's archive and its file ids.
+    if constexpr (kTitle == Title::FUComplete) {
+        std::cout << "[mods] FUComplete replaces files with its own loader; Pokee's mods are off\n";
+        return;
+    }
     const std::optional<IsoImage::Entry> entry = disc->find(kDataBin);
     if (!entry || entry->directory) return;
     s.range = DiscRange{static_cast<std::uint64_t>(entry->lba) * IsoImage::kSectorSize, entry->size};

@@ -20,6 +20,23 @@ import sys
 
 PROFILE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OVERLAY_DIR = os.path.join(PROFILE_DIR, "overlays")
+TITLE_SUFFIXES = {"FU": "", "FUC": "_fuc"}
+
+
+def overlay_dir(build_dir):
+    """overlays/, or overlays_fuc/ for a build configured with MHFU_TITLE=FUC."""
+    title = "FU"
+    try:
+        with open(os.path.join(build_dir, "CMakeCache.txt"), encoding="utf-8", errors="replace") as cache:
+            for line in cache:
+                if line.startswith("MHFU_TITLE:"):
+                    title = line.split("=", 1)[1].strip().upper()
+                    break
+    except OSError:
+        pass
+    if title not in TITLE_SUFFIXES:
+        raise SystemExit(f"MHFU_TITLE must be FU or FUC, not {title}")
+    return OVERLAY_DIR + TITLE_SUFFIXES[title]
 HEADER_BYTES = 64
 
 
@@ -69,7 +86,7 @@ def main(argv):
     # data section of a loaded overlay.
     digest = fnv1a64(data[:HEADER_BYTES + code_size])
     prefix = f"ovl{base:08X}_{name}_{digest:016X}"
-    overlay_root = os.path.realpath(OVERLAY_DIR)
+    overlay_root = os.path.realpath(overlay_dir(build_dir))
     target = os.path.realpath(os.path.join(overlay_root, prefix))
     if not target.startswith(overlay_root + os.sep):
         parser.error("overlay directory escapes the corpus root")

@@ -12,8 +12,9 @@ profile_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_dir="$(cd "$profile_dir/../.." && pwd)"
 iterations="${1:-10}"
 build_dir="${2:-$repo_dir/out/mhfu}"
-dump_dir="${MHFU_DUMP_OVERLAYS:-$profile_dir/analysis/overlays}"
-log_dir="$profile_dir/analysis"
+source "$profile_dir/scripts/title_dirs.sh"
+dump_dir="${MHFU_DUMP_OVERLAYS:-$analysis_dir/overlays}"
+log_dir="$analysis_dir"
 mkdir -p "$dump_dir" "$log_dir"
 
 for round in $(seq 1 "$iterations"); do

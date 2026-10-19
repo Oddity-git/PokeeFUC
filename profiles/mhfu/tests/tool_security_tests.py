@@ -183,7 +183,7 @@ class ArchiveBehaviorTests(unittest.TestCase):
         return xor.translate(databin.ENCODE_TABLE)[:len(plain)]
 
     @classmethod
-    def archive(cls, path):
+    def archive(cls, path, plain=False):
         overlay = bytearray(80)
         overlay[:4] = b"MWo3"
         struct.pack_into("<7I", overlay, 4, 1, 0x08804000, 12, 4, 8, 0x08804018, 0x08804000)
@@ -192,9 +192,32 @@ class ArchiveBehaviorTests(unittest.TestCase):
         struct.pack_into("<7I", directory, 0, 1, 2, 3, 4, 0, 80, 1)
         # Third entry is block-aligned; first two have explicit logical lengths.
         struct.pack_into("<I", directory, 28, 8)
-        path.write_bytes(cls.encrypt(directory, 0) + cls.encrypt(overlay + bytes(2048 - len(overlay)), 1) +
-                         b"PSMFtest" + bytes(2040) + cls.encrypt(bytes(2048), 3))
+        encode = (lambda data, block: data) if plain else cls.encrypt
+        path.write_bytes(encode(bytes(directory), 0) + encode(bytes(overlay) + bytes(2048 - len(overlay)), 1) +
+                         b"PSMFtest" + bytes(2040) + encode(bytes(2048), 3))
         return bytes(overlay)
+
+    def test_plain_archive_reads_like_the_obfuscated_one(self):
+        # FUComplete's image stores DATA.BIN without the obfuscation.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for plain in (False, True):
+                with self.subTest(plain=plain):
+                    path = root / ("plain.bin" if plain else "obfuscated.bin")
+                    overlay = self.archive(path, plain)
+                    archive = databin.Archive(path)
+                    try:
+                        self.assertEqual(archive.plain, plain)
+                        self.assertEqual(len(archive), 3)
+                        self.assertEqual(archive.read(0), overlay)
+                        self.assertEqual(archive.read(1), b"PSMFtest")
+                        self.assertEqual(archive.overlay(0)["load"], 0x08804000)
+                        self.assertEqual(archive.read(2), bytes(2048))
+                    finally:
+                        archive.stream.close()
+                    with patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()):
+                        databin.main(["databin", str(path), "extract-overlays", str(root / ("out%d" % plain))])
+                    self.assertEqual((root / ("out%d" % plain) / "overlay_08804000_public.bin").read_bytes(), overlay)
 
     def test_keystream_long_cycle_and_partial_words(self):
         for block in (0, 1, 0x12345678):
@@ -327,6 +350,19 @@ class ArchiveBehaviorTests(unittest.TestCase):
 
 
 class BuildToolContracts(unittest.TestCase):
+    def test_overlay_corpora_follow_the_build_title(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR)
+            cache = build / "CMakeCache.txt"
+            cache.write_text("MHFU_TITLE:STRING=FU\n")
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR)
+            cache.write_text("OTHER:BOOL=ON\nMHFU_TITLE:STRING=fuc\n")
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR + "_fuc")
+            cache.write_text("MHFU_TITLE:STRING=P3RD\n")
+            with self.assertRaises(SystemExit):
+                add_overlay.overlay_dir(str(build))
+
     def test_overlay_header_identity_and_errors(self):
         self.assertEqual(add_overlay.fnv1a64(b""), 0xCBF29CE484222325)
         self.assertEqual(add_overlay.fnv1a64(b"hello"), 0xA430D84680AABD0B)

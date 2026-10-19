@@ -3,6 +3,9 @@
 #
 #   prepare_game.sh <image.iso> <decrypted EBOOT.ELF>
 #
+# With MHFU_TITLE=FUC it fills profiles/mhfu/game_fuc for a FUComplete build
+# instead; FUComplete's image already holds the plain EBOOT.BIN.
+#
 # Produce EBOOT.ELF from PSP_GAME/SYSDIR/EBOOT.BIN with an external tool, or
 # take the one `Pokee --install <image.iso>` writes into the per-user
 # data directory, before running this script.
@@ -14,7 +17,8 @@ if [[ $# -ne 2 ]]; then
 fi
 
 profile_dir="$(cd "$(dirname "$0")/.." && pwd)"
-game_dir="$profile_dir/game"
+build_dir=""
+source "$profile_dir/scripts/title_dirs.sh"
 iso="$1"
 elf="$2"
 
@@ -24,7 +28,7 @@ if command -v sha256sum > /dev/null; then
 else
     actual_sha256="$(shasum -a 256 "$elf" | cut -d' ' -f1)"
 fi
-if [[ "$actual_sha256" != "$unite_sha256" ]]; then
+if [[ "$title" == FU && "$actual_sha256" != "$unite_sha256" ]]; then
     echo "warning: $elf sha256 $actual_sha256 is not USA Freedom Unite" >&2
 fi
 
