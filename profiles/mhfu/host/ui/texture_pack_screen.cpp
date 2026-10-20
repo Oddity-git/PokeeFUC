@@ -1,4 +1,5 @@
 #include "ui/texture_pack_screen.hpp"
+#include "title.hpp"
 
 #include "ui/file_browser.hpp"
 #include "ui/layer.hpp"
@@ -187,7 +188,8 @@ bool browse(bool back) {
 #if defined(MHFU_ANDROID_APP)
     indented("Import: open the pack's folder, the one that holds textures.ini, or choose a folder that holds it, "
              "such as PPSSPP's PSP/TEXTURES.");
-    indented("On Android this lists only folders Pokee can read by itself, which leaves out Downloads and SD "
+    indented("On Android this lists only folders " MHFU_APP_NAME
+             " can read by itself, which leaves out Downloads and SD "
              "cards. Importing through Android's file picker is not supported yet.",
         colors::kTextDim);
 #else
@@ -348,7 +350,7 @@ void review_screen(bool back) {
             copy_note = "Not enough free space: the copy needs " + human_size(needed) + " and " +
                 human_size(*r.free_space) + " is free. Use it where it is instead.";
         if (is_installed) copy_note = "This is the installed pack already.";
-        const char *label = installed_exists ? "Copy and replace" : "Copy into Pokee's data folder";
+        const char *label = installed_exists ? "Copy and replace" : "Copy into " MHFU_APP_NAME "'s data folder";
         // The focus starts on the first thing the player can do; the rows
         // above are a scroll away.
         if (room && !is_installed) focus_first();

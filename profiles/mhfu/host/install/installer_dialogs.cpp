@@ -4,6 +4,7 @@
 // it cannot, such as a machine without a working Vulkan driver.
 
 #include "install/installer.hpp"
+#include "title.hpp"
 
 #include "install/game_identity.hpp"
 #include "install/user_data.hpp"
@@ -28,7 +29,7 @@ namespace mhfu::install {
 #if defined(MHFU_HAS_SDL)
 namespace {
 
-constexpr const char *kTitle = "Pokee setup";
+constexpr const char *kTitle = MHFU_APP_NAME " setup";
 
 struct Button {
     int id;
@@ -62,15 +63,15 @@ public:
         // The setup screens could not be shown (the game's window or its
         // renderer failed), so these dialogs stand in for them.
         (void)data_dir;
-        const std::string text = "Pokee needs your own copy of " + supported_release_list() +
+        const std::string text = MHFU_APP_NAME " needs your own copy of " + supported_release_list() +
             " as a disc image (.iso).\n\n"
-            "Choose the image next, in Android's file picker. Pokee copies it into its own "
+            "Choose the image next, in Android's file picker. " MHFU_APP_NAME " copies it into its own "
             "storage (about 0.9 GB), checks it and prepares the game "
             "from it.";
 #else
-        std::string text = "Pokee needs your own copy of " + supported_release_list() +
+        std::string text = MHFU_APP_NAME " needs your own copy of " + supported_release_list() +
             " as a disc image (.iso).\n\n"
-            "Choose the image next. Pokee checks it, prepares the game's executable from it and "
+            "Choose the image next. " MHFU_APP_NAME " checks it, prepares the game's executable from it and "
             "copies it into its data folder, so the game keeps working if you move or delete the "
             "original. You can also choose to use the image where it is.\n\n"
             "Data folder:\n" +
@@ -92,7 +93,8 @@ public:
         if (!uri) return std::nullopt;
         std::cout << "[setup] picked " << *uri << std::endl;
         ask(SDL_MESSAGEBOX_INFORMATION, kTitle,
-            "Pokee copies the disc image into its own storage now. This takes a minute or two, and nothing moves "
+            MHFU_APP_NAME
+            " copies the disc image into its own storage now. This takes a minute or two, and nothing moves "
             "on the screen until it is done.",
             {{ 0,
                 "OK",
@@ -127,7 +129,7 @@ public:
         if (!pick.path && !pick.error.empty()) {
             ask(SDL_MESSAGEBOX_ERROR, kTitle,
                 "The file dialog could not be opened (" + pick.error +
-                    ").\n\nRun the setup from a terminal instead:\n  Pokee --install /path/to/image.iso",
+                    ").\n\nRun the setup from a terminal instead:\n  " MHFU_APP_NAME " --install /path/to/image.iso",
                 {{0, "Quit", SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT}});
         }
         return pick.path;
@@ -147,8 +149,7 @@ public:
         const std::string size = std::to_string(tenths / 10u) + "." + std::to_string(tenths % 10u) + " GB";
         const std::string text = "The image is " + std::string(info.title) + " (" + info.disc_id_display +
             ") and passed its checks.\n\n";
-            "Copy it into Pokee's data folder (recommended, " +
-            size +
+        "Copy it into " MHFU_APP_NAME "'s data folder (recommended, " + size +
             "), so the game keeps working if the original is moved or deleted?\n\n"
             "Or use it where it is, to save space. The image must then stay at:\n" +
             path_to_utf8(image) + "\n\nData folder:\n" + path_to_utf8(data_dir);

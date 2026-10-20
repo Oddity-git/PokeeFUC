@@ -1,4 +1,5 @@
 #include "ui/bindings_editor.hpp"
+#include "title.hpp"
 
 #include "ui/layer.hpp"
 #include "ui/widgets.hpp"
@@ -516,8 +517,9 @@ void conflict_lines(Target action, const Columns &c, bool locked, input::PadStyl
                 st.focus_action = action;
             }
             if (keep.focused || keep.hovered)
-                Layer::get().set_description("Keep both: one press does both. The warning goes away until Pokee "
-                                             "starts again.");
+                Layer::get().set_description(
+                    "Keep both: one press does both. The warning goes away until " MHFU_APP_NAME " "
+                    "starts again.");
             if (remove.focused || remove.hovered)
                 Layer::get().set_description("Takes " + chord_label(conflict.theirs, pad, style) + " away from " +
                     other + " on the " + device_name(pad) + ", so it does only " + target_name(action) + ".");

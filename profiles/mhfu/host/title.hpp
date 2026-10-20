@@ -4,6 +4,18 @@
 // default, USA Freedom Unite) or -DMHFU_TITLE=FUC (FUComplete, a patched
 // Monster Hunter Portable 2nd G). The two have different executables, so each
 // build links the corpus generated from its own and keeps its own data folder.
+
+// The name the player sees: the window, the menu, the setup screens and the
+// messages. A FUComplete build is "PokeeFUC", so it is told apart from the
+// standard build installed beside it. A macro, so it joins string literals:
+// MHFU_APP_NAME " needs ...". The executable and the data folder keep their
+// names.
+#if defined(MHFU_TITLE_FUC)
+#define MHFU_APP_NAME "PokeeFUC"
+#else
+#define MHFU_APP_NAME "Pokee"
+#endif
+
 namespace mhfu {
 
 enum class Title { FreedomUnite, FUComplete };

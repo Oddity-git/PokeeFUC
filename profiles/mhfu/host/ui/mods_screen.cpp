@@ -1,4 +1,5 @@
 #include "ui/mods_screen.hpp"
+#include "title.hpp"
 
 #include "ui/file_browser.hpp"
 #include "ui/layer.hpp"
@@ -267,7 +268,8 @@ void browse(bool back) {
 #if defined(MHFU_ANDROID_APP)
     indented("Open the folder of a mod you downloaded and unpacked (the one with its mod.ini), or a folder that "
              "holds several.");
-    indented("On Android this lists only folders Pokee can read by itself, which leaves out Downloads and SD "
+    indented("On Android this lists only folders " MHFU_APP_NAME
+             " can read by itself, which leaves out Downloads and SD "
              "cards. Importing through Android's file picker is not supported yet.",
         colors::kTextDim);
 #else
@@ -469,7 +471,7 @@ void list(ModSession &session) {
     if (button_row("Import mod…",
             {false, {},
                 "Copy a mod you downloaded into the mods folder: choose its unpacked folder, the one with its "
-                "mod.ini. Pokee does not download mods; unpack .zip, .rar or .7z archives first."}))
+                "mod.ini. " MHFU_APP_NAME " does not download mods; unpack .zip, .rar or .7z archives first."}))
         open_browser();
     if (button_row("Open the mods folder",
             {false, {},

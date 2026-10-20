@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ge_state.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <chrono>
@@ -70,7 +71,7 @@ struct CameraReading {
 };
 
 struct RendererConfig {
-    std::string title{"Pokee"};
+    std::string title{MHFU_APP_NAME};
 };
 
 // Vulkan backend for the GE. Draw calls are rendered into an offscreen target

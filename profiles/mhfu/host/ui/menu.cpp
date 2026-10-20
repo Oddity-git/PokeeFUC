@@ -3,6 +3,7 @@
 // pauses the game, or, as the settings say, stays over the running game.
 
 #include "ui/ui.hpp"
+#include "title.hpp"
 
 #include "camera/hunt_icon.hpp"
 
@@ -225,7 +226,7 @@ bool Menu::frame() {
         return true;
     }
 
-    begin_panel("##menu", "Pokee", paused_ ? "Paused" : "Running", true);
+    begin_panel("##menu", MHFU_APP_NAME, paused_ ? "Paused" : "Running", true);
     // A page that is not there this run gives way to the first.
     if (tab_ >= kTabCount) tab_ = 0;
     static int dropdown_tab = -1;
@@ -615,7 +616,8 @@ void Menu::video() {
         RowOptions o = options_for("video.gpu_compat",
             "Leaves out what some older phone GPU drivers may get wrong: specialized shaders, robust buffer "
             "access, the pipeline cache and a second frame in flight. It costs speed, so Auto turns it on only "
-            "when the start-up test picture comes out wrong or the driver refuses a shader. Applies when Pokee "
+            "when the start-up test picture comes out wrong or the driver refuses a shader. Applies when " MHFU_APP_NAME
+            " "
             "starts next. Now: " +
                 renderer().gpu_compat_status() + ".");
         if (const int delta = choice_row("GPU compatibility", kCompat[current], o)) {
@@ -625,7 +627,8 @@ void Menu::video() {
     }
     font_rows();
     ImGui::Dummy({0.0f, font_gap()});
-    if (button_row("Restore video defaults", {false, {}, "Every setting on this page back to how Pokee ships."})) {
+    if (button_row(
+            "Restore video defaults", {false, {}, "Every setting on this page back to how " MHFU_APP_NAME " ships."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
             if (settings::overridden_by(key) == nullptr) value = fallback;
@@ -1076,8 +1079,8 @@ void Menu::controls() {
     ImGui::Dummy({0.0f, font_gap()});
     if (button_row("Restore control defaults",
             {false, {},
-                "Every gamepad, keyboard, mouse and touch setting back to how "
-                "Pokee ships, with the Default preset. Your own presets and the Action layout's "
+                "Every gamepad, keyboard, mouse and touch setting back to how " MHFU_APP_NAME
+                " ships, with the Default preset. Your own presets and the Action layout's "
                 "arrangement are kept."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
@@ -1447,7 +1450,8 @@ void Menu::game() {
         settings::save();
 
     ImGui::Dummy({0.0f, font_gap()});
-    if (button_row("Restore game defaults", {false, {}, "Every setting on this page back to how Pokee ships."})) {
+    if (button_row(
+            "Restore game defaults", {false, {}, "Every setting on this page back to how " MHFU_APP_NAME " ships."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
             if (settings::overridden_by(key) == nullptr) value = fallback;
@@ -1843,16 +1847,16 @@ void Menu::system() {
     (void)data_dir;
     if (button_row("Save the log…",
             {false, {},
-                "Copies Pokee's logs (this run's, the previous run's, the last "
+                "Copies " MHFU_APP_NAME "'s logs (this run's, the previous run's, the last "
                 "error's and the logs folder) to a folder you pick, to send with a "
                 "problem report."})) {
         const auto saved = android::save_logs(install::user_data_directory(),
-            "Pokee log " + savedata::timestamp_for_path(std::chrono::system_clock::now()));
+            MHFU_APP_NAME " log " + savedata::timestamp_for_path(std::chrono::system_clock::now()));
         if (saved) saved_log_path() = saved->error.empty() ? saved->where : "Not saved: " + saved->error;
     }
     if (!saved_log_path().empty()) info_row("Log", saved_log_path());
 #else
-    if (button_row("Open the data folder", {false, {}, "Show Pokee's data folder in the file manager."})) {
+    if (button_row("Open the data folder", {false, {}, "Show " MHFU_APP_NAME "'s data folder in the file manager."})) {
         if (!SDL_OpenURL(folder_url(path_from_utf8(data_dir)).c_str()))
             std::cout << "[menu] cannot open " << data_dir << ": " << SDL_GetError() << "\n";
     }
@@ -1860,14 +1864,15 @@ void Menu::system() {
     if (button_row("Set up game data again…",
             {false, {}, "Choose the disc image again, for example after moving it. The game closes first."}))
         confirm_ = Confirm::Setup;
-    if (button_row("Quit game", {false, {}, "Close Pokee. Progress since your last save is lost."}, colors::kDanger))
+    if (button_row("Quit game", {false, {}, "Close " MHFU_APP_NAME ". Progress since your last save is lost."},
+            colors::kDanger))
         confirm_ = Confirm::Quit;
 
     section("Saves");
     save_rows();
 
     section("About");
-    info_row("Pokee", std::string(kPokeeVersion));
+    info_row(MHFU_APP_NAME, std::string(kPokeeVersion));
     info_row("Game", std::string(install::kGameTitle) + " (" + install::kDiscIdDisplay + ")");
     {
         std::string where = data_dir;
@@ -1929,8 +1934,8 @@ bool Menu::confirm_dialog() {
         const bool quit = confirm_ == Confirm::Quit;
         heading(quit ? "Quit the game?" : "Set up game data again?");
         paragraph(quit ? "Progress since your last save is lost."
-                       : "Pokee closes the game and opens the setup, where you choose the disc image again. "
-                         "Progress since your last save is lost.",
+                       : MHFU_APP_NAME " closes the game and opens the setup, where you choose the disc image again. "
+                                       "Progress since your last save is lost.",
             colors::kTextDim);
         ImGui::Dummy({0.0f, font * 0.6f});
         const float gap = font * 0.6f;

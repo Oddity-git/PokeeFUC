@@ -2,6 +2,7 @@
 // game's window can be created, the SDL dialogs otherwise.
 
 #include "install/installer.hpp"
+#include "title.hpp"
 #include "install/user_data.hpp"
 
 #if defined(MHFU_HAS_RENDERER)
@@ -71,8 +72,9 @@ bool copy_with_progress(const std::filesystem::path &from, const std::filesystem
 
 bool offer_user_data_copy(const std::filesystem::path &from, const std::filesystem::path &to) {
     const std::string title = "Use your existing data?";
-    const std::string message = "This copy of Pokee is portable: it keeps its settings, saves and game data in\n" +
-        path_to_utf8(to) + "\n\nwhich is empty. Pokee is also set up on this computer, with its data in\n" +
+    const std::string message = "This copy of " MHFU_APP_NAME
+                                " is portable: it keeps its settings, saves and game data in\n" +
+        path_to_utf8(to) + "\n\nwhich is empty. " MHFU_APP_NAME " is also set up on this computer, with its data in\n" +
         path_to_utf8(from) +
         "\n\nCopy that data here to keep playing with your saves and settings? The original stays where it is "
         "and is not changed.";
@@ -97,7 +99,8 @@ bool offer_user_data_copy(const std::filesystem::path &from, const std::filesyst
     if (answer < 0) answer = ask_choice_in_dialog(title, message, copy, fresh);
     if (answer < 0) {
         std::cout << "[data] " << path_to_utf8(to) << " is empty; to copy the data in " << path_to_utf8(from)
-                  << " into it, run Pokee with --copy-user-data (add --portable or --data-dir as for this run)"
+                  << " into it, run " MHFU_APP_NAME
+                     " with --copy-user-data (add --portable or --data-dir as for this run)"
                   << std::endl;
         return true;
     }
@@ -107,7 +110,7 @@ bool offer_user_data_copy(const std::filesystem::path &from, const std::filesyst
         (void)copy_with_progress(from, to);
     } catch (const std::exception &e) {
         (void)report_problem("Copy failed",
-            std::string("Pokee could not copy your data:\n") + e.what() +
+            std::string(MHFU_APP_NAME " could not copy your data:\n") + e.what() +
                 "\n\nWhat it had copied was removed again; the original is unchanged.",
             false);
         return false;
@@ -118,11 +121,11 @@ bool offer_user_data_copy(const std::filesystem::path &from, const std::filesyst
 int copy_user_data_on_console(const std::filesystem::path &from, const std::filesystem::path &to) {
     std::error_code ec;
     if (from.empty() || !has_user_data(from)) {
-        std::cerr << "Pokee: no data to copy in " << path_to_utf8(from) << "\n";
+        std::cerr << MHFU_APP_NAME ": no data to copy in " << path_to_utf8(from) << "\n";
         return 1;
     }
     if (std::filesystem::equivalent(from, to, ec)) {
-        std::cerr << "Pokee: " << path_to_utf8(to) << " is already the data folder in use\n";
+        std::cerr << MHFU_APP_NAME ": " << path_to_utf8(to) << " is already the data folder in use\n";
         return 1;
     }
     try {
@@ -130,7 +133,7 @@ int copy_user_data_on_console(const std::filesystem::path &from, const std::file
             [](std::uint64_t done, std::uint64_t total) { print_progress("Copying your data", done, total); });
         std::cout << copy_summary(files, to) << "; " << path_to_utf8(from) << " is unchanged.\n";
     } catch (const std::exception &e) {
-        std::cerr << "Pokee: copy failed: " << e.what() << "\nWhat was copied has been removed again.\n";
+        std::cerr << MHFU_APP_NAME ": copy failed: " << e.what() << "\nWhat was copied has been removed again.\n";
         return 1;
     }
     return 0;

@@ -1,4 +1,5 @@
 #include "gpu/device_report.hpp"
+#include "title.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -116,7 +117,7 @@ DeviceFacts read_device_facts(VkPhysicalDevice device) {
 void log_line(const std::string &line) {
     std::cout << line << "\n";
 #if defined(__ANDROID__)
-    SDL_Log("Pokee: %s", line.c_str());
+    SDL_Log(MHFU_APP_NAME ": %s", line.c_str());
 #endif
 }
 
