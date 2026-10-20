@@ -55,9 +55,11 @@ inline constexpr bool kGameAspect = true;
 inline constexpr bool kGiveRarity = true;
 // Empty item slot (game/empty_item_slot.cpp): the item bar's step and name.
 inline constexpr bool kEmptyItemSlot = true;
+// Hide HUD (gpu/game_hud.cpp): the 2D packets, text queues and the HUD's
+// functions in game_task and lobby_task.
+inline constexpr bool kHideHud = true;
 // Not ported yet: they stay off, and their rows stay out of the menu.
 inline constexpr bool kUiScaling = kFreedomUniteExtras;     // UI Scaling (gpu/hud_scale)
-inline constexpr bool kHideHud = kFreedomUniteExtras;       // Hide HUD (gpu/game_hud)
 inline constexpr bool kDamageNumbers = kFreedomUniteExtras;
 inline constexpr bool kSharpnessGauge = kFreedomUniteExtras; // Modern sharpness gauge
 inline constexpr bool kGatherIcon = kFreedomUniteExtras;

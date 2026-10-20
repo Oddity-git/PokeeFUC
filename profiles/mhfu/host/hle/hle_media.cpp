@@ -412,7 +412,7 @@ void present_frame(Runtime &rt) {
     // A frame ends when its image has been handed to the swapchain, or with
     // frame interpolation when the presents after it are scheduled.
     perf::end_frame(kernel().now_us(), presented);
-    if constexpr (kFreedomUniteExtras) gpu::hud::frame(rt, renderer.frames_presented());
+    if constexpr (kHideHud) gpu::hud::frame(rt, renderer.frames_presented());
     if (renderer.take_hide_hud_toggle()) gpu::hud::toggle();
 
     // Optional frame capture, independent of the window.

@@ -1,4 +1,5 @@
 #include "gpu/game_hud.hpp"
+#include "title.hpp"
 
 #include "settings/settings.hpp"
 
@@ -6,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -53,10 +55,17 @@ psprecomp::Runtime::RecompiledFunction compiled(std::uint32_t address) {
     return nullptr;
 }
 
+// FUComplete's executable and overlays have the same code at their own
+// addresses: at() picks this build's (title.hpp).
+constexpr bool kFreedomUniteHud = kTitle == Title::FreedomUnite;
+constexpr std::uint32_t at(std::uint32_t freedom_unite, std::uint32_t fucomplete) {
+    return kFreedomUniteHud ? freedom_unite : fucomplete;
+}
+
 // Files a packet into the display list's ordering table: a0 the list object,
 // a1 the packet, a2 its length in words, a3 the bucket. Leaf: sll v0, a3, 2
 // then sw a2, 0x148(t0), the new tail of that bucket.
-constexpr std::uint32_t kFilePacket = 0x088596C8u;
+constexpr std::uint32_t kFilePacket = at(0x088596C8u, 0x088595E8u);
 
 // The four functions that append to a text queue (each stores the new length
 // at +308), and 0x0889198C, which queues text twice through 0x088915B0. It is
@@ -66,17 +75,17 @@ constexpr std::uint32_t kFilePacket = 0x088596C8u;
 // teammate was a third entry after the party list's two, with no watched
 // call for it. Nothing else writes that length except the reset.
 constexpr std::array<std::uint32_t, 5> kTextFunctions = {
-    0x08891474u,
-    0x088915B0u,
-    0x08891700u,
-    0x0889183Cu,
-    0x0889198Cu,
+    at(0x08891474u, 0x08890F34u),
+    at(0x088915B0u, 0x08891070u),
+    at(0x08891700u, 0x088911C0u),
+    at(0x0889183Cu, 0x088912FCu),
+    at(0x0889198Cu, 0x0889144Cu),
 };
 // Called from the per-character draw (0x0889377C) after each character, with
 // the entry still in s3: the moment button icons the character added to the
 // queue's icon list can be told to belong to that entry.
-constexpr std::uint32_t kCharacterDrawn = 0x088952A4u;
-constexpr std::uint32_t kCharacterDrawnFromQueue = 0x08893860u; // its ra there
+constexpr std::uint32_t kCharacterDrawn = at(0x088952A4u, 0x08894D88u);
+constexpr std::uint32_t kCharacterDrawnFromQueue = at(0x08893860u, 0x08893314u); // its ra there
 constexpr std::size_t kWrapped = 2u + kTextFunctions.size();
 
 constexpr std::uint32_t wrapped_address(std::size_t index) {
@@ -87,12 +96,12 @@ constexpr std::uint32_t wrapped_address(std::size_t index) {
 // the words are checked before a match counts: the other overlay's bytes at
 // the same address are not this function.
 constexpr std::array<HudFunction, 6> kHudFunctions = {{
-    {0x09AE38F8u, 0x27BDFFF0u, 0xAFBF000Cu, false}, // lobby_task text: addiu sp,-16; sw ra,12(sp)
-    {0x09A6C248u, 0x27BDFFF0u, 0xAFBF000Cu, false}, // lobby_task callback: addiu sp,-16; sw ra,12(sp)
-    {0x09A60298u, 0x27BDFFA0u, 0xAFBF001Cu, true},  // game_task HUD: addiu sp,-96; sw ra,28(sp)
-    {0x09A617A8u, 0x27BDFFE0u, 0xAFBF000Cu, true},  // game_task HUD state: addiu sp,-32; sw ra,12(sp)
-    {0x09A62400u, 0x27BDFFF0u, 0xAFBF000Cu, true},  // game_task HUD state: addiu sp,-16; sw ra,12(sp)
-    {0x09B62488u, 0x27BDFFA0u, 0xAFBF001Cu, true},  // game_task labels: addiu sp,-96; sw ra,28(sp)
+    {at(0x09AE38F8u, 0x09ADE790u), 0x27BDFFF0u, 0xAFBF000Cu, false}, // lobby_task text: addiu sp,-16; sw ra,12(sp)
+    {at(0x09A6C248u, 0x09A673D0u), 0x27BDFFF0u, 0xAFBF000Cu, false}, // lobby_task callback: addiu sp,-16; sw ra,12(sp)
+    {at(0x09A60298u, 0x09A5B508u), 0x27BDFFA0u, 0xAFBF001Cu, true},  // game_task HUD: addiu sp,-96; sw ra,28(sp)
+    {at(0x09A617A8u, 0x09A5CA18u), 0x27BDFFE0u, 0xAFBF000Cu, true},  // game_task HUD state: addiu sp,-32; sw ra,12(sp)
+    {at(0x09A62400u, 0x09A5D670u), 0x27BDFFF0u, 0xAFBF000Cu, true},  // game_task HUD state: addiu sp,-16; sw ra,12(sp)
+    {at(0x09B62488u, 0x09B5D628u), 0x27BDFFA0u, 0xAFBF001Cu, true},  // game_task labels: addiu sp,-96; sw ra,28(sp)
 }};
 // The name over another hunter in a quest, and the mark beside it. The first
 // two words have to match: the other overlay occupies the same addresses.
@@ -135,20 +144,22 @@ struct NameFunction {
     bool hall;
 };
 constexpr NameFunction kNameFunctions[] = {
-    {0x09B62488u, 0x27BDFFA0u, 0xAFBF001Cu, false, false, false, false}, // game_task labels: addiu sp,-96; sw ra,28(sp)
-    {0x088392F4u, 0x27BDFF60u, 0xAFBF002Cu, false, true, false,
+    {at(0x09B62488u, 0x09B5D628u), 0x27BDFFA0u, 0xAFBF001Cu, false, false, false,
+        false}, // game_task labels: addiu sp,-96; sw ra,28(sp)
+    {at(0x088392F4u, 0x08839370u), 0x27BDFF60u, 0xAFBF002Cu, false, true, false,
         false}, // names over characters: addiu sp,-160; sw ra,44(sp)
-    {0x08835470u, 0x27BDFF50u, 0xAFBF004Cu, true, false, true, true}, // hall name's icon: addiu sp,-176; sw ra,76(sp)
+    {at(0x08835470u, 0x08835498u), 0x27BDFF50u, 0xAFBF004Cu, true, false, true,
+        true}, // hall name's icon: addiu sp,-176; sw ra,76(sp)
 };
 // The quest HUD function whose words show that game_task is loaded.
-constexpr std::uint32_t kQuestLoaded = 0x09A60298u;
+constexpr std::uint32_t kQuestLoaded = at(0x09A60298u, 0x09A5B508u);
 // The lobby callback whose words show that lobby_task is loaded.
-constexpr std::uint32_t kLobbyLoaded = 0x09A6C248u;
+constexpr std::uint32_t kLobbyLoaded = at(0x09A6C248u, 0x09A673D0u);
 
 // The text context, and in it each queue's length (u8 at +308 + queue) and
 // entries (a pointer at +320 + 4 * queue, entries of 12 bytes). The flush
 // loads it from 0x08A632C8.
-constexpr std::uint32_t kTextContextPointer = 0x08A632C8u;
+constexpr std::uint32_t kTextContextPointer = at(0x08A632C8u, 0x08A5E278u);
 constexpr std::uint32_t kQueueLengths = 308u;
 constexpr std::uint32_t kQueueEntries = 320u;
 constexpr std::uint32_t kQueues = 6u;
@@ -161,14 +172,14 @@ constexpr std::uint32_t kIconCounts = 314u;
 constexpr std::uint32_t kIconLists = 0x22B18u;
 constexpr std::uint32_t kIconListStride = 80u;
 constexpr std::uint32_t kIconBytes = 8u;
-constexpr std::uint32_t kIconFiled = 0x08892C88u;
-constexpr std::uint32_t kIconFiledAgain = 0x08892E2Cu;
+constexpr std::uint32_t kIconFiled = at(0x08892C88u, 0x08892748u);
+constexpr std::uint32_t kIconFiledAgain = at(0x08892E2Cu, 0x088928ECu);
 
 // Drawing one queued character (0x0889377C) calls 0x08893894 for its glyph
 // at 0x08893844, with the entry in s3. 0x08893894 saves that s3 at sp+20 and
 // ra at sp+44, and files the glyph's packet at 0x08893C24.
-constexpr std::uint32_t kGlyphFiled = 0x08893C2Cu;     // ra of the filing call
-constexpr std::uint32_t kGlyphFromQueue = 0x0889384Cu; // 0x08893894's ra from the character draw
+constexpr std::uint32_t kGlyphFiled = at(0x08893C2Cu, 0x088936E0u);     // ra of the filing call
+constexpr std::uint32_t kGlyphFromQueue = at(0x0889384Cu, 0x08893300u); // 0x08893894's ra from the character draw
 constexpr std::uint32_t kGlyphSavedRa = 44u;
 constexpr std::uint32_t kGlyphSavedEntry = 20u;
 
@@ -178,11 +189,11 @@ constexpr std::uint32_t kGlyphSavedEntry = 20u;
 // over that hunter. The append it reaches is not a call any wrapper sees, so
 // the entry was counted with the party list's name queued before it, and its
 // letters took the party list's sizes wherever they crossed a row of it.
-constexpr std::uint32_t kOverheadName = 0x08842628u;
+constexpr std::uint32_t kOverheadName = at(0x08842628u, 0x08842658u);
 
 // What the addresses above were read off; the switch stays off if any differs.
 // The overlay functions are not here: they are not loaded at startup.
-constexpr CodeWord kSignature[] = {
+constexpr CodeWord kSignatureFreedomUnite[] = {
     {0x088596C8u, 0x00071080u}, // sll v0, a3, 2: the ordering table insert
     {0x0885971Cu, 0xAD060148u}, // sw a2, 0x148(t0): the bucket's new tail
     {0x08893894u, 0x27BDFFB0u}, // addiu sp, sp, -80: drawing a glyph
@@ -209,6 +220,36 @@ constexpr CodeWord kSignature[] = {
     {0x08842628u, 0x27BDFF70u}, // addiu sp, sp, -144: the name over a teammate
     {0x0884262Cu, 0xAFBF002Cu}, // sw ra, 44(sp)
 };
+// FUComplete's executable: the same code at its own addresses.
+constexpr CodeWord kSignatureFUComplete[] = {
+    {0x088595E8u, 0x00071080u}, // sll v0, a3, 2: the ordering table insert
+    {0x0885963Cu, 0xAD060148u}, // sw a2, 0x148(t0): the bucket's new tail
+    {0x08893348u, 0x27BDFFB0u}, // addiu sp, sp, -80: drawing a glyph
+    {0x0889334Cu, 0xAFBF002Cu}, // sw ra, 44(sp)
+    {0x08893364u, 0xAFB30014u}, // sw s3, 20(sp): the caller's entry
+    {0x088936D8u, 0x0E21657Au}, // jal 0x088595E8
+    {0x088932F8u, 0x0E224CD2u}, // jal 0x08893348, from the character draw
+    {0x08891520u, 0x90720134u}, // lbu s2, 308(v1): a queue's length
+    {0x0889153Cu, 0x8C740140u}, // lw s4, 320(v1): its entries
+    {0x0889156Cu, 0x9072013Au}, // lbu s2, 314(v1): its icon count
+    {0x08891598u, 0x34212B18u}, // ori at, at, 0x2B18: the icon lists at +0x22B18
+    {0x0888FAD4u, 0x3C0208A6u}, // lui v0, 0x8a6
+    {0x0888FADCu, 0x8C44E278u}, // lw a0, -7560(v0): the text context at 0x08A5E278
+    {0x0889330Cu, 0x0E225362u}, // jal 0x08894D88 after each character
+    {0x08894D88u, 0x90820130u}, // lbu v0, 0x130(a0)
+    {0x08892740u, 0x0E21657Au}, // jal 0x088595E8, an icon's first packet
+    {0x088928E4u, 0x0E21657Au}, // jal 0x088595E8, an icon's second packet
+    {0x08890F34u, 0x27BDFCA0u}, // addiu sp, sp, -864: a queue append
+    {0x08891070u, 0x27BDFC80u}, // addiu sp, sp, -896
+    {0x088911C0u, 0x27BDFCA0u}, // addiu sp, sp, -864
+    {0x088912FCu, 0x27BDFC80u}, // addiu sp, sp, -896
+    {0x0889144Cu, 0x27BDFFE0u}, // addiu sp, sp, -32: text queued twice
+    {0x08891450u, 0xAFBF001Cu}, // sw ra, 28(sp)
+    {0x08842658u, 0x27BDFF70u}, // addiu sp, sp, -144: the name over a teammate
+    {0x0884265Cu, 0xAFBF002Cu}, // sw ra, 44(sp)
+};
+static_assert(std::size(kSignatureFreedomUnite) == std::size(kSignatureFUComplete));
+constexpr const auto &kSignature = kFreedomUniteHud ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 // Where a function starts, found from a return address into it.
 struct Frame {

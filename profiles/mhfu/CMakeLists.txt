@@ -70,14 +70,17 @@ if(MHFU_GENERATED)
         message(STATUS "mhfu: corpus has no camera update; analog camera stays off")
     endif()
 endif()
-# The HUD and layered armor hooks below name functions by their Freedom Unite
-# addresses. Another executable has other code there.
-if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
-
+if(MHFU_GENERATED)
     # Hiding the HUD (host/gpu/game_hud.cpp) wraps the game's 2D functions the
     # same way, so their units are read from the corpus too, in one pass.
-    set(MHFU_HUD_FUNCTIONS
-        088596C8 088952A4 08891474 088915B0 08891700 0889183C 0889198C)
+    # Their addresses in Freedom Unite, and in FUComplete (host/gpu/game_hud.cpp).
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(MHFU_HUD_FUNCTIONS
+            088596C8 088952A4 08891474 088915B0 08891700 0889183C 0889198C)
+    else()
+        set(MHFU_HUD_FUNCTIONS
+            088595E8 08894D88 08890F34 08891070 088911C0 088912FC 0889144C)
+    endif()
     list(JOIN MHFU_HUD_FUNCTIONS "|" hud_pattern)
     set(hud_lines "")
     foreach(unit IN LISTS MHFU_GENERATED)
@@ -90,6 +93,11 @@ if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
     endforeach()
     set(MHFU_HUD_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_hooks/hud_functions.inc")
     file(CONFIGURE OUTPUT "${MHFU_HUD_INC}" CONTENT "${hud_lines}" @ONLY)
+endif()
+# The HUD and layered armor hooks below name functions by their Freedom Unite
+# addresses. Another executable has other code there.
+if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
+
 
     # Layered armor (host/game/layered_armor_hook.cpp) stands in for the game's
     # lookup of an armor part's model, the cont_task hunter task, and the load
