@@ -271,13 +271,14 @@ void present_frame(Runtime &rt) {
     revalidate_overlays(rt);
     // These read Freedom Unite's memory (title.hpp); another game's stays
     // unread, and the menu's pages about the hunter stay empty.
-    if constexpr (kFreedomUniteExtras) {
+    if constexpr (kLayeredArmor) {
         // The menu, drawn below, reads the game's memory between frames.
         game::attach(rt);
         // Layered armor puts its wrappers in place here, between two frames.
         game::layered::frame(rt);
-        game::item_box::frame(rt);
     }
+    // FUComplete already shortens the item box's pause itself.
+    if constexpr (kFreedomUniteExtras) game::item_box::frame(rt);
     if constexpr (kSharpnessGauge) game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
     // The extras ported to FUComplete as well, each at its title's addresses.
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);

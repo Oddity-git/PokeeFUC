@@ -8,6 +8,7 @@
 //
 // Pure functions over a Ram, so the unit tests run them on a buffer.
 
+#include "title.hpp"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -30,7 +31,8 @@ class Ram;
 // Each table is then a list of 32-bit offsets (from the table) to UTF-8
 // strings, ended by 0xFFFFFFFF. Armor names are tables 7, 9, 11, 13 and 15
 // (head, chest, arms, waist, legs).
-inline constexpr std::uint32_t kTextBlock = 0x089CC560u;
+// FUComplete's is at 0x089C7510 (its 0x088513AC reads it).
+inline constexpr std::uint32_t kTextBlock = kTitle == Title::FreedomUnite ? 0x089CC560u : 0x089C7510u;
 
 // Table `index` of the text block, or empty when it does not look like one
 // (the block not loaded yet, or a different executable).

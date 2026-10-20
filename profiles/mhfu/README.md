@@ -84,7 +84,7 @@ What differs from the Freedom Unite build:
 | Corpus, overlays, game, analysis | `generated/`, `overlays/`, `game/`, `analysis/` | `generated_fuc/`, `overlays_fuc/`, `game_fuc/`, `analysis_fuc/` |
 | Overlay slots | the four read from Freedom Unite's `DATA.BIN` | the load addresses of the executable's `*.ovl` sections |
 | `DATA.BIN` | obfuscated | stored plain; `databin.py` and `build_overlays.sh` read either |
-| Extras (analog camera, hold to gather, aspect ratio, HUD hiding, UI scaling, damage numbers, gather icon, sharpness gauge, empty item slot, give any rarity, lock-on, item box, layered armor) | on | on at FUComplete's own addresses (`host/title.hpp`), except: the fast item box, which FUComplete already has; layered armor and equipment models, off and out of the menu, since FUComplete's equipment code and records differ |
+| Extras (analog camera, hold to gather, aspect ratio, HUD hiding, UI scaling, damage numbers, gather icon, sharpness gauge, empty item slot, give any rarity, lock-on, item box, layered armor) | on | on at FUComplete's own addresses (`host/title.hpp`), except the fast item box, which FUComplete already has |
 | Mods page | the community's `DATA.BIN` mods | off: FUComplete has its own file replacer (`ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP`) |
 
 The scripts (`generate.sh`, `build_overlays.sh`, `bootstrap_overlays.sh`, `add_overlay.py`) read the title from the build directory they are given; `prepare_game.sh` reads `MHFU_TITLE` from the environment. FUComplete's own loader copies `PRELOAD.BIN` and `MODLOAD.BIN` to `ms0:/PSP/SAVEDATA/FUCDAT` on the first start and runs them from there; that code is not in the corpus and runs in the interpreter. FUComplete boots to its title, menus, character creation and quests on Linux.

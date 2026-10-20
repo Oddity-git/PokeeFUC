@@ -94,16 +94,19 @@ if(MHFU_GENERATED)
     set(MHFU_HUD_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_hooks/hud_functions.inc")
     file(CONFIGURE OUTPUT "${MHFU_HUD_INC}" CONTENT "${hud_lines}" @ONLY)
 endif()
-# The HUD and layered armor hooks below name functions by their Freedom Unite
-# addresses. Another executable has other code there.
-if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
+if(MHFU_GENERATED)
 
 
     # Layered armor (host/game/layered_armor_hook.cpp) stands in for the game's
     # lookup of an armor part's model, the cont_task hunter task, and the load
     # step. The task list is not wrapped: stepping a finished load from it
     # cleared a pointer the quest reads, and embarking then stopped.
-    set(MHFU_LAYERED_FUNCTIONS 088516A4 0885187C 08851C3C 088BC7F0 088C0E58 088D6388)
+    # Their addresses in Freedom Unite, and in FUComplete (layered_armor.hpp).
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(MHFU_LAYERED_FUNCTIONS 088516A4 0885187C 08851C3C 088BC7F0 088C0E58 088D6388)
+    else()
+        set(MHFU_LAYERED_FUNCTIONS 088515D0 088517A8 08851B68 088BF3F8 088C37AC 088D8CD0)
+    endif()
     list(JOIN MHFU_LAYERED_FUNCTIONS "|" layered_pattern)
     set(layered_lines "")
     foreach(unit IN LISTS MHFU_GENERATED)

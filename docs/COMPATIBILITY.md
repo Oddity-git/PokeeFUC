@@ -90,9 +90,9 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | A save written before those changes, then saved again | ✅ |
 | Analog camera: turn and tilt, standing and moving, a sword and shield drawn | ✅ |
 | Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f` |
-| Lock-on, its monster icon | ❔ no large monster yet |
+| Lock-on, its monster icon | ✅ lock-on, seen by the player |
 | Give Any Rarity Item | ❔ needs another hunter |
-| Layered armor | ❌ not ported: FUComplete's equipment code and records differ |
+| Layered armor | ✅ in the village: every part set to nothing showed the bare hunter; ❔ chosen pieces, the equipment change and a quest |
 
 ## Updating this page
 

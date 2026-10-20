@@ -2,6 +2,7 @@
 // game/equipment_models.hpp), on a buffer standing for guest memory. No game
 // data: the tables and names here are made up.
 #include "game/equipment_models.hpp"
+#include "title.hpp"
 #include "game/game_data.hpp"
 #include "game/guest_ram.hpp"
 #include "game/layered_armor.hpp"
@@ -12,6 +13,11 @@
 #include <vector>
 
 namespace {
+
+// This build's address: Freedom Unite's, or FUComplete's (title.hpp).
+constexpr std::uint32_t for_title(std::uint32_t freedom_unite, std::uint32_t fucomplete) {
+    return mhfu::kTitle == mhfu::Title::FreedomUnite ? freedom_unite : fucomplete;
+}
 using namespace mhfu::game;
 int failures{};
 
@@ -117,22 +123,32 @@ void test_layered_armor() {
             layered::sex_lookup_returns_model(5),
         "an equipment change gets a model for every armor part, even when t0 is 0");
     check(!layered::sex_lookup_returns_model(1), "that lookup's part 1 is the id, and stays the game's");
-    check(layered::equipment_resolve(0x09A7E4ACu), "the equipment change is the lobby's model resolve");
-    check(!layered::equipment_resolve(0x08866EA8u), "the file load is not the lobby call");
-    check(layered::file_load_resolve(0x08866EA8u), "the file load's return is the resident resolve");
-    check(!layered::file_load_resolve(0x09A7E4ACu), "the lobby call is not the file load");
-    check(layered::substitute_resolved_model(0x09A7E4ACu), "the equipment change returns the chosen model");
-    check(!layered::substitute_resolved_model(0x08866EA8u) && !layered::substitute_resolved_model(0x08866EFCu),
+    check(layered::equipment_resolve(for_title(0x09A7E4ACu, 0x09A7961Cu)),
+        "the equipment change is the lobby's model resolve");
+    check(!layered::equipment_resolve(for_title(0x08866EA8u, 0x08866EA0u)), "the file load is not the lobby call");
+    check(layered::file_load_resolve(for_title(0x08866EA8u, 0x08866EA0u)),
+        "the file load's return is the resident resolve");
+    check(!layered::file_load_resolve(for_title(0x09A7E4ACu, 0x09A7961Cu)), "the lobby call is not the file load");
+    check(layered::substitute_resolved_model(for_title(0x09A7E4ACu, 0x09A7961Cu)),
+        "the equipment change returns the chosen model");
+    check(!layered::substitute_resolved_model(for_title(0x08866EA8u, 0x08866EA0u)) &&
+            !layered::substitute_resolved_model(for_title(0x08866EFCu, 0x08866EF4u)),
         "the resident file load keeps the model the game computed");
-    check(layered::equipment_sex_lookup(0x09A7E360u), "the equipment change is the sex lookup that returns a model");
+    check(layered::equipment_sex_lookup(for_title(0x09A7E360u, 0x09A794D0u)),
+        "the equipment change is the sex lookup that returns a model");
     check(!layered::equipment_sex_lookup(0x09A85840u) && !layered::equipment_sex_lookup(0x09AA6680u),
         "the other sex lookups keep the game's model");
-    check(layered::equipment_part_model(0x09A7DF24u), "the equipment change loads the model this lookup returns");
-    check(!layered::equipment_part_model(0x088DBCCCu), "the character load is not that lookup");
-    check(layered::equipment_part_present(0x09A7DF48u), "the equipment change uses this answer to pick the helm files");
-    check(!layered::equipment_part_present(0x088DBCCCu), "the character load does not use that answer");
-    check(layered::equipment_model_read(0x09A7E548u), "the equipment change is the file read that takes a model");
-    check(!layered::equipment_model_read(0x088DBCCCu), "the character load keeps the model its own lookup returned");
+    check(layered::equipment_part_model(for_title(0x09A7DF24u, 0x09A79094u)),
+        "the equipment change loads the model this lookup returns");
+    check(!layered::equipment_part_model(for_title(0x088DBCCCu, 0x088DE614u)), "the character load is not that lookup");
+    check(layered::equipment_part_present(for_title(0x09A7DF48u, 0x09A790B8u)),
+        "the equipment change uses this answer to pick the helm files");
+    check(!layered::equipment_part_present(for_title(0x088DBCCCu, 0x088DE614u)),
+        "the character load does not use that answer");
+    check(layered::equipment_model_read(for_title(0x09A7E548u, 0x09A796B8u)),
+        "the equipment change is the file read that takes a model");
+    check(!layered::equipment_model_read(for_title(0x088DBCCCu, 0x088DE614u)),
+        "the character load keeps the model its own lookup returned");
     check(layered::sex_lookup_id(ram, 3, 0, pieces, 0) == std::optional<std::uint16_t>{1},
         "the equipment lookup is given the chosen chest id");
     check(!layered::sex_lookup_id(ram, 1, 0, pieces, 0), "that lookup's part 1 keeps the game's id");

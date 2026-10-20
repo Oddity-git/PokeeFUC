@@ -67,8 +67,8 @@ inline constexpr bool kDamageNumbers = true;
 inline constexpr bool kUiScaling = true;
 inline constexpr bool kSharpnessGauge = true;
 inline constexpr bool kGatherIcon = true;
-// Not ported: FUComplete's equipment code and records differ from Freedom
-// Unite's, so layered armor and equipment models stay off and out of the menu.
-inline constexpr bool kLayeredArmor = kFreedomUniteExtras;
+// Layered armor (game/layered_armor*.cpp): the armor model lookup, the
+// hunter's load and the lobby's equipment calls, and the armor tables.
+inline constexpr bool kLayeredArmor = true;
 
 } // namespace mhfu

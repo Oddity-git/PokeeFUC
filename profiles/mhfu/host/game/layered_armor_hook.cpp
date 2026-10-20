@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <string>
 
 // The generated unit the game's model lookup was compiled into, found by CMake
@@ -50,7 +51,7 @@ struct CodeWord {
     std::uint32_t address;
     std::uint32_t word;
 };
-constexpr CodeWord kSignature[] = {
+constexpr CodeWord kSignatureFreedomUnite[] = {
     {0x0885187Cu, 0x000518C0u},  // sll v1,a1,3
     {0x08851880u, 0x00652823u},  // subu a1,v1,a1
     {0x08851884u, 0x00051880u},  // sll v1,a1,2
@@ -66,10 +67,28 @@ constexpr CodeWord kSignature[] = {
     {0x088519CCu, 0x94640062u},  // lhu a0,0x62(v1): arms
     {0x08851A1Cu, 0x9464006Eu},  // lhu a0,0x6E(v1): waist
 };
+constexpr CodeWord kSignatureFUComplete[] = {
+    {0x088517A8u, 0x000518C0u},  // sll v1,a1,3
+    {0x088517ACu, 0x00652823u},  // subu a1,v1,a1
+    {0x088517B0u, 0x00051880u},  // sll v1,a1,2
+    {0x088517B4u, 0x00A31821u},  // addu v1,a1,v1
+    {0x088517B8u, 0x00031880u},  // sll v1,v1,2
+    {0x088517BCu, 0x00831821u},  // addu v1,a0,v1          a1 * 140 + block
+    {0x088517C0u, 0x2CC10006u},  // sltiu at,a2,6
+    {0x088517CCu, 0x24630030u},  // addiu v1,v1,0x30
+    {0x088517ECu, 0x90620010u},  // lbu v0,0x10(v1): sex, 0 male
+    {0x088517F4u, 0x9464003Eu},  // lhu a0,0x3E(v1): legs
+    {0x0885184Cu, 0x9465004Au},  // lhu a1,0x4A(v1): head
+    {0x088518A8u, 0x94640056u},  // lhu a0,0x56(v1): chest
+    {0x088518F8u, 0x94640062u},  // lhu a0,0x62(v1): arms
+    {0x08851948u, 0x9464006Eu},  // lhu a0,0x6E(v1): waist
+};
+static_assert(std::size(kSignatureFreedomUnite) == std::size(kSignatureFUComplete));
+constexpr const auto &kSignature = kFreedomUniteArmor ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 // What starting the hunter's load over relies on: the step, the state it
 // reports done at, and the game's own request that clears the state.
-constexpr CodeWord kLoadSignature[] = {
+constexpr CodeWord kLoadSignatureFreedomUnite[] = {
     {0x088C0E58u, 0x27BDFFE0u},  // addiu sp,sp,-0x20
     {0x088C0E70u, 0x8C820998u},  // lw v0,0x998(a0): the state
     {0x088C0EA0u, 0xAE020998u},  // sw v0,0x998(s0): the first step stores the next state
@@ -80,62 +99,125 @@ constexpr CodeWord kLoadSignature[] = {
     {0x088BCBB8u, 0xAE200998u},  // sw zero,0x998(s1)
     {0x088BCBFCu, 0x0E230396u},  // jal 0x088C0E58: the driver steps it
 };
+constexpr CodeWord kLoadSignatureFUComplete[] = {
+    {0x088C37ACu, 0x27BDFFE0u},  // addiu sp,sp,-0x20
+    {0x088C37C4u, 0x8C820998u},  // lw v0,0x998(a0): the state
+    {0x088C37F4u, 0xAE020998u},  // sw v0,0x998(s0): the first step stores the next state
+    {0x088C3AA4u, 0x8E020998u},  // lw v0,0x998(s0)
+    {0x088C3AA8u, 0x38420005u},  // xori v0,v0,5: done when the state is 5
+    {0x088C3AACu, 0x2C420001u},  // sltiu v0,v0,1
+    {0x088BF750u, 0xAE40099Cu},  // sw zero,0x99C(s2): the game's request
+    {0x088BF754u, 0xAE400998u},  // sw zero,0x998(s2)
+    {0x088BF798u, 0x0E230DEBu},  // jal 0x088C37AC: the driver steps it
+};
+static_assert(std::size(kLoadSignatureFreedomUnite) == std::size(kLoadSignatureFUComplete));
+constexpr const auto &kLoadSignature = kFreedomUniteArmor ? kLoadSignatureFreedomUnite : kLoadSignatureFUComplete;
 
 // 0x088BC7F0: the frame, the hunter in s1, and the task word it dispatches.
-constexpr CodeWord kTaskSignature[] = {
+constexpr CodeWord kTaskSignatureFreedomUnite[] = {
     {0x088BC7F0u, 0x27BDEE20u},  // addiu sp,sp,-4576
     {0x088BC7F4u, 0xAFBF002Cu},  // sw ra,44(sp)
     {0x088BC80Cu, 0x00808821u},  // addu s1,a0,zero
     {0x088BC874u, 0x8E22000Cu},  // lw v0,12(s1): the task
 };
+constexpr CodeWord kTaskSignatureFUComplete[] = {
+    {0x088BF3F8u, 0x27BDFFE0u},  // addiu sp,sp,-32
+    {0x088BF3FCu, 0xAFBF001Cu},  // sw ra,28(sp)
+    {0x088BF40Cu, 0x8C82000Cu},  // lw v0,12(a0): the task
+    {0x088BF410u, 0x00809021u},  // addu s2,a0,zero
+};
+static_assert(std::size(kTaskSignatureFreedomUnite) == std::size(kTaskSignatureFUComplete));
+constexpr const auto &kTaskSignature = kFreedomUniteArmor ? kTaskSignatureFreedomUnite : kTaskSignatureFUComplete;
 
 // 0x08851C3C: the stack frame, the index shifted, and the call that remaps the
 // part before the id is read. 0x088516A4: the part masked and checked below 6.
-constexpr CodeWord kPresentSignature[] = {
+constexpr CodeWord kPresentSignatureFreedomUnite[] = {
     {0x08851C3Cu, 0x27BDFFF0u},  // addiu sp,sp,-16
     {0x08851C40u, 0x000510C0u},  // sll v0,a1,3
     {0x08851C74u, 0x0E215B45u},  // jal 0x08856D14
 };
-constexpr CodeWord kBySexSignature[] = {
+constexpr CodeWord kPresentSignatureFUComplete[] = {
+    {0x08851B68u, 0x27BDFFF0u},  // addiu sp,sp,-16
+    {0x08851B6Cu, 0x000510C0u},  // sll v0,a1,3
+    {0x08851BA0u, 0x0E215B0Fu},  // jal 0x08856C3C
+};
+static_assert(std::size(kPresentSignatureFreedomUnite) == std::size(kPresentSignatureFUComplete));
+constexpr const auto &kPresentSignature = kFreedomUniteArmor ? kPresentSignatureFreedomUnite : kPresentSignatureFUComplete;
+constexpr CodeWord kBySexSignatureFreedomUnite[] = {
     {0x088516A4u, 0x30C300FFu},  // andi v1,a2,0xff
     {0x088516A8u, 0x2C610006u},  // sltiu at,v1,6
     {0x088516ACu, 0x10200071u},  // beqz at
 };
+constexpr CodeWord kBySexSignatureFUComplete[] = {
+    {0x088515D0u, 0x30C300FFu},  // andi v1,a2,0xff
+    {0x088515D4u, 0x2C610006u},  // sltiu at,v1,6
+    {0x088515D8u, 0x10200071u},  // beqz at
+};
+static_assert(std::size(kBySexSignatureFreedomUnite) == std::size(kBySexSignatureFUComplete));
+constexpr const auto &kBySexSignature = kFreedomUniteArmor ? kBySexSignatureFreedomUnite : kBySexSignatureFUComplete;
 // 0x088D6388: the part masked, checked below 6, and the model sign-extended
 // into a1. A nonzero model is returned unchanged.
-constexpr CodeWord kResolveSignature[] = {
+constexpr CodeWord kResolveSignatureFreedomUnite[] = {
     {0x088D6388u, 0x30A200FFu},  // andi v0,a1,0xff
     {0x088D638Cu, 0x2C410006u},  // sltiu at,v0,6
     {0x088D6394u, 0x7C062E20u},  // seh a1,a2
 };
+constexpr CodeWord kResolveSignatureFUComplete[] = {
+    {0x088D8CD0u, 0x30A200FFu},  // andi v0,a1,0xff
+    {0x088D8CD4u, 0x2C410006u},  // sltiu at,v0,6
+    {0x088D8CDCu, 0x7C062E20u},  // seh a1,a2
+};
+static_assert(std::size(kResolveSignatureFreedomUnite) == std::size(kResolveSignatureFUComplete));
+constexpr const auto &kResolveSignature = kFreedomUniteArmor ? kResolveSignatureFreedomUnite : kResolveSignatureFUComplete;
 
 // 0x088DBBBC loads one part's file. lobby_task calls it; the load step calls
 // it too. It asks the model lookup at 0x088DBC64. A different executable does
 // not get the wrapper.
-constexpr std::uint32_t kFileLoad = 0x088DBBBCu;
+constexpr std::uint32_t kFileLoad = kFreedomUniteArmor ? 0x088DBBBCu : 0x088DE504u;
 // 0x088DB4C8 jumps here. a3 is the part, a2 the sex, t0 the model the read
 // uses. Replacing the model 0x088D6388 returns to this function faulted the
 // reader at 0x249D5510; the model has to arrive in t0, and the function then
 // runs as the game wrote it.
 // 0x08851A68: a1 is the part, and it must be below 6. The equipment change
 // stores v0 and passes it to 0x08866E10 as t0 (return 0x09A7DF70).
-constexpr std::uint32_t kPartModel = 0x08851A68u;
-constexpr CodeWord kPartModelSignature[] = {
+constexpr std::uint32_t kPartModel = kFreedomUniteArmor ? 0x08851A68u : 0x08851994u;
+constexpr CodeWord kPartModelSignatureFreedomUnite[] = {
     {0x08851A68u, 0x2CA10006u},  // sltiu at,a1,6
     {0x08851A6Cu, 0x248304A0u},  // addiu v1,a0,1184
     {0x08851A70u, 0x10200070u},  // beq at,zero
 };
-constexpr std::uint32_t kResidentLoad = 0x08866E10u;
-constexpr CodeWord kResidentSignature[] = {
+constexpr CodeWord kPartModelSignatureFUComplete[] = {
+    {0x08851994u, 0x2CA10006u},  // sltiu at,a1,6
+    {0x08851998u, 0x248304A0u},  // addiu v1,a0,1184
+    {0x0885199Cu, 0x10200070u},  // beq at,zero
+};
+static_assert(std::size(kPartModelSignatureFreedomUnite) == std::size(kPartModelSignatureFUComplete));
+constexpr const auto &kPartModelSignature = kFreedomUniteArmor ? kPartModelSignatureFreedomUnite : kPartModelSignatureFUComplete;
+constexpr std::uint32_t kResidentLoad = kFreedomUniteArmor ? 0x08866E10u : 0x08866E08u;
+constexpr CodeWord kResidentSignatureFreedomUnite[] = {
     {0x08866E10u, 0x27BDFFE0u},  // addiu sp,sp,-32
     {0x08866E14u, 0xAFBF001Cu},  // sw ra,28(sp)
     {0x08866EA0u, 0x0E2358E2u},  // jal 0x088D6388
 };
-constexpr CodeWord kFileSignature[] = {
+constexpr CodeWord kResidentSignatureFUComplete[] = {
+    {0x08866E08u, 0x27BDFFE0u},  // addiu sp,sp,-32
+    {0x08866E0Cu, 0xAFBF001Cu},  // sw ra,28(sp)
+    {0x08866E98u, 0x0E236334u},  // jal 0x088D8CD0
+};
+static_assert(std::size(kResidentSignatureFreedomUnite) == std::size(kResidentSignatureFUComplete));
+constexpr const auto &kResidentSignature = kFreedomUniteArmor ? kResidentSignatureFreedomUnite : kResidentSignatureFUComplete;
+constexpr CodeWord kFileSignatureFreedomUnite[] = {
     {0x088DBBBCu, 0x27BDFFD0u},  // addiu sp,sp,-48
     {0x088DBBC0u, 0xAFBF002Cu},  // sw ra,44(sp)
     {0x088DBC64u, 0x0E21461Fu},  // jal 0x0885187C
 };
+constexpr CodeWord kFileSignatureFUComplete[] = {
+    {0x088DE504u, 0x27BDFFD0u},  // addiu sp,sp,-48
+    {0x088DE508u, 0xAFBF002Cu},  // sw ra,44(sp)
+    {0x088DE5ACu, 0x0E2145EAu},  // jal 0x088517A8
+};
+static_assert(std::size(kFileSignatureFreedomUnite) == std::size(kFileSignatureFUComplete));
+constexpr const auto &kFileSignature = kFreedomUniteArmor ? kFileSignatureFreedomUnite : kFileSignatureFUComplete;
 
 struct State {
     bool checked{};
@@ -291,11 +373,12 @@ void resident_load(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx)
     // no file. A chosen piece is armor, so the helm model in t0 is read from
     // the helm files. The character load keeps the model it already has.
     if (s.on && sex_lookup_returns_model(ctx.gpr[7]) &&
-        (ctx.gpr[31] == 0x09A7DF70u || ctx.gpr[31] == 0x088DBCCCu)) {
+        (ctx.gpr[31] == (kFreedomUniteArmor ? 0x09A7DF70u : 0x09A790E0u) ||
+            ctx.gpr[31] == (kFreedomUniteArmor ? 0x088DBCCCu : 0x088DE614u))) {
         const GuestRam ram(runtime.memory());
         if (const std::optional<std::uint8_t> kind = armor_kind(ctx.gpr[7]); kind && s.pieces[*kind] > 0) {
             if (const std::optional<std::uint16_t> model = chosen_model(ram, ctx.gpr[7], ctx.gpr[6], s.pieces)) {
-                if (ctx.gpr[31] == 0x09A7DF70u || ctx.gpr[8] == *model) ctx.gpr[11] = 1u;
+                if (ctx.gpr[31] == (kFreedomUniteArmor ? 0x09A7DF70u : 0x09A790E0u) || ctx.gpr[8] == *model) ctx.gpr[11] = 1u;
             }
         }
     }
