@@ -12,7 +12,7 @@
 namespace mhfu::game::hall_meal {
 namespace {
 
-constexpr std::array<CodeWord, 67> kSignature = {{
+constexpr std::array<CodeWord, 67> kSignatureFreedomUnite = {{
     {0x09AAAAD0u, 0x0E6AB02Au}, // jal 0x09AAC0A8: the seated frame
     {0x09AAAAD4u, 0x24050010u}, // addiu a1, zero, 16
     {kSeatedUpdate, 0x27BDFFF0u},
@@ -82,6 +82,79 @@ constexpr std::array<CodeWord, 67> kSignature = {{
     {0x08838E1Cu, 0x0E20AA77u}, // jal 0x0882A9DC: the sprite
     {kPrintFormat, 0x73257325u}, // "%s%s"
 }};
+// FUComplete: the same words where its executable and overlays have them.
+constexpr std::array<CodeWord, 67> kSignatureFUComplete = {{
+    {0x09AA5968u, 0x0E6A9BD0u}, // jal 0x09AA6F40: the seated frame
+    {0x09AA596Cu, 0x24050010u}, // addiu a1, zero, 16
+    {kSeatedUpdate, 0x27BDFFF0u},
+    {0x09AA6F50u, 0x908601D5u}, // lbu a2, 0x1D5(a0): the phase
+    {0x09AA7040u, 0x8C647508u}, // lw a0, GameSys
+    {0x09AA7044u, 0x962501E6u}, // lhu a1, 0x1E6(s1): the hunter's console
+    {0x09AA7048u, 0x90840028u}, // lbu a0, 0x28(a0): this console
+    {0x09AA7064u, 0x8C63D9E8u}, // lw v1, -0x2618(v1): the lobby's state
+    {0x09AA7068u, 0x8C630000u}, // lw v1, 0(v1): its mode
+    {0x09AA7074u, 0x8E240484u}, // lw a0, 0x484(s1): the new buttons
+    {0x09AA7078u, 0x30838000u}, // andi v1, a0, 0x8000: □ stands up
+    {kSound, 0x27BDFFE0u},
+    {0x09A76C8Cu, 0x2CA10014u}, // sltiu at, a1, 20
+    {0x09A6CE0Cu, 0x0E705F6Eu}, // jal 0x09C17DB8: the menu's frame
+    {0x09A6CE10u, 0x8C446818u}, // lw a0, kitchen
+    {0x09A6CE18u, 0x54430018u}, // bnel v0, v1: 1 is a meal
+    {0x09A6CE4Cu, 0x0E706522u}, // jal 0x09C19488
+    {0x09A6CE64u, 0x0E70634Eu}, // jal 0x09C18D38
+    {kMenuOpen, 0x27BDFFF0u},
+    {0x09C17D7Cu, 0xAC800070u}, // sw zero, 0x70(a0)
+    {kMenuFrame, 0x27BDFE90u},
+    {0x09C17FD8u, 0x2402FFFFu}, // addiu v0, zero, -1: backed out
+    {0x09C18160u, 0x0E213EBAu}, // jal 0x0884FAE8: paid
+    {0x09C18170u, 0x24020001u}, // addiu v0, zero, 1
+    {0x09C1878Cu, 0x00001021u}, // move v0, zero: still open
+    {kFlavour, 0x27BDFFF0u},
+    {kRollSkills, 0x27BDFFE0u},
+    {kMealRow, 0x8C850080u},
+    {kResults, 0x27BDFFF0u},
+    {0x09C198FCu, 0x0E706256u}, // jal 0x09C18958
+    {0x09C19914u, 0x0E70645Au}, // jal 0x09C19168: the skills' messages
+    {kSetEaten, 0x3C03089Cu},
+    {0x09C16B38u, 0xA0659936u}, // sb a1, -0x66CA(v1): GameSys + 0x69936
+    {0x09C16B08u, 0x3C02089Cu},
+    {0x09C16B18u, 0x03E00008u},
+    {0x09C16AE8u, 0x3C02089Cu},
+    {0x09C16AF8u, 0x8C4296F4u}, // lw v0, -0x690C(v0): GameSys + 0x696F4
+    {0x08836C38u, 0x0E20E2CCu}, // jal 0x08838B30: seated?
+    {0x08836C64u, 0x00408021u}, // move s0, v0: the ":"
+    {0x08836C74u, 0x0E69DA72u}, // jal 0x09A769C8: Stand Up, printed
+    {0x08836C78u, 0x9445FF7Au}, // lhu a1, -0x86(v0)
+    {0x08836C8Cu, 0x02004021u}, // move t0, s0
+    {0x08836C98u, 0x0E2243CDu}, // jal 0x08890F34
+    {kTextCore, 0x27BDFFE0u},
+    {kText, 0x00A03021u}, // move a2, a1
+    {0x09A769CCu, 0x0A69DA56u}, // j 0x09A76958
+    {0x09A769D0u, 0x00002821u}, // move a1, zero: table 0
+    {kPlainPrint, 0x27BDFCA0u}, // addiu sp, sp, -0x360
+    {0x08890F38u, 0xAFBF000Cu},
+    // The bar, shared by every prompt.
+    {0x0883755Cu, 0x8C44E278u}, // lw a0, the font
+    {0x08837560u, 0x0E224242u}, // jal 0x08890908: its characters
+    {0x08837568u, 0x24430004u}, // addiu v1, v0, 4
+    {0x0883756Cu, 0x000310C0u}, // sll v0, v1, 3
+    {0x08837574u, 0x24420024u}, // addiu v0, v0, 36
+    {0x08837580u, 0x3C02801Du}, // lui v0, 0x801D
+    {0x08837594u, 0x34493905u}, // ori t1, v0, 0x3905: its colour
+    {0x08837598u, 0x0E20E2E1u}, // jal 0x08838B84: the bar
+    {0x088375A0u, 0x82880535u}, // lb t0, 0x535(s4): the blink
+    {0x088375B0u, 0x24070035u}, // addiu a3, zero, 53: the button
+    {0x088375B4u, 0x0E20E3A2u}, // jal 0x08838E88
+    {0x088375B8u, 0x24090014u}, // addiu t1, zero, 20
+    {kBarMeasure, 0x27BDFFE0u},
+    {kBarBox, 0x27BDFFC0u},
+    {kBarButton, 0x27BDFFF0u},
+    {0x08838E8Cu, 0x0109182Au}, // slt v1, t0, t1: shown while the blink is below
+    {0x08838E98u, 0x0E20AC1Eu}, // jal 0x0882B078: the sprite
+    {kPrintFormat, 0x73257325u}, // "%s%s"
+}};
+constexpr const std::array<CodeWord, 67> &kSignature =
+    kFreedomUniteCode ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 // What runs after a confirmed meal, in the kitchen's order.
 constexpr std::array<std::uint32_t, 5> kServe = {kFlavour, kRollSkills, kMealRow, kResults, kSetEaten};
