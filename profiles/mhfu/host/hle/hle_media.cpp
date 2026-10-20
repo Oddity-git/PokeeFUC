@@ -277,11 +277,11 @@ void present_frame(Runtime &rt) {
         // Layered armor puts its wrappers in place here, between two frames.
         game::layered::frame(rt);
         game::item_box::frame(rt);
-        game::empty_item_slot::frame(rt);
         game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
     }
     // The extras ported to FUComplete as well, each at its title's addresses.
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);
+    if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);
 #if defined(MHFU_HAS_RENDERER)
     if (!media().renderer || !media().renderer->available()) {
         perf::end_frame(kernel().now_us());

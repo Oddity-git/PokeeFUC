@@ -11,7 +11,7 @@
 namespace mhfu::game::empty_item_slot {
 namespace {
 
-constexpr std::array<CodeWord, 29> kSignature = {{
+constexpr std::array<CodeWord, 29> kSignatureFreedomUnite = {{
     // The pouch's packing and the move off a slot with no item before it.
     {kPack, 0x27BDFFD0u},       // addiu sp, sp, -48
     {0x088292FCu, 0x321000FFu}, // andi s0, s0, 0xFF: the pouch
@@ -47,15 +47,58 @@ constexpr std::array<CodeWord, 29> kSignature = {{
     {0x088D82B4u, 0x30420001u}, // andi v0, v0, 1
     {0x088568A0u, 0x3421AEA6u}, // ori at, at, 0xAEA6: the pouch
 }};
+constexpr std::array<CodeWord, 29> kSignatureFUComplete = {{
+    {kPack, 0x27BDFFD0u},       // addiu sp, sp, -48
+    {0x08829998u, 0x321000FFu}, // andi s0, s0, 0xFF: the pouch
+    {0x08829A04u, 0x0E20A717u}, // jal 0x08829C5C
+    {0x08829C5Cu, 0x27BDFFE0u}, // addiu sp, sp, -32
+    {0x08829CC0u, 0xA6500648u}, // sh s0, 1608(s2)
+    {0x08845F9Cu, kStepCall},   // the animated layout's first
+    {0x088460C0u, kStepCall},   // and last
+    {0x0884649Cu, kStepCall},   // the still layout's first
+    {0x08846538u, kStepCall},   // and last
+    {0x08846120u, 0x240200FFu}, // addiu v0, zr, 255
+    {0x08846124u, 0x50A20012u}, // beql a1, v0: no icon
+    {0x08845A6Cu, 0x0E209C65u}, // jal 0x08827194
+    {kHasItem, 0x27BDFFF0u},    // addiu sp, sp, -16
+    {0x08845B58u, 0x0E214512u}, // jal 0x08851448
+    {0x08845BA8u, 0x0E214512u}, // jal 0x08851448
+    {kItemName, 0x00A03021u},   // addu a2, a1, zr
+    {0x0885144Cu, 0x0A2144F3u}, // j 0x088513CC
+    {0x088D9E44u, kStepCall},   // jal 0x088DAB44
+    {kStep, 0x27BDFFE0u},       // addiu sp, sp, -32
+    {0x088DAB5Cu, 0x3C02089Cu}, // lui v0, 0x089C
+    {0x088DAB60u, 0x8C427508u}, // lw v0, 29960(v0): GameSys
+    {0x088DAB64u, 0x948301E6u}, // lhu v1, 486(a0)
+    {0x088DAB68u, 0x90420028u}, // lbu v0, 40(v0)
+    {0x088DAB88u, 0x28420018u}, // slti v0, v0, 24
+    {0x088DABECu, 0x3C02089Au}, // lui v0, 0x089A
+    {0x088DABF0u, 0x2442A238u}, // addiu v0, v0, -24008: the item table
+    {0x088DABF8u, 0x90420001u}, // lbu v0, 1(v0)
+    {0x088DABFCu, 0x30420001u}, // andi v0, v0, 1
+    {0x088567C8u, 0x3421AEA6u}, // ori at, at, 0xAEA6: the pouch
+}};
+constexpr const std::array<CodeWord, 29> &kSignature =
+    kFreedomUniteCode ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 // game_task.ovl's first selection, as loaded at 0x09A5F300.
-constexpr std::array<CodeWord, 5> kSelectFirstSignature = {{
+constexpr std::array<CodeWord, 5> kSelectFirstSignatureFreedomUnite = {{
     {kSelectFirst, 0x27BDFFE0u}, // addiu sp, sp, -32
     {0x09A6814Cu, 0x948401E6u},  // lhu a0, 486(a0)
     {0x09A68150u, 0x90630028u},  // lbu v1, 40(v1)
     {0x09A68164u, 0xA6200648u},  // sh zr, 1608(s1)
     {0x09A681E0u, 0xA6230648u},  // sh v1, 1608(s1)
 }};
+// FUComplete's game_task, as loaded at 0x09A5A580.
+constexpr std::array<CodeWord, 5> kSelectFirstSignatureFUComplete = {{
+    {kSelectFirst, 0x27BDFFE0u}, // addiu sp, sp, -32
+    {0x09A6334Cu, 0x948401E6u},  // lhu a0, 486(a0)
+    {0x09A63350u, 0x90630028u},  // lbu v1, 40(v1)
+    {0x09A63364u, 0xA6200648u},  // sh zr, 1608(s1)
+    {0x09A633E0u, 0xA6230648u},  // sh v1, 1608(s1)
+}};
+constexpr const std::array<CodeWord, 5> &kSelectFirstSignature =
+    kFreedomUniteCode ? kSelectFirstSignatureFreedomUnite : kSelectFirstSignatureFUComplete;
 
 struct State {
     psprecomp::Runtime::RecompiledFunction original{};

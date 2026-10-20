@@ -53,10 +53,11 @@ inline constexpr bool kGatherHold = true;
 inline constexpr bool kGameAspect = true;
 // Give Any Rarity Item (game/give_rarity.cpp): the item menu's give check.
 inline constexpr bool kGiveRarity = true;
+// Empty item slot (game/empty_item_slot.cpp): the item bar's step and name.
+inline constexpr bool kEmptyItemSlot = true;
 // Not ported yet: they stay off, and their rows stay out of the menu.
 inline constexpr bool kUiScaling = kFreedomUniteExtras;     // UI Scaling (gpu/hud_scale)
 inline constexpr bool kHideHud = kFreedomUniteExtras;       // Hide HUD (gpu/game_hud)
-inline constexpr bool kEmptyItemSlot = kFreedomUniteExtras; // Empty item slot
 inline constexpr bool kDamageNumbers = kFreedomUniteExtras;
 inline constexpr bool kSharpnessGauge = kFreedomUniteExtras; // Modern sharpness gauge
 inline constexpr bool kGatherIcon = kFreedomUniteExtras;
