@@ -79,11 +79,14 @@ echo "compiling SDL's Java activity and the app's own"
 java_sources=()
 while IFS= read -r -d '' file; do java_sources+=("$file"); done < <(
     find "$sdl_dir/android-project/app/src/main/java" "$here/java" -name '*.java' -print0)
+# (Counted before use: bash 3.2, macOS's, takes an empty array for unset.)
+[[ ${#java_sources[@]} -gt 0 ]] || { echo "error: no Java sources under $sdl_dir or $here/java" >&2; exit 1; }
 javac -nowarn --release 11 -classpath "$android_jar" -d "$work/classes" \
     "${java_sources[@]}" 2> "$work/javac.log"
 min_sdk=29
 class_files=()
 while IFS= read -r -d '' file; do class_files+=("$file"); done < <(find "$work/classes" -name '*.class' -print0)
+[[ ${#class_files[@]} -gt 0 ]] || { echo "error: javac made no classes; see $work/javac.log" >&2; exit 1; }
 "$build_tools/d8" --release --min-api "$min_sdk" --lib "$android_jar" --output "$work/dex" \
     "${class_files[@]}"
 

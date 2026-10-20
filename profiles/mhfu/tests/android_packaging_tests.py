@@ -36,7 +36,10 @@ case "$(basename "$0")" in
     zipalign) cp "${{@: -2:1}}" "${{@: -1}}" ;;
     apksigner) printf '%s\\n' "$POKEE_APK_KEY_PASSWORD" > "{root}/password"; cp "${{@: -1}}" "$out" ;;
     d8) mkdir -p "$out"; touch "$out/classes.dex" ;;
-    javac) ;;
+    javac)
+        dir=""; prev=""
+        for arg in "$@"; do [[ "$prev" == -d ]] && dir="$arg"; prev="$arg"; done
+        touch "$dir/Stub.class" ;;
 esac
 """
 
@@ -66,7 +69,9 @@ class BuildApk(unittest.TestCase):
         executable(self.ndk / "toolchains" / "llvm" / "prebuilt" / "linux-x86_64" / "bin" / "llvm-strip",
                    "#!/bin/sh\nexit 0\n")
         self.sdl = self.root / "sdl"
-        (self.sdl / "android-project" / "app" / "src" / "main" / "java").mkdir(parents=True)
+        java = self.sdl / "android-project" / "app" / "src" / "main" / "java"
+        java.mkdir(parents=True)
+        (java / "SDLActivity.java").write_text("class SDLActivity {}\n")
         (self.sdl / "LICENSE.txt").write_text("zlib\n")
         self.build = self.root / "build dir"
         for name in ("bin/libmain.so", "bin/lib/libavcodec.so", "bin/lib/libavutil.so",
@@ -152,6 +157,13 @@ class BuildApk(unittest.TestCase):
         for name in ("Pokee-LICENSE.txt", "THIRD_PARTY_NOTICES.md", "DearImGui-LICENSE.txt",
                      "tiny-AES-c-UNLICENSE.txt", "xxHash-LICENSE.txt", "SDL3-LICENSE.txt"):
             self.assertTrue((licenses / name).is_file(), name)
+
+    def test_a_failed_java_build_is_refused(self):
+        executable(self.bin / "javac", "#!/bin/sh\nexit 0\n")
+        result = self.pack("FUC")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("javac made no classes", result.stderr)
+        self.assertFalse((self.root / "out.apk").exists())
 
     def test_chosen_sdk_versions(self):
         result = self.pack("FU", ANDROID_BUILD_TOOLS_VERSION="35.0.0", ANDROID_COMPILE_SDK_VERSION="35")
