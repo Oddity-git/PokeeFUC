@@ -385,7 +385,8 @@ void Menu::video() {
         }
     }
 #endif
-    {
+    // Each row below is shown only where its feature runs for this build's game (title.hpp).
+    if constexpr (kGameAspect) {
         static const char *const kAspects[] = {"Original", "Stretch", "Fill"};
         const int current = static_cast<int>(s.aspect);
         if (const int delta = choice_row("Aspect ratio", kAspects[current],
@@ -407,7 +408,7 @@ void Menu::video() {
         renderer().set_sharp_screen(s.sharp_screen);
         settings::save();
     }
-    {
+    if constexpr (kUiScaling) {
         struct Element {
             const char *name;
             const char *key;
@@ -460,7 +461,7 @@ void Menu::video() {
             ImGui::Unindent(ImGui::GetFontSize() * 0.75f);
         }
     }
-    {
+    if constexpr (kHideHud) {
         const std::string key = input::format(s.controls.keys[static_cast<std::size_t>(input::Action::HideHud)]);
         RowOptions o;
         o.description = "Hides the game's HUD for pictures and videos: health, stamina, sharpness, the clock, the "
@@ -1206,147 +1207,157 @@ void Menu::game() {
         s.gather_hold = !s.gather_hold;
         settings::save();
     }
-    if (toggle_row("Empty item slot", s.empty_item_slot,
-            options_for("game.empty_item_slot",
-                "On: the item bar has an empty slot, Nothing Selected, before the first item, and each quest "
-                "starts on it. With it selected, □ with the weapon sheathed uses nothing. A pouch with all 24 "
-                "slots filled has no room for it. Off: the game's own bar, which starts on the first item and "
-                "wraps from the last item to the first."))) {
-        s.empty_item_slot = !s.empty_item_slot;
-        settings::save();
-    }
-    section("Lock-on");
-    {
-        const auto slot = static_cast<std::size_t>(input::Action::LockOn);
-        std::string bind = input::format(s.controls.keys[slot]);
-        const std::string pad = input::format(s.controls.pad[slot]);
-        if (!pad.empty()) bind += (bind.empty() ? "" : " / ") + pad;
-        const std::string help = "A tap of Lock on" +
-            (bind.empty() ? std::string(" (unbound: set it in Controls)") : " (" + bind + ")") +
-            " selects the nearest large monster. Tap again for the next one in the area; after the last one, a tap "
-            "lets go. Lock-on style says whether the camera stays on it. Off, the bind does nothing and the hunt "
-            "icon is hidden.";
-        if (toggle_row("Lock-on", s.lock_on, options_for("input.lock_on", help.c_str()))) {
-            s.lock_on = !s.lock_on;
-            settings::save();
-        }
-        const char *const styles[] = {"Follow", "Focus"};
-        const int style = s.lock_on_style == settings::LockOnStyle::Focus ? 1 : 0;
-        const auto focus = static_cast<std::size_t>(input::Action::FocusCamera);
-        std::string focus_bind = input::format(s.controls.keys[focus]);
-        const std::string focus_pad = input::format(s.controls.pad[focus]);
-        if (!focus_pad.empty()) focus_bind += (focus_bind.empty() ? "" : " / ") + focus_pad;
-        const std::string focus_button = focus_bind.empty() ? std::string("L") : focus_bind;
-        const std::string style_help = "Follow keeps the camera on the selected monster. " +
-            (focus_bind.empty() ? std::string("Focus/Follow Camera, once bound,") : focus_button) +
-            " turns that tracking off and on again; the selection stays. "
-            "Turning it by hand, the D-pad, or L lets go, and L "
-            "recenters behind the hunter. Focus keeps the selection, and a tap of " +
-            focus_button +
-            " centers the camera on that monster, even when it is already on screen, and L's own camera move stays "
-            "off for that tap. A second tap within a third of a second recenters behind the hunter; the selection stays. A "
-            "later tap centers again. With nothing selected, L recenters behind the hunter. Focus/Follow Camera in Controls "
-            "chooses that tap; with nothing bound, it is L.";
-        RowOptions o = options_for("input.lock_on_style", std::move(style_help));
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (const int delta = choice_row("Lock-on style", styles[style], o)) {
-            // Either way, or confirm, moves to the other style, as the other choice rows wrap.
-            const int next = cycle(style, delta, 2);
-            s.lock_on_style = next == 0 ? settings::LockOnStyle::Follow : settings::LockOnStyle::Focus;
-            settings::save();
-        }
-        o = options_for("input.lock_on_marker",
-            "A red ring, a cross through it, and four ticks, over the monster the camera is locked onto. "
-            "Follow keeps it up while the camera is tracking. The right stick or Focus/Follow Camera turns it off "
-            "with that tracking; the selection stays, and the same button turns both back on. In Focus, selecting "
-            "leaves it off. The focus button shows it for a third of a second.");
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (toggle_row("Lock-on marker", s.lock_on_marker, o)) {
-            s.lock_on_marker = !s.lock_on_marker;
-            settings::save();
-        }
-        int portrait = static_cast<int>(s.hunt_portrait_size);
-        o = options_for("video.hunt_portrait",
-            "The monster icon at the bottom left, as a percent of its usual size. "
-            "A loading screen shows none. Off with Lock-on.");
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (slider_row("Monster Icon", portrait, static_cast<int>(settings::kMinHuntPortraitSize),
-                static_cast<int>(settings::kMaxHuntPortraitSize), 10, "%d%%", o)) {
-            s.hunt_portrait_size = static_cast<std::uint32_t>(portrait);
+    if constexpr (kEmptyItemSlot) {
+        if (toggle_row("Empty item slot", s.empty_item_slot,
+                options_for("game.empty_item_slot",
+                    "On: the item bar has an empty slot, Nothing Selected, before the first item, and each quest "
+                    "starts on it. With it selected, □ with the weapon sheathed uses nothing. A pouch with all 24 "
+                    "slots filled has no room for it. Off: the game's own bar, which starts on the first item and "
+                    "wraps from the last item to the first."))) {
+            s.empty_item_slot = !s.empty_item_slot;
             settings::save();
         }
     }
-    section("Overlays");
-    if (toggle_row("Damage numbers", s.damage_numbers,
-            options_for("game.damage_numbers",
-                "On: a number shows how much health a hit takes off a monster, drawn on the monster. A weak point "
-                "(hitzone 45 or more, after sharpness for a blade) is orange and any other part "
-                "is gray. The number stays white until that part is known, and a critical hit "
-                "keeps its own mark. Off: nothing is added."))) {
-        s.damage_numbers = !s.damage_numbers;
-        settings::save();
+    if constexpr (kLockOn) {
+        section("Lock-on");
+        {
+            const auto slot = static_cast<std::size_t>(input::Action::LockOn);
+            std::string bind = input::format(s.controls.keys[slot]);
+            const std::string pad = input::format(s.controls.pad[slot]);
+            if (!pad.empty()) bind += (bind.empty() ? "" : " / ") + pad;
+            const std::string help = "A tap of Lock on" +
+                (bind.empty() ? std::string(" (unbound: set it in Controls)") : " (" + bind + ")") +
+                " selects the nearest large monster. Tap again for the next one in the area; after the last one, a tap "
+                "lets go. Lock-on style says whether the camera stays on it. Off, the bind does nothing and the hunt "
+                "icon is hidden.";
+            if (toggle_row("Lock-on", s.lock_on, options_for("input.lock_on", help.c_str()))) {
+                s.lock_on = !s.lock_on;
+                settings::save();
+            }
+            const char *const styles[] = {"Follow", "Focus"};
+            const int style = s.lock_on_style == settings::LockOnStyle::Focus ? 1 : 0;
+            const auto focus = static_cast<std::size_t>(input::Action::FocusCamera);
+            std::string focus_bind = input::format(s.controls.keys[focus]);
+            const std::string focus_pad = input::format(s.controls.pad[focus]);
+            if (!focus_pad.empty()) focus_bind += (focus_bind.empty() ? "" : " / ") + focus_pad;
+            const std::string focus_button = focus_bind.empty() ? std::string("L") : focus_bind;
+            const std::string style_help = "Follow keeps the camera on the selected monster. " +
+                (focus_bind.empty() ? std::string("Focus/Follow Camera, once bound,") : focus_button) +
+                " turns that tracking off and on again; the selection stays. "
+                "Turning it by hand, the D-pad, or L lets go, and L "
+                "recenters behind the hunter. Focus keeps the selection, and a tap of " +
+                focus_button +
+                " centers the camera on that monster, even when it is already on screen, and L's own camera move stays "
+                "off for that tap. A second tap within a third of a second recenters behind the hunter; the selection stays. A "
+                "later tap centers again. With nothing selected, L recenters behind the hunter. Focus/Follow Camera in Controls "
+                "chooses that tap; with nothing bound, it is L.";
+            RowOptions o = options_for("input.lock_on_style", std::move(style_help));
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (const int delta = choice_row("Lock-on style", styles[style], o)) {
+                // Either way, or confirm, moves to the other style, as the other choice rows wrap.
+                const int next = cycle(style, delta, 2);
+                s.lock_on_style = next == 0 ? settings::LockOnStyle::Follow : settings::LockOnStyle::Focus;
+                settings::save();
+            }
+            o = options_for("input.lock_on_marker",
+                "A red ring, a cross through it, and four ticks, over the monster the camera is locked onto. "
+                "Follow keeps it up while the camera is tracking. The right stick or Focus/Follow Camera turns it off "
+                "with that tracking; the selection stays, and the same button turns both back on. In Focus, selecting "
+                "leaves it off. The focus button shows it for a third of a second.");
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (toggle_row("Lock-on marker", s.lock_on_marker, o)) {
+                s.lock_on_marker = !s.lock_on_marker;
+                settings::save();
+            }
+            int portrait = static_cast<int>(s.hunt_portrait_size);
+            o = options_for("video.hunt_portrait",
+                "The monster icon at the bottom left, as a percent of its usual size. "
+                "A loading screen shows none. Off with Lock-on.");
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (slider_row("Monster Icon", portrait, static_cast<int>(settings::kMinHuntPortraitSize),
+                    static_cast<int>(settings::kMaxHuntPortraitSize), 10, "%d%%", o)) {
+                s.hunt_portrait_size = static_cast<std::uint32_t>(portrait);
+                settings::save();
+            }
+        }
     }
-    {
-        RowOptions o = options_for("game.damage_number_size",
-            "How large damage numbers are drawn, in percent of the interface text. They still shrink when "
-            "the camera is close to the monster.");
-        o.disabled = o.disabled || !s.damage_numbers;
-        int size = static_cast<int>(s.damage_number_size);
-        if (slider_row("Damage number size", size, static_cast<int>(settings::kMinDamageNumberSize),
-                static_cast<int>(settings::kMaxDamageNumberSize), 10, "%d%%", o)) {
-            s.damage_number_size = static_cast<std::uint32_t>(size);
+    if constexpr (kDamageNumbers || kSharpnessGauge || kGatherIcon) section("Overlays");
+    if constexpr (kDamageNumbers) {
+        if (toggle_row("Damage numbers", s.damage_numbers,
+                options_for("game.damage_numbers",
+                    "On: a number shows how much health a hit takes off a monster, drawn on the monster. A weak point "
+                    "(hitzone 45 or more, after sharpness for a blade) is orange and any other part "
+                    "is gray. The number stays white until that part is known, and a critical hit "
+                    "keeps its own mark. Off: nothing is added."))) {
+            s.damage_numbers = !s.damage_numbers;
+            settings::save();
+        }
+        {
+            RowOptions o = options_for("game.damage_number_size",
+                "How large damage numbers are drawn, in percent of the interface text. They still shrink when "
+                "the camera is close to the monster.");
+            o.disabled = o.disabled || !s.damage_numbers;
+            int size = static_cast<int>(s.damage_number_size);
+            if (slider_row("Damage number size", size, static_cast<int>(settings::kMinDamageNumberSize),
+                    static_cast<int>(settings::kMaxDamageNumberSize), 10, "%d%%", o)) {
+                s.damage_number_size = static_cast<std::uint32_t>(size);
+                settings::save();
+            }
+        }
+        {
+            RowOptions o = options_for("game.damage_number_thickness",
+                "How bold damage numbers are: 1 is the font's own strokes with a thin dark outline, and each "
+                "step thickens both the digits and the outline. 3 is the thickest that stays readable.");
+            o.disabled = o.disabled || !s.damage_numbers;
+            int thickness = static_cast<int>(s.damage_number_thickness);
+            if (slider_row("Damage number thickness", thickness, 1,
+                    static_cast<int>(settings::kMaxDamageNumberThickness), 1, "%d", o)) {
+                s.damage_number_thickness = static_cast<std::uint32_t>(thickness);
+                settings::save();
+            }
+        }
+    }
+    if constexpr (kSharpnessGauge) {
+        if (toggle_row("Modern sharpness gauge", s.sharpness_gauge,
+                options_for("game.sharpness_gauge",
+                    "On: the colour the game paints on the blade shortens as that colour is spent, from "
+                    "the tip back to the handle. It stays solid and glows, and orange and yellow get a "
+                    "colour like the others. The bar under a long sword ends at the sharpness that is left. "
+                    "A weapon that loses less per hit, a guard and Handicraft are all included. "
+                    "Off: the game's own drawing."))) {
+            s.sharpness_gauge = !s.sharpness_gauge;
             settings::save();
         }
     }
-    {
-        RowOptions o = options_for("game.damage_number_thickness",
-            "How bold damage numbers are: 1 is the font's own strokes with a thin dark outline, and each "
-            "step thickens both the digits and the outline. 3 is the thickest that stays readable.");
-        o.disabled = o.disabled || !s.damage_numbers;
-        int thickness = static_cast<int>(s.damage_number_thickness);
-        if (slider_row("Damage number thickness", thickness, 1, static_cast<int>(settings::kMaxDamageNumberThickness),
-                1, "%d", o)) {
-            s.damage_number_thickness = static_cast<std::uint32_t>(thickness);
+    if constexpr (kGatherIcon) {
+        if (toggle_row("Gather icon", s.gather_icon,
+                options_for("game.gather_icon",
+                    "On: a mark floats above a gather point while you are close enough to gather it, with the "
+                    "picture of what it gives, and above a monster you can carve, with its icon. "
+                    "Off: no mark, and the gather list is not read."))) {
+            s.gather_icon = !s.gather_icon;
             settings::save();
         }
-    }
-    if (toggle_row("Modern sharpness gauge", s.sharpness_gauge,
-            options_for("game.sharpness_gauge",
-                "On: the colour the game paints on the blade shortens as that colour is spent, from "
-                "the tip back to the handle. It stays solid and glows, and orange and yellow get a "
-                "colour like the others. The bar under a long sword ends at the sharpness that is left. "
-                "A weapon that loses less per hit, a guard and Handicraft are all included. "
-                "Off: the game's own drawing."))) {
-        s.sharpness_gauge = !s.sharpness_gauge;
-        settings::save();
-    }
-    if (toggle_row("Gather icon", s.gather_icon,
-            options_for("game.gather_icon",
-                "On: a mark floats above a gather point while you are close enough to gather it, with the "
-                "picture of what it gives, and above a monster you can carve, with its icon. "
-                "Off: no mark, and the gather list is not read."))) {
-        s.gather_icon = !s.gather_icon;
-        settings::save();
-    }
-    {
-        RowOptions o = options_for("game.gather_icon_size",
-            "How large the gather mark is, in percent of its usual size. The disc and its picture grow together, "
-            "and the ring grows with them.");
-        o.disabled = o.disabled || !s.gather_icon;
-        int size = static_cast<int>(s.gather_icon_size);
-        if (slider_row("Gather icon size", size, static_cast<int>(settings::kMinGatherIconSize),
-                static_cast<int>(settings::kMaxGatherIconSize), 10, "%d%%", o)) {
-            s.gather_icon_size = static_cast<std::uint32_t>(size);
-            settings::save();
+        {
+            RowOptions o = options_for("game.gather_icon_size",
+                "How large the gather mark is, in percent of its usual size. The disc and its picture grow together, "
+                "and the ring grows with them.");
+            o.disabled = o.disabled || !s.gather_icon;
+            int size = static_cast<int>(s.gather_icon_size);
+            if (slider_row("Gather icon size", size, static_cast<int>(settings::kMinGatherIconSize),
+                    static_cast<int>(settings::kMaxGatherIconSize), 10, "%d%%", o)) {
+                s.gather_icon_size = static_cast<std::uint32_t>(size);
+                settings::save();
+            }
         }
     }
     section("Speed");
@@ -1783,15 +1794,17 @@ void Menu::network() {
 void Menu::mods() {
     if (layered_armor_screen(back_)) return;
     if (!mods_screen_open()) {
-        layered_armor_row();
-        settings::Settings &s = settings::current();
-        section("Gameplay");
-        if (toggle_row("Give Any Rarity Item", s.give_any_rarity,
-                options_for("game.give_any_rarity",
-                    "On: in the Guild Hall, Start > Item > Give hands an item of any rarity to another hunter. "
-                    "Off (default): the game's own limit, Rare 1 to 3 only."))) {
-            s.give_any_rarity = !s.give_any_rarity;
-            settings::save();
+        if constexpr (kLayeredArmor) layered_armor_row();
+        [[maybe_unused]] settings::Settings &s = settings::current();
+        if constexpr (kGiveRarity) {
+            section("Gameplay");
+            if (toggle_row("Give Any Rarity Item", s.give_any_rarity,
+                    options_for("game.give_any_rarity",
+                        "On: in the Guild Hall, Start > Item > Give hands an item of any rarity to another hunter. "
+                        "Off (default): the game's own limit, Rare 1 to 3 only."))) {
+                s.give_any_rarity = !s.give_any_rarity;
+                settings::save();
+            }
         }
     }
     mods_page(back_);

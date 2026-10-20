@@ -2923,10 +2923,12 @@ void menu_contracts(gpu::VulkanRenderer &renderer) {
     expect(settings::current().sharp_textures != initial_sharp_textures, "video menu changes actual texture filter");
     change_video("Texture filter", ImGuiKey_LeftArrow);
     expect(settings::current().sharp_textures == initial_sharp_textures, "texture filter round trip restores setting");
-    change_video("Aspect ratio", ImGuiKey_RightArrow);
-    expect(settings::current().aspect != initial_aspect, "video menu cycles renderer aspect ratio");
-    change_video("Aspect ratio", ImGuiKey_LeftArrow);
-    expect(settings::current().aspect == initial_aspect, "aspect ratio round trip restores renderer setting");
+    if constexpr (mhfu::kGameAspect) {
+        change_video("Aspect ratio", ImGuiKey_RightArrow);
+        expect(settings::current().aspect != initial_aspect, "video menu cycles renderer aspect ratio");
+        change_video("Aspect ratio", ImGuiKey_LeftArrow);
+        expect(settings::current().aspect == initial_aspect, "aspect ratio round trip restores renderer setting");
+    }
     auto cycle_setting = [&](const char *label, auto field, bool toggle = false) {
         const auto original = settings::current().*field;
         change_video(label, toggle ? ImGuiKey_Space : ImGuiKey_RightArrow);
@@ -3263,22 +3265,25 @@ void menu_contracts(gpu::VulkanRenderer &renderer) {
     cycle_setting("Game speed", &settings::Settings::unthrottled);
     cycle_setting("Fast loading", &settings::Settings::fast_loading, true);
     cycle_setting("Fast-forward", &settings::Settings::fast_forward);
-    // Lock-on style wraps like the other choice rows: from either style, left
-    // or right moves to the other one. It used to stop at each end.
-    const auto original_style = settings::current().lock_on_style;
-    settings::current().lock_on = true;
-    settings::current().lock_on_style = settings::LockOnStyle::Follow;
-    change_video("Lock-on style", ImGuiKey_RightArrow);
-    expect(settings::current().lock_on_style == settings::LockOnStyle::Focus, "lock-on style steps right to Focus");
-    change_video("Lock-on style", ImGuiKey_RightArrow);
-    expect(settings::current().lock_on_style == settings::LockOnStyle::Follow,
-        "lock-on style wraps right from Focus back to Follow");
-    change_video("Lock-on style", ImGuiKey_LeftArrow);
-    expect(settings::current().lock_on_style == settings::LockOnStyle::Focus,
-        "lock-on style wraps left from Follow to Focus");
-    change_video("Lock-on style", ImGuiKey_LeftArrow);
-    expect(settings::current().lock_on_style == settings::LockOnStyle::Follow, "lock-on style steps left to Follow");
-    settings::current().lock_on_style = original_style;
+    if constexpr (mhfu::kLockOn) {
+        // Lock-on style wraps like the other choice rows: from either style, left
+        // or right moves to the other one. It used to stop at each end.
+        const auto original_style = settings::current().lock_on_style;
+        settings::current().lock_on = true;
+        settings::current().lock_on_style = settings::LockOnStyle::Follow;
+        change_video("Lock-on style", ImGuiKey_RightArrow);
+        expect(settings::current().lock_on_style == settings::LockOnStyle::Focus, "lock-on style steps right to Focus");
+        change_video("Lock-on style", ImGuiKey_RightArrow);
+        expect(settings::current().lock_on_style == settings::LockOnStyle::Follow,
+            "lock-on style wraps right from Focus back to Follow");
+        change_video("Lock-on style", ImGuiKey_LeftArrow);
+        expect(settings::current().lock_on_style == settings::LockOnStyle::Focus,
+            "lock-on style wraps left from Follow to Focus");
+        change_video("Lock-on style", ImGuiKey_LeftArrow);
+        expect(
+            settings::current().lock_on_style == settings::LockOnStyle::Follow, "lock-on style steps left to Follow");
+        settings::current().lock_on_style = original_style;
+    }
     const auto original_fast_mode = settings::current().fast_forward;
     const auto original_fast_speed = settings::current().fast_forward_speed;
     change_video("Fast-forward speed", ImGuiKey_RightArrow);
@@ -3298,64 +3303,74 @@ void menu_contracts(gpu::VulkanRenderer &renderer) {
     expect(unlimited && settings::current().fast_forward == original_fast_mode,
         "Unlimited game speed disables independent fast-forward mode selection");
     change_video("Game speed", ImGuiKey_LeftArrow);
-    toggle_setting("Lock-on", &settings::Settings::lock_on);
-    change_video("Lock-on style", ImGuiKey_RightArrow);
-    expect(settings::current().lock_on_style == settings::LockOnStyle::Focus, "lock-on style switches to focus");
-    change_video("Lock-on style", ImGuiKey_LeftArrow);
-    expect(
-        settings::current().lock_on_style == settings::LockOnStyle::Follow, "lock-on style round trip restores follow");
-    toggle_setting("Lock-on marker", &settings::Settings::lock_on_marker);
-    {
-        const bool lock_on = settings::current().lock_on;
-        const auto style = settings::current().lock_on_style;
-        const bool marker = settings::current().lock_on_marker;
-        settings::current().lock_on = false;
+    if constexpr (mhfu::kLockOn) {
+        toggle_setting("Lock-on", &settings::Settings::lock_on);
         change_video("Lock-on style", ImGuiKey_RightArrow);
-        change_video("Lock-on marker", ImGuiKey_Space);
-        expect(settings::current().lock_on_style == style && settings::current().lock_on_marker == marker,
-            "lock-on style and marker are locked while lock-on is off");
-        settings::current().lock_on = lock_on;
+        expect(settings::current().lock_on_style == settings::LockOnStyle::Focus, "lock-on style switches to focus");
+        change_video("Lock-on style", ImGuiKey_LeftArrow);
+        expect(settings::current().lock_on_style == settings::LockOnStyle::Follow,
+            "lock-on style round trip restores follow");
+        toggle_setting("Lock-on marker", &settings::Settings::lock_on_marker);
+        {
+            const bool lock_on = settings::current().lock_on;
+            const auto style = settings::current().lock_on_style;
+            const bool marker = settings::current().lock_on_marker;
+            settings::current().lock_on = false;
+            change_video("Lock-on style", ImGuiKey_RightArrow);
+            change_video("Lock-on marker", ImGuiKey_Space);
+            expect(settings::current().lock_on_style == style && settings::current().lock_on_marker == marker,
+                "lock-on style and marker are locked while lock-on is off");
+            settings::current().lock_on = lock_on;
+        }
     }
-    toggle_setting("Damage numbers", &settings::Settings::damage_numbers);
-    {
-        const bool numbers = settings::current().damage_numbers;
-        const std::uint32_t size = settings::current().damage_number_size;
-        const std::uint32_t thickness = settings::current().damage_number_thickness;
-        settings::current().damage_numbers = false;
-        change_video("Damage number size", ImGuiKey_RightArrow);
-        change_video("Damage number thickness", ImGuiKey_RightArrow);
-        expect(
-            settings::current().damage_number_size == size && settings::current().damage_number_thickness == thickness,
-            "damage number size and thickness are locked while the numbers are off");
-        settings::current().damage_numbers = true;
-        change_video("Damage number size", ImGuiKey_RightArrow);
-        change_video("Damage number thickness", ImGuiKey_RightArrow);
-        expect(settings::current().damage_number_size == size + 10u &&
-                settings::current().damage_number_thickness == thickness + 1u,
-            "damage number size steps by 10% and thickness by 1");
-        change_video("Damage number size", ImGuiKey_LeftArrow);
-        change_video("Damage number thickness", ImGuiKey_LeftArrow);
-        expect(
-            settings::current().damage_number_size == size && settings::current().damage_number_thickness == thickness,
-            "damage number size and thickness round trip");
-        settings::current().damage_numbers = numbers;
+    if constexpr (mhfu::kDamageNumbers) {
+        toggle_setting("Damage numbers", &settings::Settings::damage_numbers);
+        {
+            const bool numbers = settings::current().damage_numbers;
+            const std::uint32_t size = settings::current().damage_number_size;
+            const std::uint32_t thickness = settings::current().damage_number_thickness;
+            settings::current().damage_numbers = false;
+            change_video("Damage number size", ImGuiKey_RightArrow);
+            change_video("Damage number thickness", ImGuiKey_RightArrow);
+            expect(settings::current().damage_number_size == size &&
+                    settings::current().damage_number_thickness == thickness,
+                "damage number size and thickness are locked while the numbers are off");
+            settings::current().damage_numbers = true;
+            change_video("Damage number size", ImGuiKey_RightArrow);
+            change_video("Damage number thickness", ImGuiKey_RightArrow);
+            expect(settings::current().damage_number_size == size + 10u &&
+                    settings::current().damage_number_thickness == thickness + 1u,
+                "damage number size steps by 10% and thickness by 1");
+            change_video("Damage number size", ImGuiKey_LeftArrow);
+            change_video("Damage number thickness", ImGuiKey_LeftArrow);
+            expect(settings::current().damage_number_size == size &&
+                    settings::current().damage_number_thickness == thickness,
+                "damage number size and thickness round trip");
+            settings::current().damage_numbers = numbers;
+        }
     }
-    {
-        const bool icon = settings::current().gather_icon;
-        const std::uint32_t size = settings::current().gather_icon_size;
-        settings::current().gather_icon = false;
-        change_video("Gather icon size", ImGuiKey_RightArrow);
-        expect(settings::current().gather_icon_size == size, "gather icon size is locked while the icon is off");
-        settings::current().gather_icon = true;
-        change_video("Gather icon size", ImGuiKey_RightArrow);
-        expect(settings::current().gather_icon_size == size + 10u, "gather icon size steps by 10%");
-        change_video("Gather icon size", ImGuiKey_LeftArrow);
-        expect(settings::current().gather_icon_size == size, "gather icon size round trips");
-        settings::current().gather_icon = icon;
+    if constexpr (mhfu::kGatherIcon) {
+        {
+            const bool icon = settings::current().gather_icon;
+            const std::uint32_t size = settings::current().gather_icon_size;
+            settings::current().gather_icon = false;
+            change_video("Gather icon size", ImGuiKey_RightArrow);
+            expect(settings::current().gather_icon_size == size, "gather icon size is locked while the icon is off");
+            settings::current().gather_icon = true;
+            change_video("Gather icon size", ImGuiKey_RightArrow);
+            expect(settings::current().gather_icon_size == size + 10u, "gather icon size steps by 10%");
+            change_video("Gather icon size", ImGuiKey_LeftArrow);
+            expect(settings::current().gather_icon_size == size, "gather icon size round trips");
+            settings::current().gather_icon = icon;
+        }
     }
     toggle_setting("Hold to gather", &settings::Settings::gather_hold);
-    toggle_setting("Empty item slot", &settings::Settings::empty_item_slot);
-    toggle_setting("Modern sharpness gauge", &settings::Settings::sharpness_gauge);
+    if constexpr (mhfu::kEmptyItemSlot) {
+        toggle_setting("Empty item slot", &settings::Settings::empty_item_slot);
+    }
+    if constexpr (mhfu::kSharpnessGauge) {
+        toggle_setting("Modern sharpness gauge", &settings::Settings::sharpness_gauge);
+    }
     toggle_setting("Pause the game when the menu opens", &settings::Settings::menu_pause);
     toggle_setting("Pause during multiplayer", &settings::Settings::menu_pause_multiplayer);
     {
@@ -3652,6 +3667,8 @@ void menu_contracts(gpu::VulkanRenderer &renderer) {
 }
 
 void layered_armor_ui_contracts(gpu::VulkanRenderer &renderer, psprecomp::Runtime &runtime) {
+    // Another title's build leaves layered armor out of the menu (title.hpp).
+    if constexpr (!mhfu::kLayeredArmor) return;
     auto &layer = ui::Layer::get();
     expect(layer.attach(renderer), "layered fixture attaches the real UI");
     layer.set_interactive(true);
