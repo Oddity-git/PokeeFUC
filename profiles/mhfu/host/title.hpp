@@ -77,8 +77,9 @@ inline constexpr bool kHallMeal = true;
 // Item Sets (game/item_sets.cpp): the item box's menu, its record and lists,
 // and the game's windows, with FUComplete's ○ to choose.
 inline constexpr bool kItemSets = true;
-// Not yet ported to FUComplete: the Guild Hall's Change Equipment
-// (game/hall_equipment.cpp) calls and hooks Freedom Unite's lobby code.
-inline constexpr bool kHallEquipment = kFreedomUniteExtras;
+// Change Equipment in the Guild Hall (game/hall_equipment.cpp): the box's
+// frame and menu, the member entries of ad hoc play, and the hall's model
+// loader and archive rows.
+inline constexpr bool kHallEquipment = true;
 
 } // namespace mhfu

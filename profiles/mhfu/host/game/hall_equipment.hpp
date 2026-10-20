@@ -120,6 +120,7 @@
 // runs to its end inside the wrapper.
 
 #include "psprecomp/guest_memory.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <cstdint>
@@ -132,35 +133,43 @@ struct AllegrexContext;
 
 namespace mhfu::game::hall_equipment {
 
-inline constexpr std::uint32_t kBoxUpdate = 0x09ADCCD0u;
-inline constexpr std::uint32_t kMenuDraw = 0x09AE38F8u;
+// The addresses below are Freedom Unite's, and FUComplete's after them: the
+// same code and data in its executable and its lobby_task (loaded at
+// 0x09A5A580, as FUComplete's loader patches it). The session, the member
+// entries, the archive's rows and the loader's requests have the same
+// layout in both.
+inline constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+
+inline constexpr std::uint32_t kBoxUpdate = kFreedomUniteCode ? 0x09ADCCD0u : 0x09AD7B68u;
+inline constexpr std::uint32_t kMenuDraw = kFreedomUniteCode ? 0x09AE38F8u : 0x09ADE790u;
 inline constexpr std::uint32_t kHallFlag = 0x34u; // u8: 1 for the Guild Hall's box
 inline constexpr std::uint32_t kCursor = 0x36u;   // u8: the top menu's entry
 inline constexpr std::uint32_t kScreen = 0x38u;   // u8: 0 on the top menu
 inline constexpr std::uint32_t kShown = 0x60u;    // u8: 0 while the menu is put away
 inline constexpr std::uint8_t kChangeEquipment = 3u;
-inline constexpr std::uint16_t kConfirm = 0x4000u;
-inline constexpr std::uint16_t kCancel = 0x2000u;
+// Choose and back: × and ○ in Freedom Unite, ○ and × in FUComplete.
+inline constexpr std::uint16_t kConfirm = kFreedomUniteCode ? 0x4000u : 0x2000u;
+inline constexpr std::uint16_t kCancel = kFreedomUniteCode ? 0x2000u : 0x4000u;
 inline constexpr std::uint16_t kStart = 0x0008u; // puts the house's menu away
 // The hall's label for Change Equipment, and the two texts it can hold.
-inline constexpr std::uint32_t kHallLabel = 0x09B05168u + 2u * kChangeEquipment;
+inline constexpr std::uint32_t kHallLabel = (kFreedomUniteCode ? 0x09B05168u : 0x09AFFDA8u) + 2u * kChangeEquipment;
 // The hall's labels, where Change Equipment's is entry 3, or entry 4 once
 // Item Sets (game/item_sets.hpp) has put its row before it. The label is
 // found by its text, which no other row of the hall's box has.
-inline constexpr std::uint32_t kHallLabels = 0x09B05168u;
+inline constexpr std::uint32_t kHallLabels = kFreedomUniteCode ? 0x09B05168u : 0x09AFFDA8u;
 inline constexpr std::uint32_t kHallLabelRows = 8u;
 inline constexpr std::uint16_t kGreyLabel = 0x012Fu;
 inline constexpr std::uint16_t kLabel = 0x0129u;
 // The buttons as 0x0884FB6C returns them: none while the byte at
 // load32(kPadGate) + 0x74 is set, otherwise the word at kPadPressed with the
 // D-pad bits of the word at kPadRepeat.
-inline constexpr std::uint32_t kPadGate = 0x08A62D80u;
+inline constexpr std::uint32_t kPadGate = kFreedomUniteCode ? 0x08A62D80u : 0x08A5DD30u;
 inline constexpr std::uint32_t kPadGateByte = 0x74u;
-inline constexpr std::uint32_t kPadPressed = 0x08A62D8Cu;
-inline constexpr std::uint32_t kPadRepeat = 0x08A62D94u;
+inline constexpr std::uint32_t kPadPressed = kFreedomUniteCode ? 0x08A62D8Cu : 0x08A5DD3Cu;
+inline constexpr std::uint32_t kPadRepeat = kFreedomUniteCode ? 0x08A62D94u : 0x08A5DD44u;
 // The refresh of this console's member entry, and the session it takes.
-inline constexpr std::uint32_t kRefreshOwnEntry = 0x0889D6ECu;
-inline constexpr std::uint32_t kSessionPointer = 0x09A0B684u;
+inline constexpr std::uint32_t kRefreshOwnEntry = kFreedomUniteCode ? 0x0889D6ECu : 0x088A0570u;
+inline constexpr std::uint32_t kSessionPointer = kFreedomUniteCode ? 0x09A0B684u : 0x09A07284u;
 inline constexpr std::uint32_t kSessionBytes = 0x12D8u; // up to the status bytes the refresh reads
 inline constexpr std::uint32_t kSendCounter = 0x12D0u;  // s32: sent when it goes below 0
 inline constexpr std::uint32_t kStatus = 0x12D5u;       // u8: this console's status
@@ -172,29 +181,29 @@ inline constexpr std::uint8_t kReadyFirst = 3u;
 inline constexpr std::uint8_t kReadyLast = 5u;
 inline constexpr std::uint32_t kAbsentFrames = 45u;
 // The reset of a slot's parts, and where the reload's own call returns.
-inline constexpr std::uint32_t kSlotReset = 0x088DB534u;
-inline constexpr std::uint32_t kReloadResetReturn = 0x09A7E1A4u;
+inline constexpr std::uint32_t kSlotReset = kFreedomUniteCode ? 0x088DB534u : 0x088DDE7Cu;
+inline constexpr std::uint32_t kReloadResetReturn = kFreedomUniteCode ? 0x09A7E1A4u : 0x09A79314u;
 // The members' entries, this console's address, and its hunter record.
 inline constexpr std::uint32_t kMembers = 0x57Cu;
 inline constexpr std::uint32_t kMemberBytes = 0xC8u;
 inline constexpr std::uint32_t kMemberCount = 0xEE3u; // s8
 inline constexpr std::uint32_t kMemberHunter = 0x20u;
-inline constexpr std::uint32_t kOwnAddress = 0x09A289BCu; // 6 bytes
-inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
+inline constexpr std::uint32_t kOwnAddress = kFreedomUniteCode ? 0x09A289BCu : 0x09A245B8u; // 6 bytes
+inline constexpr std::uint32_t kGameSysPointer = kFreedomUniteCode ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kOwnRecord = 0x30u;
 inline constexpr std::uint32_t kRecordMirror = 0x10u; // entry hunter + i is record + 0x10 + i
 inline constexpr std::uint32_t kMirrorGapFirst = 0x19u; // three bytes the loader skips
 inline constexpr std::uint32_t kMirrorGapEnd = 0x1Cu;
 inline constexpr std::uint32_t kMirrorEnd = 0x79u;
 // The model loader, its request for this hunter, and the states that run it.
-inline constexpr std::uint32_t kLoaderFrame = 0x09A7C9C8u;
-inline constexpr std::uint32_t kRequestOwnReload = 0x09A7D390u;
-inline constexpr std::uint32_t kLoaderPointer = 0x09B23790u;
+inline constexpr std::uint32_t kLoaderFrame = kFreedomUniteCode ? 0x09A7C9C8u : 0x09A77B38u;
+inline constexpr std::uint32_t kRequestOwnReload = kFreedomUniteCode ? 0x09A7D390u : 0x09A78500u;
+inline constexpr std::uint32_t kLoaderPointer = kFreedomUniteCode ? 0x09B23790u : 0x09B1E308u;
 inline constexpr std::uint32_t kOwnReloadFirst = 3u;
 inline constexpr std::uint32_t kOwnReloadLast = 5u;
 // The archive's rows, per part e = slot * 8 + part.
-inline constexpr std::uint32_t kArchivePointer = 0x08A62D7Cu;
-inline constexpr std::uint32_t kFilesPointer = 0x09A4F204u;
+inline constexpr std::uint32_t kArchivePointer = kFreedomUniteCode ? 0x08A62D7Cu : 0x08A5DD2Cu;
+inline constexpr std::uint32_t kFilesPointer = kFreedomUniteCode ? 0x09A4F204u : 0x09A4AE04u;
 inline constexpr std::uint32_t kSlotParts = 8u;
 inline constexpr std::uint32_t kRowKind = 0x800A8u;    // 8 bytes: kind, and the part's room at +4
 inline constexpr std::uint32_t kRowAddress = 0x80258u; // 4 bytes
