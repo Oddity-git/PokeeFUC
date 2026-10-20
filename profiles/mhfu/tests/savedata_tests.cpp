@@ -147,8 +147,10 @@ void test_store() {
     // A changed data file must be reported as broken.
     {
         std::fstream data(folder / "DATA.BIN", std::ios::binary | std::ios::in | std::ios::out);
+        data.seekg(100);
+        const int byte = data.get();
         data.seekp(100);
-        data.put('\x7f');
+        data.put(static_cast<char>(byte ^ 0xFF));
     }
     check(load_save(root, files).status == LoadStatus::Broken, "a modified data file is rejected");
     SaveFiles missing = files;
@@ -223,8 +225,12 @@ void test_earlier_keys() {
     {
         std::fstream file(memory_stick / "PSP" / "SAVEDATA" / "ULUS10391" / "MHP2NDG.BIN",
             std::ios::binary | std::ios::in | std::ios::out);
+        // The data is encrypted with a random IV, so flip the byte rather than
+        // write a fixed value it may already hold.
+        file.seekg(100);
+        const int byte = file.get();
         file.seekp(100);
-        file.put('\x7f');
+        file.put(static_cast<char>(byte ^ 0xFF));
     }
     loaded = load_save_with_earlier_key(memory_stick, files, earlier);
     check(loaded.status == LoadStatus::Broken && !earlier, "a damaged save matches no key and stays broken");
@@ -262,8 +268,10 @@ void test_transfer() {
         fs::copy_file(entry.path(), damaged / entry.path().filename());
     {
         std::fstream data(damaged / "MHP2NDG.BIN", std::ios::binary | std::ios::in | std::ios::out);
+        data.seekg(200);
+        const int byte = data.get();
         data.seekp(200);
-        data.put('\x7f');
+        data.put(static_cast<char>(byte ^ 0xFF));
     }
     check(!check_save_folder(damaged, key).ok(), "a damaged data file is refused");
     // A damaged PARAM.SFO: the title changed, which its hashes cover.

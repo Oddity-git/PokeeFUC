@@ -65,6 +65,9 @@ def main():
         fixtures = build / "bin/overlay-fixtures"
         if fixtures.is_dir():
             subprocess.run(["adb", "push", str(fixtures), remote + "/"], check=True, timeout=120)
+        hud_fixtures = Path(__file__).resolve().parents[2] / "profiles/mhfu/tests/hud_scale_fixtures"
+        if hud_fixtures.is_dir():
+            subprocess.run(["adb", "push", str(hud_fixtures), remote + "/"], check=True, timeout=120)
         subprocess.run(["adb", "shell", f"chmod 755 {remote}/*tests {remote}/psp_recomp"],
                        check=True, timeout=120)
         for test in tests:
@@ -73,7 +76,8 @@ def main():
             shell = (f"cd {remote} && export LD_LIBRARY_PATH={remote} TMPDIR={remote}/tmp "
                      f"HOME={remote}/home PSPRECOMP_CODEGEN_PATH={remote}/psp_recomp "
                      f"PSPRECOMP_TEST_NIDS_CSV={remote}/nids.csv "
-                     f"MHFU_OVERLAY_FIXTURE_DIR={remote}/overlay-fixtures && "
+                     f"MHFU_OVERLAY_FIXTURE_DIR={remote}/overlay-fixtures "
+                     f"MHFU_HUD_SCALE_FIXTURE_DIR={remote}/hud_scale_fixtures && "
                      "timeout 120 " + shlex.join(["env", *test["remote_environment"], *command]))
             start = time.monotonic()
             try:
