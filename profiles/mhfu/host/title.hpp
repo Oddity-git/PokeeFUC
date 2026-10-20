@@ -51,6 +51,8 @@ inline constexpr bool kLockOn = kFreedomUniteExtras;
 inline constexpr bool kGatherHold = true;
 // Aspect ratio's Fill (camera/game_aspect.cpp): the camera object's projection.
 inline constexpr bool kGameAspect = true;
+// Give Any Rarity Item (game/give_rarity.cpp): the item menu's give check.
+inline constexpr bool kGiveRarity = true;
 // Not ported yet: they stay off, and their rows stay out of the menu.
 inline constexpr bool kUiScaling = kFreedomUniteExtras;     // UI Scaling (gpu/hud_scale)
 inline constexpr bool kHideHud = kFreedomUniteExtras;       // Hide HUD (gpu/game_hud)
@@ -58,7 +60,6 @@ inline constexpr bool kEmptyItemSlot = kFreedomUniteExtras; // Empty item slot
 inline constexpr bool kDamageNumbers = kFreedomUniteExtras;
 inline constexpr bool kSharpnessGauge = kFreedomUniteExtras; // Modern sharpness gauge
 inline constexpr bool kGatherIcon = kFreedomUniteExtras;
-inline constexpr bool kGiveRarity = kFreedomUniteExtras;   // Give Any Rarity Item
 inline constexpr bool kLayeredArmor = kFreedomUniteExtras; // Layered armor and equipment models
 
 } // namespace mhfu

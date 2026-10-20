@@ -17,8 +17,13 @@
 //
 // The wrapper sets that one record's rarity to 0 for the call and puts it
 // back after, so every other check stays the game's.
+//
+// FUComplete's executable has the same code: the check at 0x08829FC4, the item
+// id at 0x08826F8C, the pouch slot at 0x088567AC and the item table at
+// 0x0899A238. The build's title picks the addresses (title.hpp).
 
 #include "psprecomp/guest_memory.hpp"
+#include "title.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -30,12 +35,13 @@ class Runtime;
 
 namespace mhfu::game::give_rarity {
 
-inline constexpr std::uint32_t kCanGive = 0x08829928u;
-inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
+inline constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+inline constexpr std::uint32_t kCanGive = kFreedomUniteCode ? 0x08829928u : 0x08829FC4u;
+inline constexpr std::uint32_t kGameSysPointer = kFreedomUniteCode ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kPouch = 0x6AEA6u;
 inline constexpr std::uint32_t kPouchSlots = 25u; // 0x08856884 takes 0 to 24
 inline constexpr std::uint32_t kSelectedSlot = 1414u;
-inline constexpr std::uint32_t kItemTable = 0x0899D2B8u;
+inline constexpr std::uint32_t kItemTable = kFreedomUniteCode ? 0x0899D2B8u : 0x0899A238u;
 inline constexpr std::uint32_t kItemRecord = 24u;
 inline constexpr std::uint32_t kRarity = 2u;
 inline constexpr std::uint8_t kGameLimit = 3u; // rarity bytes below this can be given
