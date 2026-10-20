@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Package an Android release: a signed APK for arm64-v8a phones.
+# Package an Android release: a signed APK for arm64-v8a phones. A build
+# configured with -DMHFU_TITLE=FUC packs PokeeFUC (pokeefuc-*.apk, its own
+# app beside Pokee); otherwise it is Pokee (pokee-*.apk).
 #
 #   release_android.sh <build-dir> [--version VERSION] [--jobs N]
 #
@@ -74,7 +76,11 @@ fi
 # The code Android compares: the number of commits, which only grows along
 # the history releases are made from.
 version_code="$(git -C "$repo_dir" rev-list --count HEAD)"
-name="pokee-$version-android-arm64"
+case "$(cached MHFU_TITLE | tr '[:lower:]' '[:upper:]')" in
+    ""|FU) name="pokee-$version-android-arm64" ;;
+    FUC) name="pokeefuc-$version-android-arm64" ;;
+    *) echo "error: unknown MHFU_TITLE in $build_dir" >&2; exit 1 ;;
+esac
 
 work="${POKEE_WORK:-$repo_dir/out/release-android}"
 dist="$work/dist"

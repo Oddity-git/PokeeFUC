@@ -62,6 +62,7 @@ test: build
 
 python-test:
 	$(PYTHON) profiles/mhfu/tests/tool_security_tests.py
+	$(PYTHON) profiles/mhfu/tests/android_packaging_tests.py
 	$(PYTHON) -m unittest discover -s scripts/ci -p 'test_*.py'
 
 java-test:
@@ -126,6 +127,7 @@ coverage-tools:
 python-coverage:
 	"$(COVERAGE_PYTHON)" -m coverage erase
 	"$(COVERAGE_PYTHON)" -m coverage run --parallel-mode profiles/mhfu/tests/tool_security_tests.py
+	"$(COVERAGE_PYTHON)" -m coverage run --parallel-mode profiles/mhfu/tests/android_packaging_tests.py
 	"$(COVERAGE_PYTHON)" -m coverage run --parallel-mode -m unittest discover -s scripts/ci -p 'test_*.py'
 	"$(COVERAGE_PYTHON)" -m coverage combine --append
 	"$(COVERAGE_PYTHON)" -m coverage json
