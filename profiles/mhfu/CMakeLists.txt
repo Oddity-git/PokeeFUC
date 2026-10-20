@@ -1234,10 +1234,14 @@ if(NOT WIN32)
             PREFIX ""
             LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_FIXTURE_DIR}"
             OUTPUT_NAME "fixture_${mark}")
+        # The framework's symbols come from the test executable when the
+        # fixture is loaded. The NDK links with --no-undefined and ld64
+        # refuses undefined symbols in a bundle, so both are told to leave
+        # them to the loader, as ELF does by default.
         if(ANDROID)
-            # The NDK links with --no-undefined; like a game overlay, the
-            # fixture leaves the framework's symbols to the loader.
             target_link_options(${fixture_target} PRIVATE "LINKER:-z,undefs")
+        elseif(APPLE)
+            target_link_options(${fixture_target} PRIVATE "LINKER:-undefined,dynamic_lookup")
         endif()
     endforeach()
     add_executable(mhfu_overlay_swap_tests tests/overlay_swap_tests.cpp)
