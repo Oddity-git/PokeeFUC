@@ -546,7 +546,9 @@ inline constexpr int kNamePlates = 4;
 // its letters from y 72 over the plate's width, with its face below them.
 inline constexpr float kNameLetterLeft = 26.0f;
 inline constexpr float kNameLetterAdvance = 8.0f;
-inline constexpr float kPlateEndLeft = 96.0f;
+// FUComplete's plate is 8 shorter, (8, 56)-(96, 72), so its end is at x 88
+// (MHFU_TRACE_CAPTURE in a FUComplete quest).
+inline constexpr float kPlateEndLeft = game::layout::kFreedomUniteLayout ? 96.0f : 88.0f;
 
 [[nodiscard]] inline bool on_party_row(Rect rect) {
     const Rect r = normalized(rect);

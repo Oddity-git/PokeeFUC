@@ -267,12 +267,6 @@ void test_parse_and_owner() {
 } // namespace
 
 int main(int argc, char **argv) {
-    // The fixtures are captures of Freedom Unite's HUD, with its texture
-    // addresses; another title's build has its own.
-    if constexpr (mhfu::kTitle != mhfu::Title::FreedomUnite) {
-        std::cout << "skipped: the fixtures are Freedom Unite captures\n";
-        return 0;
-    }
     // mhfu_hud_scale_replay_tests <log or trace> [map health items names]:
     // prints each quad of that capture as replayed at those sizes (in
     // percent, the player's own by default here 100), to find the rule that
@@ -282,6 +276,12 @@ int main(int argc, char **argv) {
         for (int i = 0; i < 4 && i + 2 < argc; ++i) size[i] = static_cast<std::uint32_t>(std::atoi(argv[i + 2]));
         kScales = hs::Scales::from_percent(size[0], size[1], size[2], size[3]);
         for (const std::string &line : replay_file(argv[1]).lines) std::cout << line << "\n";
+        return 0;
+    }
+    // The fixtures are captures of Freedom Unite's HUD, with its texture
+    // addresses; another title's build has its own.
+    if constexpr (mhfu::kTitle != mhfu::Title::FreedomUnite) {
+        std::cout << "skipped: the fixtures are Freedom Unite captures\n";
         return 0;
     }
     test_parse_and_owner();
