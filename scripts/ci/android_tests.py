@@ -61,6 +61,10 @@ def main():
             subprocess.run(["adb", "push", str(binary), remote + "/"], check=True, timeout=120)
         subprocess.run(["adb", "push", str(stl), remote + "/libc++_shared.so"], check=True, timeout=120)
         subprocess.run(["adb", "push", str(nids), remote + "/nids.csv"], check=True, timeout=120)
+        # Overlay fixtures are loaded at run time from a folder; copy it beside the tests.
+        fixtures = build / "bin/overlay-fixtures"
+        if fixtures.is_dir():
+            subprocess.run(["adb", "push", str(fixtures), remote + "/"], check=True, timeout=120)
         subprocess.run(["adb", "shell", f"chmod 755 {remote}/*tests {remote}/psp_recomp"],
                        check=True, timeout=120)
         for test in tests:
@@ -68,7 +72,8 @@ def main():
             command = [remote + "/" + Path(test["command"][0]).name, *test["command"][1:]]
             shell = (f"cd {remote} && export LD_LIBRARY_PATH={remote} TMPDIR={remote}/tmp "
                      f"HOME={remote}/home PSPRECOMP_CODEGEN_PATH={remote}/psp_recomp "
-                     f"PSPRECOMP_TEST_NIDS_CSV={remote}/nids.csv && "
+                     f"PSPRECOMP_TEST_NIDS_CSV={remote}/nids.csv "
+                     f"MHFU_OVERLAY_FIXTURE_DIR={remote}/overlay-fixtures && "
                      "timeout 120 " + shlex.join(["env", *test["remote_environment"], *command]))
             start = time.monotonic()
             try:
