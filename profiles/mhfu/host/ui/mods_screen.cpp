@@ -525,6 +525,16 @@ void mods_page(bool back) {
     ModSession *session = mods::session();
     if (session == nullptr) {
         section("Mods");
+        // FUComplete replaces files itself (mods/mhfu_mods.cpp), so the
+        // list of Freedom Unite mods is off in its build, not missing.
+        if constexpr (kTitle == Title::FUComplete) {
+            indented("FUComplete replaces game files with its own file replacer, so " MHFU_APP_NAME
+                     " leaves this list of Freedom Unite mods off: they are made for Freedom Unite's files.");
+            indented("FUComplete's replacements are files named by their file id in its NATIVEPSP folder, in "
+                     "ms0/PSP/SAVEDATA/FUCDAT inside the data folder. FUCTool's Configuration chooses where it "
+                     "reads them (File Replacer Path) and builds that folder from a mods folder.");
+            return;
+        }
         indented("Mods need the game's disc image, which is not open.");
         return;
     }
