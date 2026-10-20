@@ -100,6 +100,14 @@ constexpr std::uint32_t kSnapCount = 0x8Du;
 // Non-negative, this byte selects the behind-the-hunter placement (0x08887530)
 // and the follow driver leaves that update to the game.
 constexpr std::uint32_t kAim = 0x91u;
+// A game option, copied into GameSys at this offset (0x088496F4 in
+// FUComplete). Set, the follow update picks again, every update, the vertical
+// preset whose height is nearest the view it has (0x088876A8 in Freedom
+// Unite, 0x088873AC in FUComplete) and points +0x70 at it. That undid the
+// height and distance the driver had bent the preset to, so the tilt eased
+// back as soon as it was made. While the driver owns the pitch, the option
+// reads as off for the update and is put back afterwards.
+constexpr std::uint32_t kVerticalSnapOption = 0x6ADE0u;
 // The followed hunter is not an argument of the camera update. 0x08886E80
 // loads the camera object and 0x08886EF8 loads the hunter from it
 // (game::layout::followed_hunter). The same object is s3 where the aim camera
@@ -239,7 +247,7 @@ constexpr float kMouseStockTurn = 0.5f;
 // Game code the driver depends on, read from ULUS-10391. If any word differs,
 // the executable is not the one these facts were read from, and the driver
 // stays out rather than write to places that may mean something else.
-constexpr std::array<CodeWord, 38> kSignatureFreedomUnite{{
+constexpr std::array<CodeWord, 40> kSignatureFreedomUnite{{
     {0x08886E50u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
     {0x08886EC8u, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
     {0x08887470u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
@@ -280,12 +288,14 @@ constexpr std::array<CodeWord, 38> kSignatureFreedomUnite{{
     {0x0888D05Cu, 0xA6030086u, "sh v1,0x86(s0): written to the camera in the branch delay"},
     {0x088874E4u, 0x0E223925u, "jal 0x0888E494: the recenter check"},
     {0x0888E494u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
+    {0x08887550u, 0x8042ADE0u, "lb v0,-0x5220(v0): the vertical snap option, for the behind placement"},
+    {0x088876A8u, 0x8042ADE0u, "lb v0,-0x5220(v0): and before the vertical preset is picked again"},
 }};
 // The same code in FUComplete's Portable 2nd G executable. The camera update
 // and its helpers sit 0x2FC below Freedom Unite's, the aim pitch's clamp
 // 0x2948 above, and every word is the same apart from the hunter list's
 // address (0x089C6CB4) and the calls, which move with their targets.
-constexpr std::array<CodeWord, 38> kSignatureFUComplete{{
+constexpr std::array<CodeWord, 40> kSignatureFUComplete{{
     {0x08886B54u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
     {0x08886BCCu, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
     {0x08887174u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
@@ -326,8 +336,10 @@ constexpr std::array<CodeWord, 38> kSignatureFUComplete{{
     {0x0888CD60u, 0xA6030086u, "sh v1,0x86(s0): written to the camera in the branch delay"},
     {0x088871E8u, 0x0E223866u, "jal 0x0888E198: the recenter check"},
     {0x0888E198u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
+    {0x08887254u, 0x8042ADE0u, "lb v0,-0x5220(v0): the vertical snap option, for the behind placement"},
+    {0x088873ACu, 0x8042ADE0u, "lb v0,-0x5220(v0): and before the vertical preset is picked again"},
 }};
-constexpr const std::array<CodeWord, 38> &kSignature =
+constexpr const std::array<CodeWord, 40> &kSignature =
     kTitle == Title::FreedomUnite ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
@@ -1299,6 +1311,8 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
     std::optional<RecenterWatch> watch;
     std::uint8_t saved_gate = 0u;
     bool restore_gate = false;
+    std::uint32_t snap_option = 0u;
+    std::uint8_t saved_snap_option = 0u;
     if (hunter_aiming(memory, hunter)) {
         drive_aim(memory, hunter, camera ? address : 0u);
     } else if (camera) {
@@ -1313,6 +1327,16 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
             memory.store8(address + kAim, 0xFFu);
             restore_gate = true;
         }
+        // The pitch the preset was bent to holds only if the vertical snap
+        // does not pick another preset in this update.
+        if (state.preset_patched && memory.raw_pointer(game::layout::kGameSysPointer, 4u) != nullptr) {
+            const std::uint32_t option = memory.load32(game::layout::kGameSysPointer) + kVerticalSnapOption;
+            if (memory.raw_pointer(option, 1u) != nullptr && memory.load8(option) != 0u) {
+                snap_option = option;
+                saved_snap_option = memory.load8(option);
+                memory.store8(option, 0u);
+            }
+        }
         // A shared trigger is not "focus held": L's recenter is left where the
         // game put it. Holding LT must not put that recenter back.
         const bool focus_held = focus_bind_held_now && !lock_on_trigger_initiates_camera();
@@ -1325,6 +1349,7 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
     // Do not invoke an isolated guest call: normal scheduling must be retained.
     state.original(runtime, ctx);
     if (restore_gate) memory.store8(address + kAim, saved_gate);
+    if (snap_option != 0u) memory.store8(snap_option, saved_snap_option);
     if (watch) check_recenter(memory, *watch);
     restore_preset(memory);
     if (state.facing_substituted) {

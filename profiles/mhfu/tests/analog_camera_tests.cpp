@@ -36,6 +36,9 @@ unsigned original_calls{};
 // The eye height the camera update was entered with, before the stand-in
 // copies the offset it was handed. The game eases that height by an eighth.
 float eye_on_entry{};
+// The vertical snap option, as the camera update saw it (when a test plants it).
+std::uint32_t snap_option_at{};
+int snap_option_on_entry{-1};
 
 void check(bool condition, const char *message) {
     if (!condition) {
@@ -56,6 +59,7 @@ void original(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     auto &memory = runtime.memory();
     const auto camera = ctx.gpr[4] + 0xA0u;
     if (memory.raw_pointer(camera, 0x98u) != nullptr) eye_on_entry = read_float(memory, camera + 4u);
+    if (snap_option_at != 0u) snap_option_on_entry = memory.load8(snap_option_at);
     const auto preset = memory.raw_pointer(camera, 0x98u) != nullptr ? memory.load32(camera + 0x70u) : 0u;
     if (memory.raw_pointer(preset, 0x0Cu) != nullptr) {
         // The game reads the preset, then builds the eye. Copying it here lets
@@ -256,6 +260,33 @@ void test_pitch_is_not_left_for_the_eye_ease() {
     f.frame(0.0f, 0.0f);
     check(std::fabs(eye_on_entry - looked_down) < 0.001f, "releasing adds no further height");
 }
+}
+
+// With the game's vertical snap option on, the update picks the preset nearest
+// its view again and would drop the bent one: the tilt eased back as soon as
+// the stick let go. While the driver owns the pitch the option reads as off
+// for the update, and it is the player's again afterwards.
+void test_vertical_snap_option_is_held_off_while_tilting() {
+    Fixture f;
+    f.enable();
+    auto &memory = f.runtime.memory();
+    constexpr std::uint32_t kGameSys = 0x09400000u;
+    memory.store32(mhfu::game::layout::kGameSysPointer, kGameSys);
+    snap_option_at = kGameSys + 0x6ADE0u;
+    memory.store8(snap_option_at, 1u);
+    f.frame(0.0f, 0.0f);
+    check(snap_option_on_entry == 1, "without a tilt the update sees the option as the player set it");
+    f.frame(0.0f, -1.0f);
+    check(snap_option_on_entry == 0, "while the driver bends the preset, the update sees the option off");
+    check(memory.load8(snap_option_at) == 1u, "and the option is put back after the update");
+    f.frame(0.0f, 0.0f);
+    check(snap_option_on_entry == 0, "the tilt the driver holds after the stick is released keeps it off");
+    check(memory.load8(snap_option_at) == 1u, "and put back again");
+    memory.store8(snap_option_at, 0u);
+    f.frame(0.0f, -1.0f);
+    check(memory.load8(snap_option_at) == 0u, "an option already off is left off");
+    snap_option_at = 0u;
+    snap_option_on_entry = -1;
 }
 
 void test_signature_mismatch() {
@@ -704,6 +735,7 @@ int main() {
     test_ownership();
     test_dispatch_and_write_extent();
     test_pitch_is_handed_whole();
+    test_vertical_snap_option_is_held_off_while_tilting();
     test_pitch_is_not_left_for_the_eye_ease();
     test_signature_mismatch();
     test_hook_waits_for_the_option();
