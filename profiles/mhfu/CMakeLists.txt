@@ -1235,6 +1235,9 @@ if(NOT WIN32)
             # ld64 refuses undefined symbols in a bundle unless told to leave
             # them to the loader, as ELF linkers do by default.
             target_link_options(${fixture_target} PRIVATE "LINKER:-undefined,dynamic_lookup")
+        elseif(ANDROID)
+            # The NDK links with --no-undefined; the overlay modules opt out the same way.
+            target_link_options(${fixture_target} PRIVATE "LINKER:-z,undefs")
         endif()
     endforeach()
     add_executable(mhfu_overlay_swap_tests tests/overlay_swap_tests.cpp)
