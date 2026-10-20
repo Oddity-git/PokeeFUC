@@ -3,7 +3,9 @@
 // A minimal little-endian MIPS executable for tests that need one: a
 // program segment of `code` loaded at `load_address`, and empty (NOBITS)
 // sections with the given names and addresses, as a game's executable names
-// its overlays. No game data.
+// its overlays. A section with `code` set is instead a code section
+// (PROGBITS, executable) of `size` bytes of that segment, from `address`. No
+// game data.
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -15,6 +17,8 @@ namespace mhfu::test {
 struct NamedSection {
     std::string name;
     std::uint32_t address{};
+    bool code{};
+    std::uint32_t size{};
 };
 
 inline std::vector<std::uint8_t> synthetic_elf(
@@ -82,9 +86,16 @@ inline std::vector<std::uint8_t> synthetic_elf(
     for (std::size_t i = 0; i < sections.size(); ++i) {
         const std::size_t at = section_offset + (i + 1u) * kSectionHeader;
         put32(at + 0u, name_offsets[i]);
+        put32(at + 12u, sections[i].address);
+        if (sections[i].code) {
+            put32(at + 4u, 1u); // SHT_PROGBITS
+            put32(at + 8u, 6u); // SHF_ALLOC | SHF_EXECINSTR
+            put32(at + 16u, code_offset + (sections[i].address - load_address));
+            put32(at + 20u, sections[i].size);
+            continue;
+        }
         put32(at + 4u, 8u); // SHT_NOBITS: named, with no bytes in the file
         put32(at + 8u, 3u);
-        put32(at + 12u, sections[i].address);
         put32(at + 16u, names_offset);
     }
     const std::size_t strtab = section_offset + (section_count - 1u) * kSectionHeader;

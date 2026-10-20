@@ -3,6 +3,7 @@
 // list completion callbacks, blocking audio output); the drawing and the
 // mixing themselves live under gpu/ and audio/.
 #include "hle_common.hpp"
+#include "fuc_code_patches.hpp"
 #include "kernel/fast_forward.hpp"
 #include "kernel/fast_loading.hpp"
 #include "kernel/load_trace.hpp"
@@ -264,6 +265,8 @@ std::uint64_t frame_start_us(std::uint64_t latest_vblank_us) {
 
 void present_frame(Runtime &rt) {
     load_trace::note_flip();
+    // FUComplete's loader changes the game's code while the title runs.
+    if constexpr (kTitle == Title::FUComplete) (void)fuc::frame(rt.memory());
     // Overlays are swapped between frames; re-check before drawing the next one.
     revalidate_overlays(rt);
     // These read Freedom Unite's memory (title.hpp); another game's stays

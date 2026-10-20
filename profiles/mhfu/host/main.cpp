@@ -1,4 +1,5 @@
 #include "mhfu_profile.hpp"
+#include "fuc_code_patches.hpp"
 
 #include "app_paths.hpp"
 #include "platform/utf8_path.hpp"
@@ -467,7 +468,7 @@ int main(int argc, char **argv) {
 
         const std::optional<GameFiles> files = locate_game(options);
         if (!files) return 1;
-        const std::filesystem::path &executable = files->executable;
+        std::filesystem::path executable = files->executable;
         mhfu::ProfilePaths paths;
         paths.disc_image = files->disc_image;
         paths.memory_stick = files->memory_stick;
@@ -475,7 +476,21 @@ int main(int argc, char **argv) {
             throw psprecomp::Error(
                 "Missing " + mhfu::path_to_utf8(executable) + " (run profiles/mhfu/scripts/prepare_game.sh)");
 
-        const std::string sha256 = psprecomp::sha256_file(executable);
+        std::string sha256 = psprecomp::sha256_file(executable);
+        // FUComplete's loader changes the game's code when it starts. Once the
+        // corpus is generated from the executable with those changes
+        // (fuc_code_patches.hpp), the game starts from that file.
+        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete) {
+            const std::filesystem::path patched = mhfu::fuc::patched_path(executable);
+            std::error_code ec;
+            if (sha256 != mhfu::kCorpusExecutableSha256 && std::filesystem::is_regular_file(patched, ec)) {
+                if (std::string patched_sha256 = psprecomp::sha256_file(patched);
+                    patched_sha256 == mhfu::kCorpusExecutableSha256) {
+                    executable = patched;
+                    sha256 = std::move(patched_sha256);
+                }
+            }
+        }
         const mhfu::install::SupportedRelease *release = mhfu::install::find_release_by_executable_hash(sha256);
         // A plain executable pins no hash (game_identity.hpp); the installer
         // checked the disc it came from.
@@ -493,6 +508,7 @@ int main(int argc, char **argv) {
         psprecomp::Runtime runtime(guest_ram);
         for (const EmbeddedNid &entry : kEmbeddedNids) runtime.nids().add(entry.library, entry.nid, entry.name);
         (void)elf.load_and_relocate(runtime.memory(), mhfu::kLoadBase);
+        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete) mhfu::fuc::watch(elf, executable, mhfu::kLoadBase);
         // generate.sh stamps the executable it translated. Registering any
         // other corpus would run that game's code at overlapping addresses.
         const bool corpus_matches = mhfu::kCorpusExecutableSha256[0] != '\0' &&
