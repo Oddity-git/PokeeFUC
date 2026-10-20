@@ -492,7 +492,19 @@ void trace(const psprecomp::GuestMemory &memory, std::uint32_t address, const Tu
         << turn.pitch_degrees << ',' << memory.load16(address + kYawTarget) << ','
         << memory.load16(address + kYawCurrent) << ',' << height << ',' << distance << ',' << state.pitch_owned << ','
         << state.pitch << ',' << yielded << ',' << vertical_command << ','
-        << std::atan2(eye_dy, std::hypot(eye_dx, eye_dz)) / kRadians << '\n';
+        << std::atan2(eye_dy, std::hypot(eye_dx, eye_dz)) / kRadians;
+    // What picks the eye's height in this update (see kVerticalSnapOption):
+    // the hunter's bytes +0x298, +0x299 and +0x29C, and the vertical snap
+    // option, or -1 where they cannot be read.
+    const std::uint32_t hunter = game::layout::followed_hunter(memory, kHunterExtent);
+    for (const std::uint32_t offset : {0x298u, 0x299u, 0x29Cu})
+        out << ',' << (hunter != 0u ? static_cast<int>(memory.load8(hunter + offset)) : -1);
+    int option = -1;
+    if (memory.raw_pointer(game::layout::kGameSysPointer, 4u) != nullptr) {
+        const std::uint32_t at = memory.load32(game::layout::kGameSysPointer) + kVerticalSnapOption;
+        if (memory.raw_pointer(at, 1u) != nullptr) option = memory.load8(at);
+    }
+    out << ',' << option << '\n';
     if (state.updates % 30u == 0u) out.flush();
 }
 
