@@ -92,7 +92,8 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f`, the sharpness gauge's tables in `40038c5` |
 | Lock-on, its monster icon | ✅ lock-on, seen by the player |
 | Give Any Rarity Item | ❔ needs another hunter |
-| Layered armor | ✅ in the village: every part set to nothing showed the bare hunter; ❔ chosen pieces, the equipment change and a quest |
+| Layered armor | ✅ seen by the player; in the village, every part set to nothing showed the bare hunter |
+| HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ imported and played by the player; its 6127 entries read, title, loading screen, HUD and village drawn from it in a scripted run |
 
 ## Updating this page
 

@@ -37,7 +37,7 @@ void test_signature_accepts_this_executable() {
 void test_signature_refuses_a_different_word() {
     psprecomp::Runtime runtime;
     store_signature(runtime.memory());
-    const CodeWord &insert = code_signature().front();
+    const CodeWord insert = code_signature().front();
     check(insert.address == at(0x088596C8u, 0x088595E8u), "the ordering-table insert is the first anchor");
     runtime.memory().store32(insert.address, 0u);
     check(!code_matches(runtime), "a different insert is refused");
