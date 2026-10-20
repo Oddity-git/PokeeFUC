@@ -93,6 +93,7 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Lock-on, its monster icon | ✅ lock-on, seen by the player |
 | Give Any Rarity Item | ❔ needs another hunter |
 | Layered armor | ✅ in the village: every part set to nothing showed the bare hunter; ❔ chosen pieces, the equipment change and a quest |
+| HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ its 6127 entries read; title, loading screen, HUD and village drawn from it in a scripted run |
 
 ## Updating this page
 

@@ -228,6 +228,21 @@ add_custom_target(mhfu_version
 # the project (see cmake/FFmpeg.cmake).
 include("${MHFU_PROFILE_DIR}/cmake/FFmpeg.cmake")
 
+# Basis Universal's transcoder, and the zstd decompressor it uses, read the
+# KTX2 images of texture packs made for PPSSPP (host/gpu/ktx2_image.cpp). Both
+# are unmodified copies in third_party/basis_universal; zstd is C.
+enable_language(C)
+add_library(mhfu_basisu STATIC
+    third_party/basis_universal/transcoder/basisu_transcoder.cpp
+    third_party/basis_universal/zstd/zstddeclib.c)
+target_compile_definitions(mhfu_basisu PUBLIC BASISD_SUPPORT_KTX2=1 BASISD_SUPPORT_KTX2_ZSTD=1)
+target_include_directories(mhfu_basisu PUBLIC "${MHFU_PROFILE_DIR}/third_party")
+if(NOT MSVC)
+    # Third-party code: its warnings are not this project's to fix.
+    target_compile_options(mhfu_basisu PRIVATE -w)
+endif()
+set_target_properties(mhfu_basisu PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # GE parsing, texture decoding and the audio mixer are backend independent and
 # always built; only the device the sink opens depends on SDL.
 set(MHFU_HOST_SOURCES
@@ -253,6 +268,7 @@ set(MHFU_HOST_SOURCES
     host/input/gamepad_mapping.cpp
     host/input/touch_action.cpp
     host/input/touch_controls.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/gpu/screenshot.cpp
@@ -383,7 +399,7 @@ target_include_directories(Pokee PRIVATE
     "${MHFU_GENERATED_DIR}"
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(Pokee PRIVATE psprecomp_core ${CMAKE_DL_LIBS})
+target_link_libraries(Pokee PRIVATE psprecomp_core ${CMAKE_DL_LIBS} mhfu_basisu)
 if(WIN32)
     # The ad hoc client's and server's sockets, and the list of interfaces;
     # CommandLineToArgvW for the arguments as UTF-8.
@@ -807,6 +823,7 @@ endif()
 add_executable(mhfu_texture_pack_tests
     tests/texture_pack_tests.cpp
     host/gpu/texture_decode.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/platform/utf8_path.cpp)
@@ -814,7 +831,7 @@ target_include_directories(mhfu_texture_pack_tests PRIVATE
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/host/gpu"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(mhfu_texture_pack_tests PRIVATE psprecomp_core Threads::Threads)
+target_link_libraries(mhfu_texture_pack_tests PRIVATE psprecomp_core Threads::Threads mhfu_basisu)
 set_target_properties(mhfu_texture_pack_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_texture_pack_tests COMMAND mhfu_texture_pack_tests)
@@ -993,6 +1010,7 @@ add_executable(mhfu_path_tests
     host/app_paths.cpp
     host/fonts/game_font.cpp
     host/gpu/screenshot.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/input/bindings.cpp
@@ -1014,7 +1032,7 @@ target_include_directories(mhfu_path_tests PRIVATE
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/host/gpu"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(mhfu_path_tests PRIVATE psprecomp_core Threads::Threads)
+target_link_libraries(mhfu_path_tests PRIVATE psprecomp_core Threads::Threads mhfu_basisu)
 if(WIN32)
     target_link_libraries(mhfu_path_tests PRIVATE shell32)
 endif()
@@ -1188,7 +1206,7 @@ add_library(mhfu_test_host STATIC ${MHFU_HOST_SOURCES} host/generated_stub.cpp "
 target_include_directories(mhfu_test_host PUBLIC
     "${MHFU_PROFILE_DIR}/host" "${MHFU_PROFILE_DIR}/third_party"
     "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
-target_link_libraries(mhfu_test_host PUBLIC psprecomp_core Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(mhfu_test_host PUBLIC psprecomp_core Threads::Threads ${CMAKE_DL_LIBS} mhfu_basisu)
 mhfu_use_ffmpeg(mhfu_test_host)
 if(WIN32)
     target_link_libraries(mhfu_test_host PUBLIC ws2_32 iphlpapi shell32)
@@ -1280,7 +1298,7 @@ if(MHFU_RENDERER_TESTS)
         "${CMAKE_CURRENT_BINARY_DIR}/generated_shaders"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_version"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
-    target_link_libraries(mhfu_renderer_ui_tests PRIVATE psprecomp_core SDL3::SDL3 Vulkan::Vulkan Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(mhfu_renderer_ui_tests PRIVATE psprecomp_core SDL3::SDL3 Vulkan::Vulkan Threads::Threads ${CMAKE_DL_LIBS} mhfu_basisu)
     mhfu_use_ffmpeg(mhfu_renderer_ui_tests)
     if(WIN32)
         target_link_libraries(mhfu_renderer_ui_tests PRIVATE ws2_32 iphlpapi shell32)

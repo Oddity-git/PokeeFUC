@@ -117,6 +117,9 @@ cp "$bin/FFmpeg-LICENSE.txt" "$bin/FFmpeg-SOURCE.txt" "$licenses/"
 cp "$profile_dir/third_party/imgui/LICENSE.txt" "$licenses/DearImGui-LICENSE.txt"
 cp "$profile_dir/third_party/tiny_aes/UNLICENSE" "$licenses/tiny-AES-c-UNLICENSE.txt"
 cp "$profile_dir/third_party/xxhash/LICENSE" "$licenses/xxHash-LICENSE.txt"
+cp "$profile_dir/third_party/basis_universal/LICENSE" "$licenses/BasisUniversal-LICENSE.txt"
+cp "$profile_dir/third_party/basis_universal/NOTICE" "$licenses/BasisUniversal-NOTICE.txt"
+cp "$profile_dir/third_party/basis_universal/zstd/LICENSE" "$licenses/zstd-LICENSE.txt"
 
 cat > "$root/BUILDINFO.txt" << EOF
 Version: v$version

@@ -32,6 +32,14 @@ Read and write the PNG images of HD texture packs. Pokee adds a checked-allocati
 
 Hashes textures for HD texture packs. Copyright (c) 2012-2021 Yann Collet. BSD 2-Clause License: `xxHash-LICENSE.txt`. <https://github.com/Cyan4973/xxHash>
 
+### Basis Universal 2.1.0 (transcoder)
+
+Reads the KTX2 images of HD texture packs. Copyright © 2016–2026 Binomial LLC. "Basis Universal" is a trademark of Binomial LLC. Apache License 2.0: `BasisUniversal-LICENSE.txt`, with its attribution notices in `BasisUniversal-NOTICE.txt`. Unmodified. <https://github.com/BinomialLLC/basis_universal>
+
+### Zstandard 1.5.7 (decompressor)
+
+Unpacks zstd-supercompressed KTX2 images for the Basis Universal transcoder. Copyright (c) 2016-present, Facebook, Inc. BSD License: `zstd-LICENSE.txt`. Unmodified. <https://github.com/facebook/zstd>
+
 ## Shipped as separate libraries
 
 These are dynamically linked shared libraries in `lib/` next to the executable (`/app/lib/pokee/lib/` in the Flatpak, `Pokee.app/Contents/Frameworks/` on macOS). They are unmodified builds of the upstream releases below. You may replace them with your own builds of the same or a compatible version.
