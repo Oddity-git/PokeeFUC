@@ -18,6 +18,9 @@
 #include "game/item_atlas.hpp"
 #include "game/empty_item_slot.hpp"
 #include "game/give_rarity.hpp"
+#include "game/hall_equipment.hpp"
+#include "game/hall_meal.hpp"
+#include "game/item_sets.hpp"
 #include "game/item_box.hpp"
 #include "game/layered_armor.hpp"
 #include "game/sharpness_gauge.hpp"
@@ -61,6 +64,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace psprecomp {
+// Defined in the core library and declared here, as camera_probe.cpp does, so
+// that arming a watch does not rebuild every generated unit and overlay.
+void set_write_watch(std::uint32_t address, std::uint32_t size);
+} // namespace psprecomp
 
 namespace mhfu {
 namespace {
@@ -263,6 +272,25 @@ std::uint64_t frame_start_us(std::uint64_t latest_vblank_us) {
     return start;
 }
 
+void call_guest_function(
+    AllegrexContext &ctx, std::uint32_t function, std::uint32_t argument, game::hall_equipment::ThenFunction then) {
+    kernel().call_guest(ctx, function, {argument, 0u, 0u, 0u}, [then](AllegrexContext &c, std::uint32_t) { then(c); });
+}
+
+void call_guest_with_result(AllegrexContext &ctx, std::uint32_t function, const std::array<std::uint32_t, 4> &arguments,
+    game::hall_meal::ResultFunction then) {
+    kernel().call_guest(
+        ctx, function, arguments, [then](AllegrexContext &c, std::uint32_t result) { then(c, result); });
+}
+
+// From the top of user memory, as thread stacks are, and never given back.
+std::uint32_t allocate_guest_block(std::uint32_t size) {
+    const std::int32_t uid = kernel().allocate_block("mhfu_hall_equipment", 1u, size, 0u);
+    if (uid < 0) return 0u;
+    const MemoryBlock *block = kernel().find_block(uid);
+    return block != nullptr ? block->address : 0u;
+}
+
 void present_frame(Runtime &rt) {
     load_trace::note_flip();
     // FUComplete's loader changes the game's code while the title runs.
@@ -283,6 +311,9 @@ void present_frame(Runtime &rt) {
     // The extras ported to FUComplete as well, each at its title's addresses.
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);
     if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);
+    if constexpr (kHallEquipment) game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
+    if constexpr (kItemSets) game::item_sets::frame(rt);
+    if constexpr (kHallMeal) game::hall_meal::frame(rt, &call_guest_with_result);
 #if defined(MHFU_HAS_RENDERER)
     if (!media().renderer || !media().renderer->available()) {
         perf::end_frame(kernel().now_us());
@@ -311,8 +342,10 @@ void present_frame(Runtime &rt) {
             game::hit_trace::set_clock([] { return kernel().now_us() / 1000u; });
             game::damage_numbers_frame(settings::current().damage_numbers, &rt.memory(), pose);
             if (game::body_trace::enabled()) {
-                static game::body_trace::Tracker bodies;
+                static game::body_trace::Tracker bodies{game::body_trace::watch_offset()};
                 bodies.frame(rt.memory(), std::cout);
+                if (const std::optional<std::uint32_t> watch = bodies.take_watch())
+                    psprecomp::set_write_watch(*watch, 4u);
             }
         }
         if constexpr (kLockOn) {

@@ -71,4 +71,11 @@ inline constexpr bool kGatherIcon = true;
 // hunter's load and the lobby's equipment calls, and the armor tables.
 inline constexpr bool kLayeredArmor = true;
 
+// Not yet ported to FUComplete: the Guild Hall's Change Equipment
+// (game/hall_equipment.cpp), Item Sets (game/item_sets.cpp) and Eat in the
+// Guild Hall (game/hall_meal.cpp) call and hook Freedom Unite's lobby code.
+inline constexpr bool kHallEquipment = kFreedomUniteExtras;
+inline constexpr bool kItemSets = kFreedomUniteExtras;
+inline constexpr bool kHallMeal = kFreedomUniteExtras;
+
 } // namespace mhfu
