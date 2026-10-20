@@ -52,7 +52,11 @@ cmake --build out/fuc --target Pokee -j 2
 out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"          # the image FUCTool made
 MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.ELF" profiles/mhfu/scripts/generate.sh out/fuc
 cmake -S . -B out/fuc && cmake --build out/fuc --target Pokee -j 2
+profiles/mhfu/scripts/build_overlays.sh out/fuc                      # optional, long
+profiles/mhfu/packaging/linux/install_user.sh out/fuc                # Linux: add PokeeFUC to the app menu
 ```
+
+The FUComplete build calls itself **PokeeFUC** wherever the player reads its name (window, menu, setup), and its window has the desktop id `io.github.teamgdb.PokeeFUC`, so it is told apart from the standard build installed beside it. On Linux, `install_user.sh` copies a build into `~/.local/share/pokee-fuc` with a launcher, and installs a `.desktop` entry and icon under `~/.local/share` for the application menu, without root. Run it again after a rebuild or when more overlays are built; `--uninstall` removes it. The copy holds code recompiled from your own game: keep it to yourself. See [LINUX.md](../../docs/LINUX.md#install-a-source-build-for-your-user).
 
 What differs from the Freedom Unite build:
 

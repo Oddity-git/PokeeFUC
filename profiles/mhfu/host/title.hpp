@@ -15,6 +15,14 @@
 #else
 #define MHFU_APP_NAME "Pokee"
 #endif
+// The desktop's id for the window: the name of the .desktop file and icon
+// the packaging installs (packaging/linux), so the two builds keep their own
+// entries, icons and taskbar groups.
+#if defined(MHFU_TITLE_FUC)
+#define MHFU_APP_ID "io.github.teamgdb.PokeeFUC"
+#else
+#define MHFU_APP_ID "io.github.teamgdb.Pokee"
+#endif
 
 namespace mhfu {
 

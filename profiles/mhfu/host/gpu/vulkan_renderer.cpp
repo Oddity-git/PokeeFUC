@@ -2730,6 +2730,8 @@ bool VulkanRenderer::initialize(const RendererConfig &config, std::string &error
     if (const char *async = std::getenv("MHFU_MOLTENVK_ASYNC_SUBMITS"); async != nullptr && *async == '1')
         setenv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "0", 0);
 #endif
+    // The desktop matches the window to its .desktop entry and icon by this id.
+    SDL_SetAppMetadata(MHFU_APP_NAME, nullptr, MHFU_APP_ID);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         error = std::string("SDL_Init failed: ") + SDL_GetError();
         return false;
