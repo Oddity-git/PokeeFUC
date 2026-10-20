@@ -89,7 +89,7 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | FUComplete's changes to the code, run compiled (`EBOOT.FUC.ELF`) | ✅ its file I/O hook ran |
 | A save written before those changes, then saved again | ✅ |
 | Analog camera: turn and tilt, standing and moving, a sword and shield drawn | ✅ |
-| Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f` |
+| Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f`, the sharpness gauge's tables in `40038c5` |
 | Lock-on, its monster icon | ✅ lock-on, seen by the player |
 | Give Any Rarity Item | ❔ needs another hunter |
 | Layered armor | ✅ in the village: every part set to nothing showed the bare hunter; ❔ chosen pieces, the equipment change and a quest |
