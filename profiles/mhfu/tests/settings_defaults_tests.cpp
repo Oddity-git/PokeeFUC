@@ -1370,7 +1370,9 @@ void test_interface_sizes() {
         "nor on a row but off the letters' 8-pixel grid, past the Felyne's row, or at the badge column's edge");
     check(piece_of({160.0f, 56.0f, 168.0f, 70.0f}) == Piece::Vitals && piece_of({120.0f, 78.0f, 128.0f, 92.0f}) == Piece::Vitals,
         "a cat's name beside its hunter, past the plate, is still the list");
-    check(piece_of({96.0f, 76.0f, 104.0f, 92.0f}) == Piece::Vitals && piece_of({8.0f, 78.0f, 16.0f, 92.0f}) == Piece::Vitals,
+    check(piece_of({mhfu::gpu::hud_scale::kPlateEndLeft, 76.0f, mhfu::gpu::hud_scale::kPlateEndLeft + 8.0f, 92.0f}) ==
+                Piece::Vitals &&
+            piece_of({8.0f, 78.0f, 16.0f, 92.0f}) == Piece::Vitals,
         "a plate's 8 by 16 end and the cat's letter-sized cell stay Status");
     Frame overhead;
     overhead.note({8.0f, 8.0f, 60.0f, 56.0f});
@@ -2535,7 +2537,9 @@ void test_menu_over_the_party_list() {
     Frame plain;
     draw(plain, 8.0f, 8.0f, 60.0f, 56.0f, kAtlas);
     check(!draw(plain, 26.0f, 58.0f, 34.0f, 72.0f, kFont), "a name's letter takes Status");
-    check(!draw(plain, 96.0f, 56.0f, 104.0f, 72.0f, kAtlas), "the plate's end takes Status");
+    check(!draw(plain, mhfu::gpu::hud_scale::kPlateEndLeft, 56.0f, mhfu::gpu::hud_scale::kPlateEndLeft + 8.0f, 72.0f,
+              kAtlas),
+        "the plate's end takes Status");
 
     // The menu's corner at the left edge: no Status piece is 16 by 8.
     Frame menu;
@@ -2549,7 +2553,9 @@ void test_menu_over_the_party_list() {
     check(draw(menu, 65.0f, 128.0f, 79.0f, 142.0f, kFont), "a wide menu letter the size of a buff stays");
     // The party list itself, under the window, still takes Status.
     check(!draw(menu, 24.0f, 56.0f, 96.0f, 72.0f, kAtlas), "the plate under the menu takes Status");
-    check(!draw(menu, 96.0f, 56.0f, 104.0f, 72.0f, kAtlas), "the plate's end under the menu takes Status");
+    check(!draw(menu, mhfu::gpu::hud_scale::kPlateEndLeft, 56.0f, mhfu::gpu::hud_scale::kPlateEndLeft + 8.0f, 72.0f,
+              kAtlas),
+        "the plate's end under the menu takes Status");
     check(!draw(menu, 26.0f, 58.0f, 34.0f, 72.0f, kFont), "a name's letter under the menu takes Status");
     check(!draw(menu, 26.0f, 90.0f, 98.0f, 92.0f, 0u), "a teammate's health under the menu takes Status");
 
