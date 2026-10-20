@@ -1231,6 +1231,11 @@ if(NOT WIN32)
             PREFIX ""
             LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_FIXTURE_DIR}"
             OUTPUT_NAME "fixture_${mark}")
+        if(APPLE)
+            # ld64 refuses undefined symbols in a bundle unless told to leave
+            # them to the loader, as ELF linkers do by default.
+            target_link_options(${fixture_target} PRIVATE "LINKER:-undefined,dynamic_lookup")
+        endif()
     endforeach()
     add_executable(mhfu_overlay_swap_tests tests/overlay_swap_tests.cpp)
     target_compile_definitions(mhfu_overlay_swap_tests PRIVATE
