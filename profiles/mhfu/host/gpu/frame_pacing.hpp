@@ -4,6 +4,10 @@
 #include <optional>
 #include <vector>
 
+namespace mhfu::settings {
+enum class FrameRate;
+}
+
 // When frame interpolation presents, what each present shows, and how many
 // presents a second the machine can afford. Independent of the renderer and
 // of the clock, so it can be checked on made-up timings.
@@ -37,6 +41,12 @@ inline constexpr std::int64_t kGameFrameUs = 2 * 16'683;
 // The rates the Frame rate setting offers, slowest first; 30 is the game's
 // own, without interpolation. A display rate outside these joins them.
 inline constexpr double kRates[] = {30.0, 45.0, 60.0, 90.0, 120.0};
+
+// The player's Frame rate setting as presents a second, before Vsync or the
+// governor caps it: what the Android app asks the display for. Display
+// follows the display's refresh rate, or 60 when it reports none; never
+// below the game's own 30.
+[[nodiscard]] double requested_rate(settings::FrameRate rate, double display_hz) noexcept;
 
 // Presents per game frame at `rate` presents a second: 45 is 1.5, 90 is 3.
 [[nodiscard]] double presents_per_frame(double rate) noexcept;

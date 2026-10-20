@@ -6,12 +6,14 @@
 //   mhfu_interpolation_tests
 #include "gpu/frame_interpolation.hpp"
 #include "gpu/frame_pacing.hpp"
+#include "settings/settings.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 using namespace mhfu::gpu;
@@ -395,6 +397,20 @@ void rates() {
     check(plain_presents_per_frame(60.0) == 1.0 && plain_presents_per_frame(120.0) == 1.0 &&
             plain_presents_per_frame(45.0) == 0.5 && near(static_cast<float>(plain_presents_per_frame(144.0)), 0.2f),
         "presents that fall on a frame's own moment: every frame, every other one at 45, every fifth at 144");
+
+    using mhfu::settings::FrameRate;
+    const FrameRate fixed[] = {
+        FrameRate::Fps30, FrameRate::Fps45, FrameRate::Fps60, FrameRate::Fps90, FrameRate::Fps120};
+    for (int index = 0; index < 5; ++index)
+        check(requested_rate(fixed[index], 60.0) == kRates[index],
+            "a fixed Frame rate asks for its own rate, even above a 60 Hz display");
+    check(requested_rate(FrameRate::Display, 165.0) == 165.0 && requested_rate(FrameRate::Display, 59.94) == 59.94,
+        "Display asks for the display's own rate");
+    check(requested_rate(FrameRate::Display, 15.0) == 30.0, "never below the game's 30");
+    for (double unknown :
+        {0.0, -1.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()})
+        check(requested_rate(FrameRate::Display, unknown) == 60.0, "a display without a known rate counts as 60");
+    check(requested_rate(static_cast<FrameRate>(99), 120.0) == 30.0, "an unknown setting is the game's 30");
 }
 
 // Runs the clock over `frames` game frames with the game's code taking
