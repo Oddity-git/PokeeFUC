@@ -507,8 +507,11 @@ int main(int argc, char **argv) {
 #if defined(MHFU_CAMERA_HELPER_UNIT)
         // CMake names the generated unit that holds the camera update, so a
         // new partition of the code cannot hand the camera the wrong one.
-        if (sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256)
-            (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
+        // FUComplete's executable is not pinned: the corpus it was generated
+        // from, and the signature prepare_game_camera checks, stand in.
+        const bool camera_executable =
+            mhfu::kFreedomUniteExtras ? sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256 : corpus_matches;
+        if (camera_executable) (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
 #endif
 
         std::cout << "Pokee PSP bootstrap\n"

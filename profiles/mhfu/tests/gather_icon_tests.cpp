@@ -1,6 +1,7 @@
 // Gather marks: the game's own radius, the area list, and the picture.
 // No game data. Guest memory is a stand-in.
 #include "game/gather_icon.hpp"
+#include "game/guest_layout.hpp"
 #include "gpu/ui_motion.hpp"
 #include "settings/settings.hpp"
 
@@ -22,6 +23,18 @@ Settings &current() {
 namespace {
 using namespace mhfu::game;
 
+// Where this build's game keeps what the gather code reads: Freedom Unite's
+// addresses, or FUComplete's (title.hpp).
+constexpr bool kFreedomUnite = mhfu::kTitle == mhfu::Title::FreedomUnite;
+constexpr std::uint32_t kGameSysAt = layout::kGameSysPointer;
+constexpr std::uint32_t kHunterListAt = layout::kCameraObject;
+constexpr std::uint32_t kGatherObjectAt = kFreedomUnite ? 0x08A62D9Cu : 0x08A5DD4Cu;
+constexpr std::uint32_t kStageTableAt = kFreedomUnite ? 0x09CE4808u : 0x09CDF678u;
+constexpr std::uint32_t kCarveTableAt = kFreedomUnite ? 0x09A4F1A0u : 0x09A4ADA0u;
+constexpr std::uint32_t kVillageStateAt = kFreedomUnite ? 0x09B22E70u : 0x09B1D9E8u;
+// lobby_task's case for a mining outcrop, in its table of point types.
+constexpr std::uint32_t kMiningCaseAt = kFreedomUnite ? 0x09B0F33Cu : 0x09B09EBCu;
+
 int failures{};
 
 void check(bool condition, const char *message) {
@@ -36,7 +49,7 @@ void write_float(psprecomp::GuestMemory &memory, std::uint32_t address, float va
 }
 
 void plant_words(psprecomp::GuestMemory &memory) {
-    constexpr std::uint32_t kTaskSlot = 0x09A5F300u;
+    constexpr std::uint32_t kTaskSlot = layout::kTaskSlot;
     constexpr char kName[] = "game_task.ovl";
     memory.store32(kTaskSlot, 0x336F574Du);
     memory.store32(kTaskSlot + 8u, kTaskSlot);
@@ -106,9 +119,9 @@ void test_the_area_list() {
     constexpr std::uint32_t ids = 0x09300000u;
     constexpr std::uint32_t areas = 0x09400000u;
     constexpr std::uint32_t base = 0x09500000u;
-    constexpr std::uint32_t kGatherObject = 0x08A62D9Cu;
-    constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
-    constexpr std::uint32_t kStageTable = 0x09CE4808u;
+    constexpr std::uint32_t kGatherObject = kGatherObjectAt;
+    constexpr std::uint32_t kGameSysPointer = kGameSysAt;
+    constexpr std::uint32_t kStageTable = kStageTableAt;
     memory.store32(kGameSysPointer, gamesys);
     memory.store8(gamesys + 0x6AF10u, 2u);
     memory.store32(kStageTable + 16u, 2u);
@@ -137,17 +150,17 @@ void test_words_and_the_hunter() {
     constexpr std::uint32_t nodes = 0x09500000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 4u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     plant_node(memory, nodes, 0.0f, 0.0f, 0.0f, 30.0f, 2u, 4u);
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
@@ -183,17 +196,17 @@ void test_on_the_picture() {
     constexpr std::uint32_t nodes = 0x09500000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 1u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     plant_node(memory, nodes, 0.0f, 0.0f, -10.0f, 5.0f, 1u, 0u);
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
@@ -394,17 +407,17 @@ void test_pressing_again_on_the_pad() {
     constexpr std::uint32_t nodes = 0x09500000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 4u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     plant_node(memory, nodes, 0.0f, 0.0f, 0.0f, 30.0f, 2u, 0u);
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
@@ -477,23 +490,23 @@ void test_carving_a_monster() {
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
     constexpr std::uint32_t table = 0x09800000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 4u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     write_float(memory, nodes, -1.0f); // no gather point
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
     write_float(memory, hunter + 0x208u, 0.0f);
     memory.store16(hunter + 0x29Au, 4u);
-    memory.store32(0x09A4F1A0u, table);
+    memory.store32(kCarveTableAt, table);
     plant_body(memory, table + 4u, 0.0f, 0.0f, 0.0f, 30.0f, 9u, 4u);
     plant_words(memory);
 
@@ -556,8 +569,8 @@ void plant_village(psprecomp::GuestMemory &memory) {
         for (std::size_t i = 0; i <= length; ++i)
             memory.store8(slot + 32u + static_cast<std::uint32_t>(i), static_cast<std::uint8_t>(name[i]));
     };
-    overlay(0x09A5F300u, "lobby_task.ovl", 14u);
-    overlay(0x09C19100u, "game_sub.ovl", 12u);
+    overlay(layout::kTaskSlot, "lobby_task.ovl", 14u);
+    overlay(layout::kSubSlot, "game_sub.ovl", 12u);
     for (const GatherWord &word : farm_checked_words()) memory.store32(word.address, word.instruction);
 }
 
@@ -569,12 +582,12 @@ void test_farm_spots() {
     constexpr std::uint32_t hunter = 0x09700000u;
     constexpr std::uint32_t state = 0x09800000u;
     constexpr std::uint32_t point = 0x09900000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 40u, 1u); // the local hunter is slot 1
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     memory.store16(hunter + 486u, 1u);
-    memory.store32(0x09B22E70u, state);
+    memory.store32(kVillageStateAt, state);
     memory.store32(hunter + 1364u, point);
     memory.store16(point + 2u, kFarmMining);
     memory.store16(point + 22u, 1u);
@@ -625,10 +638,10 @@ void test_farm_spots() {
     memory.store16(hunter + 486u, 0u);
     check(!farm_point(memory), "a hunter that is not the local one is not read");
     memory.store16(hunter + 486u, 1u);
-    memory.store32(0x09B0F33Cu, 0u);
+    memory.store32(kMiningCaseAt, 0u);
     check(!farm_code_matches(memory) && !farm_point(memory), "a differing word turns the farm off");
     plant_village(memory);
-    memory.store8(0x09C19100u + 32u, static_cast<std::uint8_t>('d'));
+    memory.store8(layout::kSubSlot + 32u, static_cast<std::uint8_t>('d'));
     check(!farm_point(memory), "another sub overlay is not the farm's");
     plant_village(memory);
     check(farm_point(memory).has_value(), "and the farm is back");
@@ -678,23 +691,23 @@ void test_mark_over_a_carve() {
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
     constexpr std::uint32_t table = 0x09800000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 4u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     write_float(memory, nodes, -1.0f); // no gather point
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
     write_float(memory, hunter + 0x208u, -10.0f);
     memory.store16(hunter + 0x29Au, 4u);
-    memory.store32(0x09A4F1A0u, table);
+    memory.store32(kCarveTableAt, table);
     // Straight ahead of the camera, so its mark is the picture's centre.
     plant_body(memory, table + 4u, 0.0f, 0.0f, -10.0f, 30.0f, 9u, 4u);
 
@@ -754,7 +767,7 @@ void plant_stage(psprecomp::GuestMemory &memory) {
     constexpr std::uint32_t stage = 0x09810000u;
     constexpr std::uint32_t vtable = 0x09820000u;
     constexpr std::uint32_t method = 0x09830000u;
-    memory.store32(0x09A4F1A0u, quest);
+    memory.store32(kCarveTableAt, quest);
     memory.store32(quest, stage);
     memory.store32(stage, vtable);
     memory.store32(vtable + 40u, method);
@@ -778,17 +791,17 @@ void test_fishing_spots() {
     constexpr std::uint32_t nodes = 0x09500000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 4u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     write_float(memory, nodes, -1.0f); // no gather point
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 100.0f);
     write_float(memory, hunter + 0x204u, -40.0f);
@@ -935,17 +948,17 @@ void test_motion_on_the_picture() {
     constexpr std::uint32_t nodes = 0x09500000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 1u);
-    memory.store32(0x08A62D9Cu, object);
+    memory.store32(kGatherObjectAt, object);
     memory.store32(object + 96u, areas);
     memory.store32(object + 80u, 0u);
     memory.store32(areas, nodes);
     plant_node(memory, nodes, 0.0f, 0.0f, -10.0f, 5.0f, 1u, 4u);
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x200u, 0.0f);
     write_float(memory, hunter + 0x204u, 0.0f);
@@ -1004,7 +1017,7 @@ constexpr std::uint32_t kArtOffsets = 0x100u;
 
 void plant_list(psprecomp::GuestMemory &memory, std::uint16_t id, std::uint32_t entry,
     std::initializer_list<std::array<std::uint16_t, 2>> pairs) {
-    memory.store32(0x08A62D9Cu, kArtObject);
+    memory.store32(kGatherObjectAt, kArtObject);
     memory.store32(kArtObject + 80u, kArtBase);
     memory.store32(0x08A5C584u, kArtOffsets);
     memory.store32(kArtBase + kArtOffsets + static_cast<std::uint32_t>(id) * 4u, entry);
@@ -1108,10 +1121,10 @@ void test_mark_shows_art() {
     constexpr std::uint32_t areas = 0x09400000u;
     constexpr std::uint32_t hunter_list = 0x09600000u;
     constexpr std::uint32_t hunter = 0x09700000u;
-    memory.store32(0x089CC558u, gamesys);
+    memory.store32(kGameSysAt, gamesys);
     memory.store8(gamesys + 0x6AF10u, 0u);
-    memory.store32(0x09CE4808u, 1u);
-    memory.store32(0x09CE480Cu, ids);
+    memory.store32(kStageTableAt, 1u);
+    memory.store32(kStageTableAt + 4u, ids);
     memory.store16(ids, 1u);
     plant_list(memory, 6u, 0x400u, {{80u, 41u}});
     // The area list sits past the base, which +80 also adds to the area pointer.
@@ -1119,7 +1132,7 @@ void test_mark_shows_art() {
     memory.store32(areas, 0x1000u);
     const std::uint32_t nodes = kArtBase + 0x1000u;
     plant_node(memory, nodes, 0.0f, 0.0f, -10.0f, 5.0f, 6u, 0u);
-    memory.store32(0x089CBD04u, hunter_list);
+    memory.store32(kHunterListAt, hunter_list);
     memory.store32(hunter_list + 2692u, hunter);
     write_float(memory, hunter + 0x208u, -10.0f);
     memory.store16(hunter + 0x29Au, 1u);
@@ -1143,9 +1156,13 @@ void test_mark_shows_art() {
 } // namespace
 
 int main() {
-    test_gather_items();
-    test_item_art();
-    test_mark_shows_art();
+    // The picture in the mark is read from Freedom Unite's item art; another
+    // title's build has no gather icon yet (title.hpp).
+    if constexpr (mhfu::kGatherIcon) {
+        test_gather_items();
+        test_item_art();
+        test_mark_shows_art();
+    }
     test_glyphs();
     test_motion();
     test_motion_on_the_picture();

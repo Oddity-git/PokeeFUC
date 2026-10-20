@@ -1,6 +1,7 @@
 // Give at any rarity: the item lookup, the code check, and the wrapper
 // around a stand-in for the game's check. No game data.
 #include "game/give_rarity.hpp"
+#include "title.hpp"
 
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
@@ -140,6 +141,11 @@ void test_other_code() {
 } // namespace
 
 int main() {
+    // Give Any Rarity Item is Freedom Unite's; another title's build leaves it off.
+    if constexpr (!mhfu::kGiveRarity) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
     const std::filesystem::path data = std::filesystem::temp_directory_path() / "pokee_give_rarity_tests";
     std::filesystem::create_directories(data);
     set_environment("MHFU_DATA_DIR", data.string());

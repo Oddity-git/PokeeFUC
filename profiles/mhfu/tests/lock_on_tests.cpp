@@ -6,6 +6,7 @@
 #include "camera/hunt_icon.hpp"
 #include "camera/lock_on.hpp"
 #include "game/guest_layout.hpp"
+#include "title.hpp"
 #include "input/bindings.hpp"
 #include "input/presets.hpp"
 #include "settings/settings.hpp"
@@ -1533,6 +1534,11 @@ void test_follow_toggle_uses_the_focus_camera_bind() {
 }
 
 int main() {
+    // Lock-on reads Freedom Unite's monsters; another title's build leaves it off.
+    if constexpr (!mhfu::kLockOn) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
     test_geometry();
     test_monsters_and_pick();
     test_monster_in_another_area();

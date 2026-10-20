@@ -1,6 +1,7 @@
 // No game code or game data is needed: the words the aspect ratio checks are
 // written into guest memory as stand-ins, with a camera beside them.
 #include "camera/game_aspect.hpp"
+#include "title.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <bit>
@@ -108,6 +109,11 @@ void test_other_code_is_left_alone() {
 } // namespace
 
 int main() {
+    // The aspect patch is Freedom Unite's; another title's build leaves it off.
+    if constexpr (!mhfu::kGameAspect) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
     test_own_shape_writes_nothing();
     test_wide_and_back();
     test_camera_set_up_later();

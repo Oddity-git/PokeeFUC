@@ -3,6 +3,7 @@
 // dispatches the camera hook.
 #include "camera/camera_input.hpp"
 #include "camera/game_camera.hpp"
+#include "game/guest_layout.hpp"
 #include "settings/settings.hpp"
 #include "psprecomp/runtime.hpp"
 
@@ -24,7 +25,7 @@ Settings &current() {
 namespace {
 using namespace mhfu::camera;
 constexpr float frame_seconds = 1.0f / 30.0f;
-constexpr std::uint32_t helper = 0x08886E50u;
+constexpr std::uint32_t helper = kCameraUpdate;
 constexpr std::uint32_t camera_address = 0x08900000u;
 constexpr std::uint32_t parent_address = camera_address - 0xA0u;
 constexpr std::uint32_t preset_address = 0x08902000u;
@@ -338,7 +339,7 @@ void test_mouse_stock_turn() {
 }
 
 // The hunter the camera follows: list word, list object, then the hunter.
-constexpr std::uint32_t kListWord = 0x089CBD04u;
+constexpr std::uint32_t kListWord = mhfu::game::layout::kCameraObject;
 constexpr std::uint32_t kList = 0x08920000u;
 constexpr std::uint32_t kHunter = 0x08910000u;
 constexpr std::uint32_t kHeading = 800u;
@@ -382,7 +383,7 @@ void test_aim_stick_is_not_movement() {
     f.enable();
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_original, "recomp_unit_aim_test");
+    f.runtime.register_function(kAimFunction, &aim_original, "recomp_unit_aim_test");
     f.flip(0.0f, 0.0f);
     constexpr std::uint32_t kButtons = 1152u;
     memory.store32(kHunter + kButtons, 0x00800001u);
@@ -391,14 +392,14 @@ void test_aim_stick_is_not_movement() {
     game_camera_present_aim(127, -40);
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     check(seen_magnitude == 127u, "the aim function is shown a full push");
     check(seen_buttons == 0x00300031u, "right and up replace the stick and D-pad directions; the real button stays");
     check(memory.load16(kHunter + kMagnitude) == 10u, "the movement magnitude is put back");
     check(memory.load32(kHunter + kButtons) == 0x00800001u, "the movement direction is put back");
 
     game_camera_present_aim(0, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches with no push");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches with no push");
     check(seen_magnitude == 10u, "no push leaves the stick the game copied");
     check(seen_buttons == 0x00800001u, "and leaves its direction");
 
@@ -408,7 +409,7 @@ void test_aim_stick_is_not_movement() {
     memory.store8(kHunter + 1380u, 0u);
     memory.store32(kHunter + kButtons, 0x00000041u);
     game_camera_present_aim(-127, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches with the timer clear");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches with the timer clear");
     check(seen_buttons == 0x00800081u, "left on both, and the held D-pad down is replaced");
     check(seen_magnitude == 127u, "a full push with the timer clear too");
     check(memory.load32(kHunter + kButtons) == 0x00000041u, "the held D-pad is put back");
@@ -418,17 +419,16 @@ void test_aim_stick_is_not_movement() {
 // inside its unit). While its conditions hold, the right stick is pressed on
 // the D-pad, and the camera update resizes the game's 576 step from the stick.
 // The game's weapon switch: the byte at hunter +488 picks an entry of the
-// table at 0x09C0C830, and the bow's entry is the case that calls its code.
-constexpr std::uint32_t kWeaponTable = 0x09C0C830u;
-constexpr std::uint32_t kBowCase = 0x09A8AF98u;
+// table at kWeaponTable, and the bow's entry is the case that calls its code.
+// The cases are 16 bytes apart.
 constexpr std::uint8_t kBow = 10u;
 constexpr std::uint8_t kSwordAndShield = 4u;
 
 void plant_weapon_switch(psprecomp::GuestMemory &memory) {
     for (std::uint32_t weapon = 0; weapon < 11u; ++weapon)
-        memory.store32(kWeaponTable + weapon * 4u, 0x09A8AF08u + weapon * 16u);
+        memory.store32(kWeaponTable + weapon * 4u, kBowCase - kBow * 16u + weapon * 16u);
     memory.store32(kWeaponTable + kBow * 4u, kBowCase);
-    memory.store32(kBowCase, 0x0E6ED3C6u); // jal 0x09BB4F18
+    memory.store32(kBowCase, kBowCaseCall);
 }
 
 void plant_bow_aim(psprecomp::GuestMemory &memory, std::uint8_t weapon = kBow) {
@@ -517,24 +517,26 @@ void test_bow_actions_of_another_weapon() {
 // 0x09AAA158 aims in an action its caller passes (8 from three call sites).
 // It is left unwrapped: an action it once ran in is not aiming, so the right
 // stick stays on the camera through a sword's swing in that action.
+// FUComplete has the same function at 0x09AA5328.
+constexpr std::uint32_t kActionAim = kCameraFreedomUnite ? 0x09AAA158u : 0x09AA5328u;
 void test_action_aim_function() {
     Fixture f;
     f.enable();
     auto &memory = f.runtime.memory();
-    memory.store32(0x09AAA158u, 0x27BDFFF0u);
-    memory.store32(0x09AAA15Cu, 0xAFBF000Cu);
-    memory.store32(0x09AAA160u, 0xAFB00008u);
-    memory.store32(0x09AAA188u, 0x96040324u);
-    memory.store32(0x09AAA18Cu, 0x30A3FFFFu);
-    f.runtime.register_function(0x09AAA158u, &aim_original, "recomp_unit_action_aim_test");
+    memory.store32(kActionAim, 0x27BDFFF0u);
+    memory.store32(kActionAim + 0x04u, 0xAFBF000Cu);
+    memory.store32(kActionAim + 0x08u, 0xAFB00008u);
+    memory.store32(kActionAim + 0x30u, 0x96040324u);
+    memory.store32(kActionAim + 0x34u, 0x30A3FFFFu);
+    f.runtime.register_function(kActionAim, &aim_original, "recomp_unit_action_aim_test");
     plant_hunter(memory, 8u);
     f.flip(0.0f, 0.0f);
-    check(f.runtime.function_at(0x09AAA158u) == &aim_original, "0x09AAA158 is not wrapped");
+    check(f.runtime.function_at(kActionAim) == &aim_original, "the action's aim function is not wrapped");
 
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[5] = 8u;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AAA158u, f.ctx), "the game's function still runs");
+    check(f.runtime.invoke_isolated_aot(kActionAim, f.ctx), "the game's function still runs");
     f.flip(0.0f, 0.0f);
     check(!game_camera_hunter_aiming() && !game_camera_aim_boost(),
         "the action it ran in is not aiming, so the right stick stays on the camera");
@@ -549,7 +551,7 @@ void test_action_1001_without_the_aim_function() {
     f.enable();
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_original, "recomp_unit_aim_1001");
+    f.runtime.register_function(kAimFunction, &aim_original, "recomp_unit_aim_1001");
     plant_hunter(memory, 1001u);
     f.frame(0.0f, 0.0f);
     f.flip(1.0f, 0.0f);
@@ -561,7 +563,7 @@ void test_action_1001_without_the_aim_function() {
 
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     f.flip(0.0f, 0.0f);
     check(game_camera_hunter_aiming() && game_camera_aim_boost(), "once it runs in 1001, the hunter is aiming");
 
@@ -572,7 +574,7 @@ void test_action_1001_without_the_aim_function() {
 
     memory.store16(kHunter + kAction, 3u);
     f.ctx.gpr[4] = kHunter;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches in another action");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches in another action");
     memory.store16(kHunter + kAction, 1001u);
     f.flip(0.0f, 0.0f);
     check(!game_camera_hunter_aiming(), "a call made in another action does not count for 1001");
@@ -600,14 +602,14 @@ void test_aim_speed_follows_the_stick() {
     mhfu::settings::current().aim_speed = 90.0f;
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_steps_fast, "recomp_unit_aim_speed");
+    f.runtime.register_function(kAimFunction, &aim_steps_fast, "recomp_unit_aim_speed");
     plant_hunter(memory, 1001u);
     f.flip(0.0f, 0.0f);
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
 
     game_camera_present_aim(127, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     check(memory.load16(kHunter + kHeading) == 10576u, "no stick scale leaves the game's own step");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 10, "and its own pitch step");
     f.flip(0.0f, 0.0f);
@@ -618,7 +620,7 @@ void test_aim_speed_follows_the_stick() {
     f.update();
     check(memory.load16(kHunter + kHeading) == 10000u, "the follow camera's first aim update only learns");
     game_camera_present_aim(127, -40, 0.5f, 0.5f);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches at half deflection");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches at half deflection");
     check(memory.load16(kHunter + kHeading) == 10273u, "half a push is half of Aim speed, not the game's 576");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 8, "and half of the same speed on pitch");
     check(memory.load32(kHunter + kFacing) == (0xABC00000u | 10273u), "the body facing moves with the resized aim");
@@ -628,7 +630,7 @@ void test_aim_speed_follows_the_stick() {
 
     f.flip(1.0f, 0.0f);
     game_camera_present_aim(127, 0, 1.0f, 0.0f);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches at full deflection");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches at full deflection");
     check(memory.load16(kHunter + kHeading) == 10819u, "a full push is 3 degrees of Aim speed, not the game's 576");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 18, "an axis with no scale keeps the game's pitch step");
     f.update();

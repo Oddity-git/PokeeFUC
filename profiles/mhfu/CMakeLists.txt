@@ -44,17 +44,21 @@ if(MHFU_GENERATED)
     endif()
     set_source_files_properties(${MHFU_GENERATED} PROPERTIES COMPILE_OPTIONS "${MHFU_GENERATED_OPTIONS}")
 endif()
-# The camera, HUD and layered armor hooks below name functions by their
-# Freedom Unite addresses. Another executable has other code there.
-if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
-    # The analog camera wraps the camera update, and main.cpp has to hand it
-    # the generated unit that update was compiled into. Which unit that is
-    # depends on how the generator partitions the code, so read it from the
-    # corpus instead of naming it: a new partition then finds its own unit,
-    # and a corpus without the update leaves analog camera off.
-    set(MHFU_CAMERA_HELPER_UNIT "")
+# The analog camera wraps the camera update, and main.cpp has to hand it the
+# generated unit that update was compiled into. Which unit that is depends on
+# how the generator partitions the code, so read it from the corpus instead of
+# naming it: a new partition then finds its own unit, and a corpus without the
+# update leaves analog camera off. The update is at 0x08886E50 in Freedom
+# Unite and 0x08886B54 in FUComplete (kCameraUpdate in camera/game_camera.hpp).
+set(MHFU_CAMERA_HELPER_UNIT "")
+if(MHFU_GENERATED)
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(camera_update "08886E50")
+    else()
+        set(camera_update "08886B54")
+    endif()
     foreach(unit IN LISTS MHFU_GENERATED)
-        file(STRINGS "${unit}" hit REGEX "register_function\\(0x08886E50u, &recomp_unit_[0-9]+," LIMIT_COUNT 1)
+        file(STRINGS "${unit}" hit REGEX "register_function\\(0x${camera_update}u, &recomp_unit_[0-9]+," LIMIT_COUNT 1)
         if(hit)
             string(REGEX MATCH "recomp_unit_[0-9]+" MHFU_CAMERA_HELPER_UNIT "${hit}")
             break()
@@ -65,6 +69,10 @@ if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
     else()
         message(STATUS "mhfu: corpus has no camera update; analog camera stays off")
     endif()
+endif()
+# The HUD and layered armor hooks below name functions by their Freedom Unite
+# addresses. Another executable has other code there.
+if(MHFU_GENERATED AND MHFU_TITLE_UPPER STREQUAL "FU")
 
     # Hiding the HUD (host/gpu/game_hud.cpp) wraps the game's 2D functions the
     # same way, so their units are read from the corpus too, in one pass.

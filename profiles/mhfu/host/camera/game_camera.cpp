@@ -7,6 +7,7 @@
 #include "input/bindings.hpp"
 #include "platform/utf8_path.hpp"
 #include "settings/settings.hpp"
+#include "title.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <algorithm>
@@ -57,8 +58,8 @@ namespace {
 // at +4, distance at +8) before collision. A non-negative byte at +0x91 takes
 // the behind-the-hunter placement instead. These facts come from this
 // project's own reading of the executable; each one the driver relies on is
-// listed in kSignature.
-constexpr std::uint32_t kCameraUpdate = 0x08886E50u;
+// listed in kSignature. kCameraUpdate (game_camera.hpp) is its address in
+// this build's executable.
 constexpr std::uint32_t kCameraFromParent = 0xA0u;
 constexpr float kRadians = 3.14159265358979323846f / 180.0f;
 constexpr float kAngleUnits = 65536.0f / 360.0f;
@@ -152,17 +153,27 @@ constexpr int kStickDeadzone = 40;
 constexpr int kStickFull = 127;
 // The aim functions, in game_task. Each prologue is checked before its wrapper
 // is installed, because these addresses belong to whichever overlay is loaded.
-// 0x09AA4DD0 aims in action 1001. 0x09AAA158 is the same code for an action
-// its caller passes in a1 (8 from 0x09AA3D4C, 0x09AA3D5C and 0x09AA3D70). It
-// is not wrapped: once it had run, every hunter in that action counted as
-// aiming, which took the right stick off the camera during sword swings.
-constexpr std::uint32_t kAimFunction = 0x09AA4DD0u;
-constexpr std::array<CodeWord, 4> kAimSignature{{
+// 0x09AA4DD0 aims in action 1001 (kAimFunction). 0x09AAA158 is the same code
+// for an action its caller passes in a1 (8 from 0x09AA3D4C, 0x09AA3D5C and
+// 0x09AA3D70). It is not wrapped: once it had run, every hunter in that action
+// counted as aiming, which took the right stick off the camera during sword
+// swings.
+constexpr std::array<CodeWord, 4> kAimSignatureFreedomUnite{{
     {0x09AA4DD0u, 0x27BDFFE0u, "addiu sp,sp,-32"},
     {0x09AA4DD4u, 0xAFBF001Cu, "sw ra,28(sp)"},
     {0x09AA4DD8u, 0xAFB30018u, "sw s3,24(sp)"},
     {0x09AA4DDCu, 0xAFB20014u, "sw s2,20(sp)"},
 }};
+// FUComplete's game_task loads at 0x09A5A580, 0x4D80 below Freedom Unite's,
+// and the aim function sits a further 0xB0 lower: the same prologue.
+constexpr std::array<CodeWord, 4> kAimSignatureFUComplete{{
+    {0x09A9FFA0u, 0x27BDFFE0u, "addiu sp,sp,-32"},
+    {0x09A9FFA4u, 0xAFBF001Cu, "sw ra,28(sp)"},
+    {0x09A9FFA8u, 0xAFB30018u, "sw s3,24(sp)"},
+    {0x09A9FFACu, 0xAFB20014u, "sw s2,20(sp)"},
+}};
+constexpr const std::array<CodeWord, 4> &kAimSignature =
+    kTitle == Title::FreedomUnite ? kAimSignatureFreedomUnite : kAimSignatureFUComplete;
 // The bow aims in its own actions, 1400 and up (traced with MHFU_TRACE_AIM:
 // 1401 while the arrow's line is up, 1405 and 1408 as it draws). The bow's
 // handler 0x09BB5440 calls 0x09BB6D98 from 0x09BB57D4, and that call is a
@@ -179,14 +190,12 @@ constexpr std::array<CodeWord, 4> kAimSignature{{
 // MHFU_TRACE_WEAPON dump). 0x09A8AEB0 switches on it below 11 through the
 // table at 0x09C0C830; the case at 0x09A8AF98 is `jal 0x09BB4F18`, which
 // leads to the bow's handler 0x09BB5440. There are fewer cases than weapons,
-// so the bow's number is read from that table rather than assumed.
+// so the bow's number is read from that table rather than assumed. The table,
+// the case and its call are kWeaponTable, kBowCase and kBowCaseCall.
 constexpr std::uint16_t kBowActions = 1400u;
 constexpr std::uint16_t kBowActionsEnd = 1500u;
 constexpr std::uint32_t kWeaponType = 488u;
-constexpr std::uint32_t kWeaponTable = 0x09C0C830u;
 constexpr std::uint32_t kWeaponTypes = 11u;
-constexpr std::uint32_t kBowCase = 0x09A8AF98u;
-constexpr std::uint32_t kBowCaseCall = 0x0E6ED3C6u; // jal 0x09BB4F18
 constexpr std::uint32_t kBowAimReady = 1040u;
 constexpr std::uint32_t kBowAimBlocked = 4380u;
 constexpr std::uint32_t kBowAimBit = 0x8u;
@@ -230,7 +239,7 @@ constexpr float kMouseStockTurn = 0.5f;
 // Game code the driver depends on, read from ULUS-10391. If any word differs,
 // the executable is not the one these facts were read from, and the driver
 // stays out rather than write to places that may mean something else.
-constexpr std::array<CodeWord, 38> kSignature{{
+constexpr std::array<CodeWord, 38> kSignatureFreedomUnite{{
     {0x08886E50u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
     {0x08886EC8u, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
     {0x08887470u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
@@ -272,6 +281,54 @@ constexpr std::array<CodeWord, 38> kSignature{{
     {0x088874E4u, 0x0E223925u, "jal 0x0888E494: the recenter check"},
     {0x0888E494u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
 }};
+// The same code in FUComplete's Portable 2nd G executable. The camera update
+// and its helpers sit 0x2FC below Freedom Unite's, the aim pitch's clamp
+// 0x2948 above, and every word is the same apart from the hunter list's
+// address (0x089C6CB4) and the calls, which move with their targets.
+constexpr std::array<CodeWord, 38> kSignatureFUComplete{{
+    {0x08886B54u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
+    {0x08886BCCu, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
+    {0x08887174u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
+    {0x08887178u, 0x30A200A0u, "andi v0,a1,0xa0: left and right gate the turn"},
+    {0x088871A0u, 0x2403FB82u, "addiu v1,zero,-1150: one sign of the yaw step"},
+    {0x088871A4u, 0x2403047Eu, "addiu v1,zero,1150: and the other"},
+    {0x088871B4u, 0x86820080u, "lh v0,0x80(s4): the target yaw"},
+    {0x088871BCu, 0xA6820080u, "sh v0,0x80(s4): written back by that step"},
+    {0x08887318u, 0x86820080u, "lh v0,0x80(s4): the filter reads the target"},
+    {0x0888731Cu, 0x86830082u, "lh v1,0x82(s4): and the filtered yaw"},
+    {0x08887328u, 0x00021083u, "sra v0,v0,2: a quarter of the difference"},
+    {0x08887334u, 0xA6820082u, "sh v0,0x82(s4): the filtered yaw"},
+    {0x088871F8u, 0x8E6401F4u, "lw a0,500(s3): L's recenter reads the hunter's facing"},
+    {0x08887210u, 0xA283008Eu, "sb v1,0x8E(s4): and sets the snap byte"},
+    {0x08887354u, 0x2C621000u, "sltiu v0,v1,4096: within 22.5 degrees of the target"},
+    {0x0888735Cu, 0xA280008Eu, "sb zero,0x8E(s4): the snap is dropped at once"},
+    {0x08887234u, 0x82860091u, "lb a2,0x91(s4): the behind-the-hunter gate"},
+    {0x08887238u, 0x04C00029u, "bltz a2: a negative gate skips that placement"},
+    {0x08887518u, 0xC4400004u, "lwc1 f0,4(v0): the preset's eye-offset height"},
+    {0x08887520u, 0xC4400008u, "lwc1 f0,8(v0): and its distance"},
+    {0x08886B84u, 0x3C03089Cu, "lui v1,0x89c: the base of the hunter list"},
+    {0x08886B88u, 0x8C706CB4u, "lw s0,27828(v1): the list at 0x089C6CB4"},
+    {0x08886BFCu, 0x8E130A84u, "lw s3,2692(s0): the hunter the camera follows"},
+    {0x08887260u, 0x8E6301F4u, "lw v1,500(s3): the hunter's facing"},
+    {0x088D8838u, 0x8083067Eu, "lb v1,1662(a0): the aim pitch"},
+    {0x088D8840u, 0xA083067Eu, "sb v1,1662(a0): the aim pitch, written back"},
+    {0x088D8848u, 0x28610065u, "slti at,v1,101: the aim pitch stops at 100"},
+    {0x0888814Cu, 0x8265067Eu, "lb a1,1662(s3): the aim camera reads that pitch"},
+    {0x08888164u, 0x00052840u, "sll a1,a1,1: one pitch unit becomes 34 angle units"},
+    {0x08888168u, 0x24A5F500u, "addiu a1,a1,-2816: the aim camera's pitch angle"},
+    {0x08887A10u, 0xC6820004u, "lwc1 f2,4(s4): the eye height the ease reads"},
+    {0x08887A14u, 0x3C023E00u, "lui v0,0x3e00: one eighth, the eye-height ease"},
+    {0x08887A28u, 0xE6800004u, "swc1 f0,4(s4): the eased eye height"},
+    // The camera update copies this halfword onto camera +0x86 before it tests
+    // L. Clearing the camera's copy is undone by that copy.
+    {0x08886C18u, 0x0E223342u, "jal 0x0888CD08: copies the button halfwords onto the camera"},
+    {0x0888CD58u, 0x96230A72u, "lhu v1,0xA72(s1): the recenter bit, on the hunter list"},
+    {0x0888CD60u, 0xA6030086u, "sh v1,0x86(s0): written to the camera in the branch delay"},
+    {0x088871E8u, 0x0E223866u, "jal 0x0888E198: the recenter check"},
+    {0x0888E198u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
+}};
+constexpr const std::array<CodeWord, 38> &kSignature =
+    kTitle == Title::FreedomUnite ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
     bool prepared{};
@@ -386,7 +443,7 @@ bool driving_allowed() {
 }
 
 bool lock_on_allowed() {
-    return settings::current().lock_on;
+    return kLockOn && settings::current().lock_on;
 }
 
 float load_float(const psprecomp::GuestMemory &memory, std::uint32_t address) {
@@ -1340,7 +1397,8 @@ void game_camera_frame(psprecomp::Runtime &runtime) {
     // A lock that is on, or a tap waiting, needs the hook as well; a player
     // who never taps pays nothing for lock-on either.
     if (!lock_on_allowed()) lock_on_release("");
-    lock_on_frame(runtime.memory());
+    // Another title's monsters are not where lock-on reads them.
+    if constexpr (kLockOn) lock_on_frame(runtime.memory());
     if (state.prepared && !state.hooked && (option_on() || pose_wanted || (lock_on_allowed() && lock_on_wanted()))) {
         // Only ever at the game's flip, from an import: no generated frame is
         // live on the host stack, so the dispatch tables can change here.

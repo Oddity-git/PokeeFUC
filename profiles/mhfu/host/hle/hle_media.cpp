@@ -395,9 +395,11 @@ void present_frame(Runtime &rt) {
         // of the follow camera, which game_camera_frame makes sure to drive.
         const bool lock_on_press = renderer.take_lock_on_press();
         camera::set_focus_camera_held(renderer.focus_camera_held());
-        if constexpr (kFreedomUniteExtras) {
+        if constexpr (kLockOn) {
             if (lock_on_press) camera::lock_on_tap();
-            camera::game_camera_frame(rt);
+        }
+        if constexpr (kAnalogCamera) camera::game_camera_frame(rt);
+        if constexpr (kFreedomUniteExtras) {
             // The view's shape follows the picture's: the game builds its next
             // projection with the aspect ratio of the target it will draw into.
             camera::game_aspect_frame(rt, renderer.game_aspect());
