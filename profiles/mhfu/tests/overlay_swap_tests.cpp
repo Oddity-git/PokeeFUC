@@ -4,8 +4,10 @@
 
 #include "overlay_swap_fixture.hpp"
 #include "overlays.hpp"
+#include "title.hpp"
 
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <span>
 #include <stdexcept>
@@ -56,10 +58,39 @@ void swapped_slot_does_not_run_the_old_body() {
         "a call outside every overlay slot was treated as stale");
 }
 
+// An overlay with no library is dumped under a name of its own, since the
+// slot is shared, and the FUComplete build dumps by default: its loader
+// patches overlays as they load.
+void dump_names_and_directory() {
+    check(mhfu::overlay_dump_name(0x09A5A580u, "game_task.ovl") == "overlay_09A5A580_game_task.bin",
+        "a dump is named after its slot and its image");
+    check(
+        mhfu::overlay_dump_name(0x09A5A580u, "lobby_task.ovl") != mhfu::overlay_dump_name(0x09A5A580u, "game_task.ovl"),
+        "two overlays of one slot do not share a dump");
+    check(mhfu::overlay_dump_name(0x09C14280u, "") == "overlay_09C14280.bin", "an image with no name keeps the slot");
+    check(mhfu::overlay_dump_name(0x09C14280u, "a-b c.ovl") == "overlay_09C14280_a_b_c.bin",
+        "characters a file name should not have become '_'");
+
+    setenv("MHFU_DUMP_OVERLAYS", "0", 1);
+    check(!mhfu::overlay_dump_directory(), "MHFU_DUMP_OVERLAYS=0 dumps nothing");
+    setenv("MHFU_DUMP_OVERLAYS", "dumps-here", 1);
+    check(mhfu::overlay_dump_directory() == std::filesystem::path("dumps-here"), "MHFU_DUMP_OVERLAYS is the directory");
+    unsetenv("MHFU_DUMP_OVERLAYS");
+    const std::filesystem::path data = std::filesystem::temp_directory_path() / "pokee_overlay_dump_tests";
+    setenv("MHFU_DATA_DIR", data.string().c_str(), 1);
+    const std::optional<std::filesystem::path> unset = mhfu::overlay_dump_directory();
+    if constexpr (mhfu::kTitle == mhfu::Title::FUComplete)
+        check(unset && unset->filename() == "overlay_dumps", "the FUComplete build dumps into its data folder");
+    else
+        check(!unset, "the Freedom Unite build dumps only when asked");
+    unsetenv("MHFU_DATA_DIR");
+}
+
 } // namespace
 
 int main() {
     try {
+        dump_names_and_directory();
         swapped_slot_does_not_run_the_old_body();
     } catch (const std::exception &error) {
         std::cerr << "FAIL: " << error.what() << '\n';

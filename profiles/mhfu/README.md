@@ -65,6 +65,14 @@ cmake --build out/fuc --target Pokee -j 2
 
 From then on the game starts from `EBOOT.FUC.ELF`, because the corpus was generated from it. The Save Region patch changes the key the game encrypts its save with, so a save written before the change has the earlier key: every key the game passes is kept in `savedata_keys.txt` in the data folder, and a save that does not match the current key loads with an earlier one (`[savedata] ... was written with a key this game used before`). The game's next save writes it with the current key. A change to FUComplete's configuration that patches other words writes the file again and needs the same two steps; until then the game runs from `EBOOT.ELF` in the interpreter. `MHFU_FUC_CODE_PATCHES=0` turns the check off.
 
+**FUComplete's changes to overlays.** The loader also patches overlays as they load, game_task and lobby_task among them, so they match no library built from `DATA.BIN` and run in the interpreter: slower, and the extras that wrap their functions (the bow and bowgun aim, so a drawn sword and shield counts as aiming) stay off. The FUComplete build dumps every overlay it has no library for into `overlay_dumps` in its data folder (`[overlay] dumped ...`; `MHFU_DUMP_OVERLAYS` names another directory, `0` none). After playing through the village and a quest, build them:
+
+```bash
+profiles/mhfu/scripts/build_overlay_dumps.sh out/fuc
+```
+
+Each library is named after the image's hash, so a patched overlay gets one of its own beside the unpatched one.
+
 The FUComplete build calls itself **PokeeFUC** wherever the player reads its name (window, menu, setup), and its window has the desktop id `io.github.teamgdb.PokeeFUC`, so it is told apart from the standard build installed beside it. On Linux, `install_user.sh` copies a build into `~/.local/share/pokee-fuc` with a launcher, and installs a `.desktop` entry and icon under `~/.local/share` for the application menu, without root. Run it again after a rebuild or when more overlays are built; `--uninstall` removes it. The copy holds code recompiled from your own game: keep it to yourself. See [LINUX.md](../../docs/LINUX.md#install-a-source-build-for-your-user).
 
 What differs from the Freedom Unite build:
@@ -1323,7 +1331,7 @@ The marker does not project through the view a draw uploaded. That view has no t
 | `MHFU_INPUT_SCRIPT` | Scripted keys, mouse motion and buttons, virtual-gamepad buttons and axes, dropped files and window captures, for testing the menu, the setup, the on-screen keyboard and the game's controls without a person at the controls; the syntax is in `host/ui/input_script.hpp`. Its virtual gamepad also becomes the game's pad, in place of a real one that is connected; its keys reach the game through the bindings as well as the interface; with mouse steps the pointer counts as captured without taking the real one; its finger steps are a virtual touch screen, and `drag` moves the interface's pointer as a touch does; `joy` steps attach test joysticks SDL has no mapping for, like a controller it does not know (12 buttons, 4 axes and a hat), and press their buttons, hat and axes. Example: `300:key Escape;330:shot menu;360:pad leftstick+rightstick;400:key W 30;430:mouse 50 0` |
 | `MHFU_CAPTURE_PRESENTS=N` | Each window capture (`shot NAME` in the input script) goes on for N presents in a row, written as `NAME.bmp`, `NAME_1.bmp` and so on: with a [frame rate](#frame-rate) above 30 it shows the frames in between the game's as well, which one capture per game frame never does. With `MHFU_TRACE_INTERPOLATION=presents`, the `[render] window` line of each capture comes just before the `[interp] present` line that says whether it was blended. Each capture waits for its frame, so the run is slower while it lasts |
 | `MHFU_INPUT_LIVE` | A file read while the game runs; each line appended to it is an input-script step timed from when it is read, to drive two instances side by side |
-| `MHFU_DUMP_OVERLAYS` | Directory to dump an overlay that has no library into |
+| `MHFU_DUMP_OVERLAYS` | Directory to dump an overlay that has no library into, as `overlay_<slot>_<name>.bin`; `0` dumps nothing. The FUComplete build dumps into `overlay_dumps` in its data folder when this is unset |
 | `PSPRECOMP_NO_INTERPRETER=1` | Stop at uncompiled code instead of interpreting it |
 | `PSPRECOMP_MAX_DISPATCHES` | Stop after this many dispatches |
 | `PSPRECOMP_HLE_HISTOGRAM=1` | Print import call counts on exit |

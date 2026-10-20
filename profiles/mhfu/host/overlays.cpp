@@ -7,6 +7,8 @@
 #include "overlays.hpp"
 
 #include "app_paths.hpp"
+#include "install/user_data.hpp"
+#include "title.hpp"
 #include "hle/hle_common.hpp"
 #include "overlay_module.hpp"
 #include "platform/utf8_path.hpp"
@@ -14,6 +16,7 @@
 #include "psprecomp/stale_code_hook.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -226,16 +229,18 @@ void load_overlay_libraries() {
 
 // Writes the loaded image next to the other dumps so the corpus can be built.
 void dump_slot(const psprecomp::GuestMemory &memory, std::uint32_t slot_start, std::uint32_t slot_end) {
-    const std::optional<std::string> directory_text = environment_utf8("MHFU_DUMP_OVERLAYS");
-    if (!directory_text) {
+    const std::optional<std::filesystem::path> directory = overlay_dump_directory();
+    if (!directory) {
         log_once("overlay-dump-hint",
             "[overlay] set MHFU_DUMP_OVERLAYS=<dir> to dump the loaded overlay for recompilation");
         return;
     }
     std::vector<std::uint8_t> image;
+    std::string name;
     if (const std::optional<OverlayHeader> header = read_overlay_header(memory, slot_start);
         header.has_value() && header->image_size != 0u) {
         image = read_guest(memory, slot_start, header->image_size);
+        name = header->name;
     } else {
         // Not a recognisable image: fall back to the whole slot without its
         // trailing padding.
@@ -247,15 +252,20 @@ void dump_slot(const psprecomp::GuestMemory &memory, std::uint32_t slot_start, s
         return;
     }
     std::error_code ec;
-    const std::filesystem::path directory = path_from_utf8(*directory_text);
-    std::filesystem::create_directories(directory, ec);
-    const std::filesystem::path path = directory / ("overlay_" + psprecomp::hex32(slot_start).substr(2) + ".bin");
+    std::filesystem::create_directories(*directory, ec);
+    const std::filesystem::path path = *directory / overlay_dump_name(slot_start, name);
+    // A miss repeats while the image stays loaded; one dump of it is enough.
+    static std::vector<std::filesystem::path> written;
+    if (std::find(written.begin(), written.end(), path) != written.end()) return;
+    written.push_back(path);
     std::ofstream out(path, std::ios::binary);
     if (!out) throw psprecomp::Error("Cannot write overlay dump: " + path_to_utf8(path));
     out.write(reinterpret_cast<const char *>(image.data()), static_cast<std::streamsize>(image.size()));
     std::cout << "[overlay] dumped " << image.size() / 1024u << " KiB to " << path_to_utf8(path) << "\n"
               << "[overlay] recompile it with: profiles/mhfu/tools/add_overlay.py <build_dir> " << path_to_utf8(path)
-              << " " << psprecomp::hex32(slot_start) << "\n";
+              << " " << psprecomp::hex32(slot_start)
+              << ", or every dump with profiles/mhfu/scripts/build_overlay_dumps.sh <build_dir> "
+              << path_to_utf8(*directory) << "\n";
 }
 
 bool install_overlay_for(Runtime &runtime, std::uint32_t pc) {
@@ -378,6 +388,29 @@ void install_overlay_support(Runtime &runtime) {
     psprecomp::set_runtime_missing_function_hook(&missing_function_hook);
     psprecomp::set_runtime_unsupported_hook(&unsupported_instruction_hook);
     psprecomp::set_runtime_stale_code_hook(&overlay_call_is_stale);
+}
+
+std::optional<std::filesystem::path> overlay_dump_directory() {
+    if (const std::optional<std::string> text = environment_utf8("MHFU_DUMP_OVERLAYS")) {
+        if (*text == "0") return std::nullopt;
+        return path_from_utf8(*text);
+    }
+    if constexpr (kTitle == Title::FUComplete) {
+        try {
+            return install::user_data_directory() / "overlay_dumps";
+        } catch (const std::exception &) {
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;
+}
+
+std::string overlay_dump_name(std::uint32_t slot, const std::string &image_name) {
+    std::string name = "overlay_" + psprecomp::hex32(slot).substr(2);
+    const std::string stem = image_name.substr(0, image_name.find('.'));
+    if (!stem.empty()) name += '_';
+    for (const char c : stem) name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    return name + ".bin";
 }
 
 } // namespace mhfu
