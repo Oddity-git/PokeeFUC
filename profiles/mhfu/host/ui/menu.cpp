@@ -497,8 +497,8 @@ void Menu::video() {
     }
     {
         RowOptions o = options_for("video.texture_pack",
-            "Draws an HD texture pack in PPSSPP's format from textures/ULUS10391 in the data "
-            "folder instead of the game's textures.");
+            std::string("Draws an HD texture pack in PPSSPP's format from textures/") + install::kDiscId +
+                " in the data folder instead of the game's textures.");
         // The footer shows the note under the description: what is loaded,
         // or where the pack was looked for.
         if (o.note.empty()) {
