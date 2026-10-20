@@ -1806,6 +1806,36 @@ void Menu::mods() {
                 settings::save();
             }
         }
+        if constexpr (kHallEquipment) {
+            if (toggle_row("Change Equipment in the Guild Hall", s.hall_equipment,
+                    options_for("game.hall_equipment",
+                        "On (default): the item box in the Guild Hall, online or not, offers Change Equipment, as "
+                        "the box at home does, and sends the new equipment to the hall when the equipment screen "
+                        "closes, so the other hunters see it, in a full hall too. Refused while readied for a "
+                        "quest. Off: greyed out, as in the game."))) {
+                s.hall_equipment = !s.hall_equipment;
+                settings::save();
+            }
+        }
+        if constexpr (kItemSets) {
+            if (toggle_row("Item Sets", s.item_sets,
+                    options_for("game.item_sets",
+                        "On: the item box menu has Item Sets, to register the pouch as a set and load it again "
+                        "from the box, in the game's own windows. Off: the game's own six entries."))) {
+                s.item_sets = !s.item_sets;
+                settings::save();
+            }
+        }
+        if constexpr (kHallMeal) {
+            if (toggle_row("Eat in the Guild Hall", s.hall_meal,
+                    options_for("game.hall_meal",
+                        "On (default): seated at a table in the Guild Hall, △ orders from your home kitchen's "
+                        "menu, with its chefs, prices and skills, as Order Food in the house does. Off: △ does "
+                        "nothing there, as in the game."))) {
+                s.hall_meal = !s.hall_meal;
+                settings::save();
+            }
+        }
     }
     mods_page(back_);
     if (take_mods_restart_request()) {

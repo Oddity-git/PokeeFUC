@@ -94,6 +94,7 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Give Any Rarity Item | ❔ needs another hunter |
 | Layered armor | ✅ seen by the player; in the village, every part set to nothing showed the bare hunter |
 | HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ imported and played by the player; its 6127 entries read, title, loading screen, HUD and village drawn from it in a scripted run |
+| Eat in the Guild Hall, Item Sets, Change Equipment in the Guild Hall | ❔ their code signatures match FUComplete's memory and their hooks go in, in a scripted run in the village; not yet used by a player. Item Sets and Change Equipment choose with ○, as FUComplete's box does |
 
 ## Updating this page
 

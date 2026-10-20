@@ -151,9 +151,10 @@ def main():
     if not re.fullmatch(r'[0-9a-f]{40,64}', base):
         raise ValueError('Invalid base commit')
     merge_base = subprocess.check_output(['git', 'merge-base', base, 'HEAD'], cwd=ROOT, text=True).strip()
+    # Vendored sources need not be UTF-8; only hunk headers and file names are parsed.
     diff = subprocess.check_output(['git', '-c', 'core.quotepath=false', 'diff', '--no-ext-diff',
                                     '--find-renames', '--unified=0', merge_base, 'HEAD', '--'],
-                                   cwd=ROOT, text=True)
+                                   cwd=ROOT, text=True, errors='replace')
     changed = diff_coverage(changed_lines(diff), inventory, coverage)
     languages = {}
     for kind in sorted(set(inventory.values())):

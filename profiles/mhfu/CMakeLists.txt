@@ -335,6 +335,12 @@ set(MHFU_HOST_SOURCES
     host/game/item_box.cpp
     host/game/empty_item_slot.cpp
     host/game/give_rarity.cpp
+    host/game/hall_equipment.cpp
+    host/game/hall_meal.cpp
+    host/game/hooks.cpp
+    host/game/guest_calls.cpp
+    host/game/item_sets.cpp
+    host/game/item_sets_menu.cpp
     host/game/sharpness_gauge.cpp
     third_party/tiny_aes/aes.c
 )
@@ -582,8 +588,6 @@ target_compile_definitions(mhfu_hud_scale_replay_tests PRIVATE
 set_target_properties(mhfu_hud_scale_replay_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_hud_scale_replay_tests COMMAND mhfu_hud_scale_replay_tests)
-    set_tests_properties(mhfu_hud_scale_replay_tests PROPERTIES
-        ENVIRONMENT "MHFU_HUD_SCALE_FIXTURE_DIR=${MHFU_PROFILE_DIR}/tests/hud_scale_fixtures")
 endif()
 
 # Damage numbers: hitzone colour, the health a hit removes, the watch
@@ -645,6 +649,33 @@ if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_damage_numbers_tests COMMAND mhfu_damage_numbers_tests)
 endif()
 
+# Item sets: loading a set through the box, the sets file, the screens'
+# buttons, and the hooks and the game calls they make on stand-ins for the
+# item box menu. No game data.
+add_executable(mhfu_item_sets_tests
+    tests/item_sets_tests.cpp
+    host/game/game_data.cpp
+    host/game/guest_calls.cpp
+    host/game/item_sets.cpp
+    host/game/hooks.cpp
+    host/game/item_sets_menu.cpp
+    host/game/guest_ram.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_item_sets_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_item_sets_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_item_sets_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_item_sets_tests COMMAND mhfu_item_sets_tests)
+endif()
+
 # Fast item box: the shortened wait, the lobby_task code check, and the wrapper
 # around a stand-in transfer menu. No game data.
 add_executable(mhfu_item_box_tests
@@ -685,6 +716,60 @@ target_link_libraries(mhfu_give_rarity_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_give_rarity_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_give_rarity_tests COMMAND mhfu_give_rarity_tests)
+endif()
+
+# Wrappers that share a guest function: two in either order run once each,
+# and a function registered again starts a new chain. No game data.
+add_executable(mhfu_hooks_tests
+    tests/hooks_tests.cpp
+    host/game/hooks.cpp)
+target_include_directories(mhfu_hooks_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_hooks_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_hooks_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_hooks_tests COMMAND mhfu_hooks_tests)
+endif()
+
+# Change Equipment in the Guild Hall: the button read, the refused choice, the
+# label, the code check, and the wrappers around a stand-in box. No game data.
+add_executable(mhfu_hall_equipment_tests
+    tests/hall_equipment_tests.cpp
+    host/game/hall_equipment.cpp
+    host/game/hooks.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_hall_equipment_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_hall_equipment_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_hall_equipment_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_hall_equipment_tests COMMAND mhfu_hall_equipment_tests)
+endif()
+
+add_executable(mhfu_hall_meal_tests
+    tests/hall_meal_tests.cpp
+    host/game/hall_meal.cpp
+    host/game/hooks.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_hall_meal_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_hall_meal_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_hall_meal_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_hall_meal_tests COMMAND mhfu_hall_meal_tests)
 endif()
 
 # Empty item slot: the scroll with an empty stop, the code and caller checks,
@@ -915,6 +1000,15 @@ target_include_directories(mhfu_vertex_hold_tests PRIVATE "${MHFU_PROFILE_DIR}/h
 set_target_properties(mhfu_vertex_hold_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_vertex_hold_tests COMMAND mhfu_vertex_hold_tests)
+endif()
+
+# Which cached spans give way when the vertex cache is full, and the spare
+# vectors later misses reuse. No GPU is used.
+add_executable(mhfu_vertex_cache_tests tests/vertex_cache_tests.cpp)
+target_include_directories(mhfu_vertex_cache_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+set_target_properties(mhfu_vertex_cache_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_vertex_cache_tests COMMAND mhfu_vertex_cache_tests)
 endif()
 
 # Descriptor pools counted the way a phone's driver counts them: growth,
@@ -1234,6 +1328,21 @@ mhfu_use_ffmpeg(mhfu_test_host)
 if(WIN32)
     target_link_libraries(mhfu_test_host PUBLIC ws2_32 iphlpapi shell32)
 endif()
+# The stall trace's kinds and the [slow-frame] line, on the headless host.
+add_executable(mhfu_frame_stats_tests tests/frame_stats_tests.cpp)
+target_link_libraries(mhfu_frame_stats_tests PRIVATE mhfu_test_host)
+set_target_properties(mhfu_frame_stats_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_frame_stats_tests COMMAND mhfu_frame_stats_tests)
+endif()
+# The installer's disc checks and their messages, on small synthetic ISO images.
+add_executable(mhfu_installer_inspect_tests tests/installer_inspect_tests.cpp)
+target_include_directories(mhfu_installer_inspect_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_installer_inspect_tests PRIVATE mhfu_test_host)
+set_target_properties(mhfu_installer_inspect_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_installer_inspect_tests COMMAND mhfu_installer_inspect_tests)
+endif()
 add_executable(mhfu_kernel_hle_tests tests/kernel_hle_tests.cpp)
 target_compile_definitions(mhfu_kernel_hle_tests PRIVATE PSPRECOMP_TEST_NIDS_CSV="${PROJECT_SOURCE_DIR}/configs/nids.csv")
 target_link_libraries(mhfu_kernel_hle_tests PRIVATE mhfu_test_host)
@@ -1277,8 +1386,7 @@ if(NOT WIN32)
     set_target_properties(mhfu_overlay_swap_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     if(PSPRECOMP_BUILD_TESTS)
         add_test(NAME mhfu_overlay_swap_tests COMMAND mhfu_overlay_swap_tests)
-        set_tests_properties(mhfu_overlay_swap_tests PROPERTIES TIMEOUT 60
-            ENVIRONMENT "MHFU_OVERLAY_FIXTURE_DIR=${MHFU_OVERLAY_FIXTURE_DIR}")
+        set_tests_properties(mhfu_overlay_swap_tests PROPERTIES TIMEOUT 60)
     endif()
 endif()
 set_target_properties(mhfu_kernel_hle_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

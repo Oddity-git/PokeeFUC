@@ -6,6 +6,17 @@
 
 namespace {
 
+// Only the module needs the image's identity hash; keeping it out of the
+// shared header leaves the test executable without an unused inline copy.
+std::uint64_t overlay_fixture_hash(const std::uint8_t *data, std::size_t size) {
+    std::uint64_t hash = 0xCBF29CE484222325ull;
+    for (std::size_t index = 0u; index < size; ++index) {
+        hash ^= data[index];
+        hash *= 0x100000001B3ull;
+    }
+    return hash;
+}
+
 void fixture_body(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
     ctx.gpr[2] = MHFU_OVERLAY_FIXTURE_MARK;
     ctx.pc = kOverlayFixtureEntry + 4u;

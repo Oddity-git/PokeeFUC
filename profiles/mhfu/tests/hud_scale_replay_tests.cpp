@@ -285,8 +285,8 @@ int main(int argc, char **argv) {
         return 0;
     }
     test_parse_and_owner();
-    // CTest names the fixtures through the environment, so a device run can
-    // point at its own copy; a direct run uses the source tree.
+    // A runner that copies the fixtures elsewhere, such as onto an Android
+    // device, names their new place in MHFU_HUD_SCALE_FIXTURE_DIR.
     const char *fixture_dir = std::getenv("MHFU_HUD_SCALE_FIXTURE_DIR");
     const std::filesystem::path dir =
         fixture_dir != nullptr && *fixture_dir != '\0' ? fixture_dir : MHFU_HUD_SCALE_FIXTURE_DIR;

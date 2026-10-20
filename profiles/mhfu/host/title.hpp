@@ -71,4 +71,15 @@ inline constexpr bool kGatherIcon = true;
 // hunter's load and the lobby's equipment calls, and the armor tables.
 inline constexpr bool kLayeredArmor = true;
 
+// Eat in the Guild Hall (game/hall_meal.cpp): the seated frame, the bar's
+// prompt and game_sub's kitchen menu.
+inline constexpr bool kHallMeal = true;
+// Item Sets (game/item_sets.cpp): the item box's menu, its record and lists,
+// and the game's windows, with FUComplete's ○ to choose.
+inline constexpr bool kItemSets = true;
+// Change Equipment in the Guild Hall (game/hall_equipment.cpp): the box's
+// frame and menu, the member entries of ad hoc play, and the hall's model
+// loader and archive rows.
+inline constexpr bool kHallEquipment = true;
+
 } // namespace mhfu

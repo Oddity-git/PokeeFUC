@@ -159,6 +159,16 @@ class CoverageGateIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIsNone(summary['diff']['percent'])
 
+    def test_a_changed_file_that_is_not_utf8_does_not_stop_the_report(self):
+        path = self.root / 'profiles/mhfu/third_party/vendor/header.h'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'// 0.7\x960.85\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'Vendor a Windows-1252 file')
+        status, summary = self.run_gate()
+        self.assertEqual(status, 0)
+        self.assertEqual(summary['diff']['percent'], 80)
+
 
 if __name__ == '__main__':
     unittest.main()
