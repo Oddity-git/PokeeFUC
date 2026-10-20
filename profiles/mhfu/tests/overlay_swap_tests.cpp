@@ -23,7 +23,11 @@ void outside_slot(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
 }
 
 void swapped_slot_does_not_run_the_old_body() {
-    if (setenv("MHFU_OVERLAY_DIR", MHFU_OVERLAY_FIXTURE_DIR, 1) != 0)
+    // CTest names the fixtures through the environment, so a device run can
+    // point at its own copy; a direct run uses the build tree.
+    const char *fixture_dir = std::getenv("MHFU_OVERLAY_FIXTURE_DIR");
+    if (fixture_dir == nullptr || *fixture_dir == '\0') fixture_dir = MHFU_OVERLAY_FIXTURE_DIR;
+    if (setenv("MHFU_OVERLAY_DIR", fixture_dir, 1) != 0)
         throw std::runtime_error("could not point the overlay loader at the fixtures");
 
     psprecomp::Runtime runtime;

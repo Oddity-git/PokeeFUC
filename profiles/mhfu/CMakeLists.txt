@@ -566,6 +566,8 @@ target_compile_definitions(mhfu_hud_scale_replay_tests PRIVATE
 set_target_properties(mhfu_hud_scale_replay_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_hud_scale_replay_tests COMMAND mhfu_hud_scale_replay_tests)
+    set_tests_properties(mhfu_hud_scale_replay_tests PROPERTIES
+        ENVIRONMENT "MHFU_HUD_SCALE_FIXTURE_DIR=${MHFU_PROFILE_DIR}/tests/hud_scale_fixtures")
 endif()
 
 # Damage numbers: hitzone colour, the health a hit removes, the watch
@@ -1258,7 +1260,8 @@ if(NOT WIN32)
     set_target_properties(mhfu_overlay_swap_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     if(PSPRECOMP_BUILD_TESTS)
         add_test(NAME mhfu_overlay_swap_tests COMMAND mhfu_overlay_swap_tests)
-        set_tests_properties(mhfu_overlay_swap_tests PROPERTIES TIMEOUT 60)
+        set_tests_properties(mhfu_overlay_swap_tests PROPERTIES TIMEOUT 60
+            ENVIRONMENT "MHFU_OVERLAY_FIXTURE_DIR=${MHFU_OVERLAY_FIXTURE_DIR}")
     endif()
 endif()
 set_target_properties(mhfu_kernel_hle_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

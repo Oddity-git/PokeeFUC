@@ -123,6 +123,33 @@ class AndroidRunnerTests(unittest.TestCase):
         self.assertEqual(ET.parse(self.build / 'android-results/test-results.xml')
                          .find('testcase').attrib['name'], 'memory_watch_contracts')
 
+    def test_fixture_directories_are_copied_and_renamed(self):
+        fixtures = self.build / 'bin' / 'fixtures'
+        fixtures.mkdir(parents=True)
+        missing = self.build / 'not built'
+        variant = {'name': 'fixture_tests', 'command': [str(self.build / 'passing_tests')],
+                   'properties': [{'name': 'ENVIRONMENT',
+                                   'value': [f'FIXTURE_DIR={fixtures}', f'AGAIN_DIR={fixtures}',
+                                             f'MISSING_DIR={missing}', 'RELATIVE_DIR=bin']}]}
+        self.assertEqual(self.run_suite([variant]), 0)
+        calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
+        command = next(call[1] for call in calls if call[0] == 'shell' and 'timeout 120' in call[1])
+        self.assertIn('FIXTURE_DIR=/data/local/tmp/pokee-unit-tests/data/0', command)
+        self.assertIn('AGAIN_DIR=/data/local/tmp/pokee-unit-tests/data/0', command)
+        self.assertIn('RELATIVE_DIR=bin', command)
+        self.assertIn(str(missing), command)
+        pushes = [call for call in calls if call[0] == 'push' and call[1] == str(fixtures)]
+        self.assertEqual(pushes, [['push', str(fixtures), '/data/local/tmp/pokee-unit-tests/data/0']])
+
+    def test_fixture_directories_outside_the_checkout_are_refused(self):
+        outside = self.root / 'outside fixtures'
+        outside.mkdir()
+        variant = {'name': 'fixture_tests', 'command': [str(self.build / 'passing_tests')],
+                   'properties': [{'name': 'ENVIRONMENT', 'value': [f'FIXTURE_DIR={outside}']}]}
+        with self.assertRaises(ValueError):
+            self.run_suite([variant])
+        self.assertFalse(self.calls.exists(), 'Invalid input must not touch the device')
+
     def test_runtime_library_must_have_the_ndk_name(self):
         wrong = self.root / 'unexpected.so'
         wrong.write_bytes(b'wrong library')
