@@ -35,6 +35,7 @@
 // MHFU_TRACE_SHARPNESS=1 logs each change of the reading.
 
 #include "game/damage_numbers.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <cstdint>
@@ -51,17 +52,21 @@ class Ram;
 namespace mhfu::game::sharpness {
 
 // In the hunter the camera follows (game::layout::followed_hunter).
+// FUComplete's executable keeps the weapon tables and the knife's sprites
+// lower (read from its 0x088DD4DC, 0x0885CCE0 and 0x0884111C); the hunter's
+// fields are the same.
+inline constexpr bool kFreedomUniteTables = kTitle == Title::FreedomUnite;
 inline constexpr std::uint32_t kPoints = 4338u;
 inline constexpr std::uint32_t kMostPoints = 1548u;
 inline constexpr std::uint32_t kColourByte = 1522u;
 inline constexpr std::uint32_t kWeaponSlot = 1256u;
 inline constexpr std::uint8_t kWeaponKind = 5u;
 // In the executable.
-inline constexpr std::uint32_t kWeaponRecords = 0x0895A0ECu;
+inline constexpr std::uint32_t kWeaponRecords = kFreedomUniteTables ? 0x0895A0ECu : 0x089574C8u;
 inline constexpr std::uint32_t kWeaponRecordBytes = 24u;
 inline constexpr std::uint32_t kWeaponRow = 8u;
-inline constexpr std::uint32_t kModelClasses = 0x089785A8u;
-inline constexpr std::uint32_t kClassTables = 0x0897935Cu;
+inline constexpr std::uint32_t kModelClasses = kFreedomUniteTables ? 0x089785A8u : 0x08975984u;
+inline constexpr std::uint32_t kClassTables = kFreedomUniteTables ? 0x0897935Cu : 0x08976738u;
 inline constexpr std::uint32_t kClassCount = 11u;
 inline constexpr std::uint32_t kRowBytes = 14u;
 inline constexpr std::size_t kColours = 7u;
@@ -142,8 +147,8 @@ inline constexpr std::uint32_t kGlowPeak = 192u;
 // orange and 10 for the rest, so yellow's knife is the plain one the colour
 // layer tints, and with no layer it shows no colour and no pulse; orange keeps
 // its own knife but does not pulse.
-inline constexpr std::uint32_t kKnifeSprites = 0x08938978u;
-inline constexpr std::uint32_t kKnifeColours = 0x08938980u;
+inline constexpr std::uint32_t kKnifeSprites = kFreedomUniteTables ? 0x08938978u : 0x08935DA0u;
+inline constexpr std::uint32_t kKnifeColours = kFreedomUniteTables ? 0x08938980u : 0x08935DA8u;
 inline constexpr std::uint32_t kKnifeColourBytes = 4u;
 // The entries the game leaves empty, as a little-endian word of those bytes
 // (mask, blue, green, red from the top). Their strength follows the game's
