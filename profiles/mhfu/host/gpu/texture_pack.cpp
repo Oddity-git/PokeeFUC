@@ -54,7 +54,11 @@ bool texture_pack_trace() {
 
 namespace {
 
+// Also drops a UTF-8 byte order mark: packs saved by Windows editors start
+// textures.ini with one, and PPSSPP reads them.
 std::string trim(std::string_view text) {
+    constexpr std::string_view kByteOrderMark = "\xEF\xBB\xBF";
+    if (text.substr(0, kByteOrderMark.size()) == kByteOrderMark) text.remove_prefix(kByteOrderMark.size());
     std::size_t begin = 0u;
     std::size_t end = text.size();
     while (begin < end && std::isspace(static_cast<unsigned char>(text[begin])) != 0) ++begin;

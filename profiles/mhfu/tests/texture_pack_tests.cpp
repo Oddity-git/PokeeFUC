@@ -175,6 +175,11 @@ void test_hashes(const fs::path &root) {
     make_pack(root / "xxh32" / kGame, xxh32);
     c = check_texture_pack(root / "xxh32", kGame);
     check(c.ok() && c.hash == TexturePackHash::Xxh32, "hash = xxh32 is accepted");
+    // A Windows editor saves textures.ini with a UTF-8 byte order mark before
+    // [options]; the hash it names still counts.
+    make_pack(root / "bom" / kGame, "\xEF\xBB\xBF" + quick);
+    c = check_texture_pack(root / "bom", kGame);
+    check(c.ok() && c.hash == TexturePackHash::Quick, "a byte order mark before [options] is skipped");
     make_pack(root / "nohash" / kGame, "[hashes]\n0000000022585cbda625131a = ui/capcom.png\n");
     c = check_texture_pack(root / "nohash", kGame);
     check(!c.ok() && !c.problem.empty(), "an ini that names no hash is refused");
