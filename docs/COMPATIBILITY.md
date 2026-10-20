@@ -77,6 +77,23 @@ Application sources are identical between these commits: the later commits corre
 
 Game runs used isolated or copied save data and finite deadlines. Captures were inspected, and test processes stopped. macOS used 32 compatible overlays and disabled audio/FFmpeg; Android is an emulator with audio/FFmpeg disabled. Hunts, multiplayer, audio quality and long-session stability were not checked in this pass. The Steam Deck developer binary was installed with a rollback copy; the release installation was unchanged.
 
+## FUComplete build (`MHFU_TITLE=FUC`)
+
+Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTool, its default configuration, `c65526f`. Checked by a player and with scripted runs:
+
+| | Linux |
+| --- | --- |
+| Build, corpus and all overlays, FUComplete's patched game_task and lobby_task included | ✅ |
+| Boot, FUComplete's loader (`PRELOAD.BIN`, `MODLOAD.BIN`), title and menus | ✅ |
+| Character creation, village, a quest | ✅ at 30 fps and 100% speed |
+| FUComplete's changes to the code, run compiled (`EBOOT.FUC.ELF`) | ✅ its file I/O hook ran |
+| A save written before those changes, then saved again | ✅ |
+| Analog camera: turn and tilt, standing and moving, a sword and shield drawn | ✅ |
+| Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f` |
+| Lock-on, its monster icon | ❔ no large monster yet |
+| Give Any Rarity Item | ❔ needs another hunter |
+| Layered armor | ❌ not ported: FUComplete's equipment code and records differ |
+
 ## Updating this page
 
 Run through [the smoke test](TESTING.md) on the platform, then change the cells you checked in the same pull request as the fix, or in a pull request of their own. Add a row to *Tested hardware* with the commit you tested. A result without a commit cannot be compared with anything later, so it does not go in the table.
