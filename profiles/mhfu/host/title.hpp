@@ -49,8 +49,9 @@ inline constexpr bool kLockOn = kFreedomUniteExtras;
 // Hold to gather (game/gather_icon.cpp): its gather list, carve table and farm
 // points. The gather icon itself is drawn with Freedom Unite's item art.
 inline constexpr bool kGatherHold = true;
+// Aspect ratio's Fill (camera/game_aspect.cpp): the camera object's projection.
+inline constexpr bool kGameAspect = true;
 // Not ported yet: they stay off, and their rows stay out of the menu.
-inline constexpr bool kGameAspect = kFreedomUniteExtras;    // Aspect ratio
 inline constexpr bool kUiScaling = kFreedomUniteExtras;     // UI Scaling (gpu/hud_scale)
 inline constexpr bool kHideHud = kFreedomUniteExtras;       // Hide HUD (gpu/game_hud)
 inline constexpr bool kEmptyItemSlot = kFreedomUniteExtras; // Empty item slot

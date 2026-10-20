@@ -402,11 +402,9 @@ void present_frame(Runtime &rt) {
             if (lock_on_press) camera::lock_on_tap();
         }
         if constexpr (kAnalogCamera) camera::game_camera_frame(rt);
-        if constexpr (kFreedomUniteExtras) {
-            // The view's shape follows the picture's: the game builds its next
-            // projection with the aspect ratio of the target it will draw into.
-            camera::game_aspect_frame(rt, renderer.game_aspect());
-        }
+        // The view's shape follows the picture's: the game builds its next
+        // projection with the aspect ratio of the target it will draw into.
+        if constexpr (kGameAspect) camera::game_aspect_frame(rt, renderer.game_aspect());
         camera::advance(seconds, camera::game_camera_degrees_per_second());
     }
     perf::add_render_time(perf::Clock::now() - present_start);

@@ -516,18 +516,18 @@ int main(int argc, char **argv) {
         if (corpus_matches) psprecomp::register_generated_functions(runtime);
         const std::size_t generated_functions = runtime.function_count();
         mhfu::install_profile(runtime, elf, paths);
-        // The projection was read from this executable. The signature inside
-        // prepare_game_aspect refuses it if those instructions differ.
-        if (sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256)
-            (void)mhfu::camera::prepare_game_aspect(runtime);
+        // The projection was read from this executable, and from FUComplete's
+        // at its own addresses. The signature inside prepare_game_aspect
+        // refuses it if those instructions differ.
+        const bool known_executable =
+            mhfu::kFreedomUniteExtras ? sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256 : corpus_matches;
+        if (known_executable) (void)mhfu::camera::prepare_game_aspect(runtime);
 #if defined(MHFU_CAMERA_HELPER_UNIT)
         // CMake names the generated unit that holds the camera update, so a
         // new partition of the code cannot hand the camera the wrong one.
         // FUComplete's executable is not pinned: the corpus it was generated
         // from, and the signature prepare_game_camera checks, stand in.
-        const bool camera_executable =
-            mhfu::kFreedomUniteExtras ? sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256 : corpus_matches;
-        if (camera_executable) (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
+        if (known_executable) (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
 #endif
 
         std::cout << "Pokee PSP bootstrap\n"

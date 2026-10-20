@@ -10,8 +10,9 @@
 namespace {
 using namespace mhfu::camera;
 
-constexpr std::uint32_t kCameraPointer = 0x089CBD04u;
-constexpr std::uint32_t kCullFactor = 0x08815EC4u;
+constexpr bool kFreedomUnite = mhfu::kTitle == mhfu::Title::FreedomUnite;
+constexpr std::uint32_t kCameraPointer = kFreedomUnite ? 0x089CBD04u : 0x089C6CB4u;
+constexpr std::uint32_t kCullFactor = kFreedomUnite ? 0x08815EC4u : 0x08816C84u;
 constexpr std::uint32_t kCullFactorWord = 0x3C023FC0u; // lui v0,0x3fc0: the baked 1.5
 constexpr std::uint32_t kCamera = 0x08900000u;
 constexpr std::uint32_t kGameAspectBits = 0x3FE1E1E2u;
