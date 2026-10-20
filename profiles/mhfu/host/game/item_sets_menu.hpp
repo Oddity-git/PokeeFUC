@@ -8,6 +8,7 @@
 // those), and the game's Yes/No to confirm. △ deletes a set.
 
 #include "game/item_sets.hpp"
+#include "title.hpp"
 
 #include <cstdint>
 #include <string>
@@ -23,8 +24,10 @@ inline constexpr std::uint16_t kLeft = 0x0080u;
 inline constexpr std::uint16_t kL = 0x0100u;
 inline constexpr std::uint16_t kR = 0x0200u;
 inline constexpr std::uint16_t kDelete = 0x1000u;  // △
-inline constexpr std::uint16_t kCancel = 0x2000u;  // the box's back
-inline constexpr std::uint16_t kConfirm = 0x4000u; // the box's choose
+// The box's back and choose: ○ and × in Freedom Unite, the other way round
+// in FUComplete, whose box chooses with ○ (andi 0x2000 at its 0x09AD7CAC).
+inline constexpr std::uint16_t kCancel = kTitle == Title::FreedomUnite ? 0x2000u : 0x4000u;
+inline constexpr std::uint16_t kConfirm = kTitle == Title::FreedomUnite ? 0x4000u : 0x2000u;
 
 // The game's sounds, as the box plays them (0x08883988(player, bank, id,
 // ...)); sound_id gives the id and sound_bank the bank: 0 for the menus'
