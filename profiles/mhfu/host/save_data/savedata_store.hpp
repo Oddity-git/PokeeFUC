@@ -37,8 +37,24 @@ enum class LoadStatus { Ok, NoData, Broken };
 struct LoadResult {
     LoadStatus status{LoadStatus::NoData};
     SaveContents contents;
-    std::string reason; // why a save is broken, for the log
+    std::string reason;   // why a save is broken, for the log
+    bool hash_mismatch{}; // broken because its data does not match the hash the key gives
 };
+
+// The game keys a game has passed with its saves, kept in savedata_keys.txt
+// beside the memory stick folder (one "<gameName> <32 hex digits>" a line).
+// A game whose code changes its key, as FUComplete's Save Region option
+// does, then still finds the saves it wrote with the key it used before:
+// load_save_with_earlier_key tries those when the current key's hash does not
+// match, and the game's next save writes the folder with the current key.
+void note_game_key(const std::filesystem::path &memory_stick, const std::string &game_name, const Block &key);
+[[nodiscard]] std::vector<Block> earlier_game_keys(
+    const std::filesystem::path &memory_stick, const std::string &game_name, const Block &current);
+// load_save, and when that finds the data does not match the hash the
+// current key gives, load_save with each earlier key of the game until one
+// matches. `used_earlier` says one did.
+[[nodiscard]] LoadResult load_save_with_earlier_key(
+    const std::filesystem::path &memory_stick, const SaveFiles &files, bool &used_earlier);
 
 // PSP/SAVEDATA under the memory stick root.
 [[nodiscard]] std::filesystem::path savedata_root(const std::filesystem::path &memory_stick);

@@ -166,6 +166,8 @@ savedata::SaveFiles files_for(
             files.key = key;
             // The menu's Import checks saves with it.
             savedata::remember_game_key(files.game_name, key);
+            // A later key, from code the game changed, still finds these saves.
+            savedata::note_game_key(state().memory_stick, files.game_name, key);
         }
     }
     return files;
@@ -211,7 +213,11 @@ std::uint32_t do_load(psprecomp::GuestMemory &memory, std::uint32_t params, cons
     const std::uint32_t capacity = memory.load32(params + param::kDataBufSize);
     if (files.game_name.empty() || files.file_name.empty() || buffer == 0u) return result::kLoadParam;
 
-    const auto loaded = savedata::load_save(state().memory_stick, files);
+    bool earlier_key = false;
+    const auto loaded = savedata::load_save_with_earlier_key(state().memory_stick, files, earlier_key);
+    if (earlier_key)
+        std::cerr << "[savedata] " << files.file_name << " was written with a key this game used before; it loads "
+                  << "with that one, and the game's next save writes it with the current key\n";
     if (loaded.status == savedata::LoadStatus::NoData) {
         std::cerr << "[savedata] no save data in " << path_to_utf8(savedata::save_folder(state().memory_stick, files))
                   << "\n";

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <random>
+#include <string_view>
 
 namespace mhfu::savedata {
 namespace {
@@ -117,6 +118,7 @@ LoadResult load_save(const std::filesystem::path &memory_stick, const SaveFiles 
         if (const auto expected = listed_hash(*sfo, files.file_name);
             expected && *expected != data_file_hash(*file, *mode, key)) {
             result.reason = files.file_name + " does not match its hash in PARAM.SFO";
+            result.hash_mismatch = true;
             return result;
         }
         auto plain = decrypt_data(*file, *mode, key);
@@ -133,6 +135,110 @@ LoadResult load_save(const std::filesystem::path &memory_stick, const SaveFiles 
     result.contents.detail = sfo->string("SAVEDATA_DETAIL").value_or("");
     result.contents.parental_level = sfo->integer("PARENTAL_LEVEL").value_or(0u);
     result.status = LoadStatus::Ok;
+    return result;
+}
+
+namespace {
+
+constexpr const char *kKeyFile = "savedata_keys.txt";
+
+std::filesystem::path key_file(const std::filesystem::path &memory_stick) {
+    return memory_stick.parent_path() / kKeyFile;
+}
+
+struct KnownKey {
+    std::string game_name;
+    Block key{};
+};
+
+std::optional<Block> parse_key(std::string_view hex) {
+    if (hex.size() != 32u) return std::nullopt;
+    Block key{};
+    for (std::size_t i = 0; i < key.size(); ++i) {
+        unsigned value = 0u;
+        for (std::size_t d = 0; d < 2u; ++d) {
+            const char c = hex[i * 2u + d];
+            value <<= 4u;
+            if (c >= '0' && c <= '9')
+                value |= static_cast<unsigned>(c - '0');
+            else if (c >= 'a' && c <= 'f')
+                value |= static_cast<unsigned>(c - 'a' + 10);
+            else if (c >= 'A' && c <= 'F')
+                value |= static_cast<unsigned>(c - 'A' + 10);
+            else
+                return std::nullopt;
+        }
+        key[i] = static_cast<std::uint8_t>(value);
+    }
+    return key;
+}
+
+std::string key_hex(const Block &key) {
+    static constexpr char kDigits[] = "0123456789abcdef";
+    std::string out;
+    for (const std::uint8_t byte : key) {
+        out += kDigits[byte >> 4u];
+        out += kDigits[byte & 0xFu];
+    }
+    return out;
+}
+
+std::vector<KnownKey> read_keys(const std::filesystem::path &memory_stick) {
+    std::vector<KnownKey> keys;
+    std::ifstream in(key_file(memory_stick));
+    std::string line;
+    while (std::getline(in, line)) {
+        const std::size_t space = line.find(' ');
+        if (space == std::string::npos || space == 0u) continue;
+        std::string_view hex = std::string_view(line).substr(space + 1u);
+        while (!hex.empty() && (hex.back() == '\r' || hex.back() == ' ')) hex.remove_suffix(1u);
+        if (const std::optional<Block> key = parse_key(hex)) keys.push_back({line.substr(0, space), *key});
+    }
+    return keys;
+}
+
+} // namespace
+
+void note_game_key(const std::filesystem::path &memory_stick, const std::string &game_name, const Block &key) {
+    if (game_name.empty() || is_zero(key) || memory_stick.empty()) return;
+    // Read once per memory stick: the game passes its key with every request.
+    static std::filesystem::path noted_for;
+    static std::vector<KnownKey> noted;
+    if (noted_for != memory_stick) {
+        noted_for = memory_stick;
+        noted = read_keys(memory_stick);
+    }
+    for (const KnownKey &known : noted)
+        if (known.game_name == game_name && known.key == key) return;
+    noted.push_back({game_name, key});
+    std::ofstream out(key_file(memory_stick), std::ios::app);
+    out << game_name << ' ' << key_hex(key) << '\n';
+}
+
+std::vector<Block> earlier_game_keys(
+    const std::filesystem::path &memory_stick, const std::string &game_name, const Block &current) {
+    std::vector<Block> keys;
+    for (const KnownKey &known : read_keys(memory_stick))
+        if (known.game_name == game_name && known.key != current &&
+            std::find(keys.begin(), keys.end(), known.key) == keys.end())
+            keys.push_back(known.key);
+    return keys;
+}
+
+LoadResult load_save_with_earlier_key(
+    const std::filesystem::path &memory_stick, const SaveFiles &files, bool &used_earlier) {
+    used_earlier = false;
+    LoadResult result = load_save(memory_stick, files);
+    if (!result.hash_mismatch || !files.key) return result;
+    for (const Block &key : earlier_game_keys(memory_stick, files.game_name, *files.key)) {
+        SaveFiles earlier = files;
+        earlier.key = key;
+        LoadResult retry = load_save(memory_stick, earlier);
+        if (retry.status == LoadStatus::Ok) {
+            used_earlier = true;
+            return retry;
+        }
+    }
     return result;
 }
 
