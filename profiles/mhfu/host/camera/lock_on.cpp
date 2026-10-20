@@ -1,4 +1,5 @@
 #include "camera/lock_on.hpp"
+#include "title.hpp"
 
 #include "camera/game_camera.hpp"
 #include "camera/hunt_icon.hpp"
@@ -919,9 +920,14 @@ bool marker_instructions(const psprecomp::GuestMemory &memory) {
     const auto word = [&](std::uint32_t address, std::uint32_t expect) {
         return memory.raw_pointer(address, 4u) != nullptr && memory.load32(address) == expect;
     };
-    return word(0x08812954u, 0xAC50BD04u) && // sw s0,-0x42fc(v0): the pointer at 0x089CBD04
-        word(0x0881439Cu, 0x26640C80u) &&    // addiu a0,s3,0xC80: the view
-        word(0x088145D8u, 0x26050C00u);      // addiu a1,s0,0xC00: the projection
+    if constexpr (kTitle == Title::FreedomUnite)
+        return word(0x08812954u, 0xAC50BD04u) && // sw s0,-0x42fc(v0): the pointer at 0x089CBD04
+            word(0x0881439Cu, 0x26640C80u) &&    // addiu a0,s3,0xC80: the view
+            word(0x088145D8u, 0x26050C00u);      // addiu a1,s0,0xC00: the projection
+    // FUComplete: the same code 0xDC0 higher, the object at 0x089C6CB4.
+    return word(0x08813714u, 0xAC506CB4u) && // sw s0,27828(v0): the pointer at 0x089C6CB4
+        word(0x0881515Cu, 0x26640C80u) &&    // addiu a0,s3,0xC80: the view
+        word(0x08815398u, 0x26050C00u);      // addiu a1,s0,0xC00: the projection
 }
 
 void load_matrix(const psprecomp::GuestMemory &memory, std::uint32_t address, std::array<float, 16> &out) {

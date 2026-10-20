@@ -44,8 +44,9 @@ inline constexpr bool kFreedomUniteExtras = kTitle == Title::FreedomUnite;
 // executable and overlays, so they run under both titles.
 // Analog camera (camera/game_camera.cpp), without lock-on, which is not ported.
 inline constexpr bool kAnalogCamera = true;
-// Lock-on and its marker (camera/lock_on.cpp) read Freedom Unite's monsters.
-inline constexpr bool kLockOn = kFreedomUniteExtras;
+// Lock-on and its marker (camera/lock_on.cpp): the entity list, the hunter
+// vtable and the camera object, at each title's addresses.
+inline constexpr bool kLockOn = true;
 // Hold to gather (game/gather_icon.cpp): its gather list, carve table and farm
 // points. The gather icon itself is drawn with Freedom Unite's item art.
 inline constexpr bool kGatherHold = true;
@@ -58,9 +59,10 @@ inline constexpr bool kEmptyItemSlot = true;
 // Hide HUD (gpu/game_hud.cpp): the 2D packets, text queues and the HUD's
 // functions in game_task and lobby_task.
 inline constexpr bool kHideHud = true;
+// Damage numbers (game/damage_numbers.cpp): game_task's hit and status tick.
+inline constexpr bool kDamageNumbers = true;
 // Not ported yet: they stay off, and their rows stay out of the menu.
-inline constexpr bool kUiScaling = kFreedomUniteExtras;     // UI Scaling (gpu/hud_scale)
-inline constexpr bool kDamageNumbers = kFreedomUniteExtras;
+inline constexpr bool kUiScaling = kFreedomUniteExtras;      // UI Scaling (gpu/hud_scale)
 inline constexpr bool kSharpnessGauge = kFreedomUniteExtras; // Modern sharpness gauge
 inline constexpr bool kGatherIcon = kFreedomUniteExtras;
 inline constexpr bool kLayeredArmor = kFreedomUniteExtras; // Layered armor and equipment models

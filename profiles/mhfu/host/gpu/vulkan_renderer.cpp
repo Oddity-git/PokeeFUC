@@ -7522,7 +7522,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     // Damage numbers and the lock-on marker sit on the monster. The perspective
     // draw with the most vertices is the world camera, follow or aim; the HUD
     // is orthographic and is ignored. All three read Freedom Unite (title.hpp).
-    if (mhfu::kFreedomUniteExtras && !call.through && !call.clear_mode &&
+    if ((mhfu::kDamageNumbers || mhfu::kGatherIcon || mhfu::kLockOn) && !call.through && !call.clear_mode &&
         (mhfu::game::damage_numbers_watching() || settings::current().gather_icon ||
             (settings::current().lock_on_marker && mhfu::camera::lock_on_marker_wanted()))) {
         const std::uint32_t vertices = call.vertices_reused
@@ -7542,7 +7542,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     }
     // The gather mark draws item icons from the game's own atlas, decoded
     // with the palette the HUD last drew it with.
-    if (mhfu::kFreedomUniteExtras && call.through && call.texture.address == mhfu::game::kItemAtlasAddress &&
+    if (mhfu::kGatherIcon && call.through && call.texture.address == mhfu::game::kItemAtlasAddress &&
         settings::current().gather_icon)
         mhfu::game::note_item_atlas(call.texture);
     const perf::SplitScope split(perf::Split::Draw);

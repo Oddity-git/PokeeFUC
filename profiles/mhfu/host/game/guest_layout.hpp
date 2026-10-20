@@ -105,8 +105,10 @@ inline constexpr std::uint32_t kGameSysStage = 0x6AF0Eu;
 
 // The word at kEntityList is the entity manager. Its list head is the newest
 // node; +4 of a node is the next older one, +12 the entity, +36 a type byte.
-// Type 1 is a player. The insert is game_sub 0x09C57CA0.
-inline constexpr std::uint32_t kEntityList = 0x09D19860u;
+// Type 1 is a player. The insert is game_sub 0x09C57CA0. FUComplete keeps the
+// manager at 0x09D146E0 (game_sub loads it with lui 0x09D1, +0x46E0, where
+// Freedom Unite's has lui 0x09D2, -0x67A0); its insert is at 0x09C52B90.
+inline constexpr std::uint32_t kEntityList = kFreedomUniteLayout ? 0x09D19860u : 0x09D146E0u;
 inline constexpr std::uint32_t kListHead = 0x19030u;
 inline constexpr std::uint32_t kNodeOlder = 0x4u;
 inline constexpr std::uint32_t kNodeEntity = 0xCu;
@@ -126,7 +128,9 @@ inline constexpr std::uint32_t kVtableSpan = 64u;
 // Their list nodes are not type 1 (0, 3, 4 and 7 have been seen), they keep a
 // hunter's health pool, and +0x1E8 is not a species: it has read 7, 10 and
 // small species, which put a Lao-Shan Lung or a Rathian icon on a hunter.
-inline constexpr std::uint32_t kHunterVtable = 0x089BB3CCu;
+// FUComplete's is at 0x089B6378: the same table, its entries at FUComplete's
+// game_task and executable addresses.
+inline constexpr std::uint32_t kHunterVtable = kFreedomUniteLayout ? 0x089BB3CCu : 0x089B6378u;
 // World position, three floats, y up.
 inline constexpr std::uint32_t kPosition = 0x200u;
 // Species. 0x088135D0 loads this byte and compares it with species constants.
