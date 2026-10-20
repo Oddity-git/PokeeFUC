@@ -138,8 +138,10 @@ class AndroidRunnerTests(unittest.TestCase):
         self.assertIn('AGAIN_DIR=/data/local/tmp/pokee-unit-tests/data/0', command)
         self.assertIn('RELATIVE_DIR=bin', command)
         self.assertIn(str(missing), command)
-        pushes = [call for call in calls if call[0] == 'push' and call[1] == str(fixtures)]
-        self.assertEqual(pushes, [['push', str(fixtures), '/data/local/tmp/pokee-unit-tests/data/0']])
+        # The runner pushes the resolved path; macOS temporary directories are symlinks.
+        resolved = str(fixtures.resolve())
+        pushes = [call for call in calls if call[0] == 'push' and call[1] == resolved]
+        self.assertEqual(pushes, [['push', resolved, '/data/local/tmp/pokee-unit-tests/data/0']])
 
     def test_fixture_directories_outside_the_checkout_are_refused(self):
         outside = self.root / 'outside fixtures'
