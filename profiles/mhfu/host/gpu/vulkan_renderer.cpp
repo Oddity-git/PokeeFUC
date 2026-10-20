@@ -8301,7 +8301,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     // 0x08841400 turns a frame counter into 64 + 64*sin(...), so a full pulse
     // is alpha 128. AABBGGRR as the GE colour word packs it. The gauge moves
     // the pulse above that (game::sharpness::glow_alpha).
-    const bool glow_colour = mhfu::kFreedomUniteExtras && settings::current().sharpness_gauge;
+    const bool glow_colour = mhfu::kSharpnessGauge && settings::current().sharpness_gauge;
     if ((cut_bar || cut_colour || glow_colour) && through_quads && !named.is_name &&
         framebuffer_source.target == nullptr && impl.shows(call.target.color_address)) {
         const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;

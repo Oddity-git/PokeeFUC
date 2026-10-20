@@ -1,5 +1,6 @@
 // Which defaults each platform starts from; no settings.ini is read.
 #include "gpu/hud_scale.hpp"
+#include "title.hpp"
 #include "settings/settings.hpp"
 
 #include <iostream>
@@ -8,6 +9,12 @@
 #include <vector>
 
 namespace {
+
+// A HUD texture of the game this build runs: FUComplete keeps the HUD's
+// textures 0x4400 below Freedom Unite's (game::layout::kItemAtlas).
+constexpr std::uint32_t hud_texture(std::uint32_t freedom_unite) {
+    return mhfu::kTitle == mhfu::Title::FreedomUnite ? freedom_unite : freedom_unite - 0x4400u;
+}
 using namespace mhfu::settings;
 
 int failures{};
@@ -756,7 +763,7 @@ void test_interface_sizes() {
         "the mark on that window stays on it");
     std::vector<Vertex> beside(6, Vertex{280.0f, 16.0f});
     beside[2] = {456.0f, 136.0f};
-    mhfu::gpu::hud_scale::scale_quads(beside, map_half, zoomed, 0x09164420u);
+    mhfu::gpu::hud_scale::scale_quads(beside, map_half, zoomed, hud_texture(0x09164420u));
     check(beside[0].x == 280.0f && beside[0].y == 16.0f && beside[2].x == 456.0f && beside[2].y == 136.0f,
         "the panel just left of the slot is not the found-monster window");
     // "Herb obtained." sits in the middle of the picture. Its right end and
@@ -883,7 +890,7 @@ void test_interface_sizes() {
     std::vector<Vertex> foreign_zoom(6, Vertex{240.0f, 48.0f});
     foreign_zoom[2] = {320.0f, 128.0f};
     foreign_zoom.insert(foreign_zoom.end(), bare_clock.begin(), bare_clock.end());
-    mhfu::gpu::hud_scale::scale_quads(foreign_zoom, map_half, not_bare, 0x09164420u);
+    mhfu::gpu::hud_scale::scale_quads(foreign_zoom, map_half, not_bare, hud_texture(0x09164420u));
     check(foreign_zoom[0].x == 240.0f && foreign_zoom[0].y == 48.0f && foreign_zoom[2].x == 320.0f &&
             foreign_zoom[2].y == 128.0f,
         "a window of that size from another texture is not the map");
@@ -1431,7 +1438,7 @@ void test_interface_sizes() {
     const std::vector<Vertex> body = quad(360.0f, 48.0f, 456.0f, 160.0f);
     const std::vector<Vertex> corner = quad(344.0f, 47.0f, 357.0f, 61.0f);
     panel.insert(panel.end(), body.begin(), body.end());
-    mhfu::gpu::hud_scale::scale_quads(panel, map_60, with_panel, 0x09165C20u);
+    mhfu::gpu::hud_scale::scale_quads(panel, map_60, with_panel, hud_texture(0x09165C20u));
     check(panel[0].x == 344.0f && panel[0].y == 48.0f && panel[8].x == 456.0f && panel[8].y == 160.0f,
         "a window over the map keeps its side and body where the game drew them");
     std::vector<Vertex> panel_corner = corner;
@@ -2343,7 +2350,7 @@ void test_paintball_ring_stays_on_map() {
     // Boundaries: a large square from another texture, a large ring centred
     // off the map, a ring off the map, and a ring drawn by other code (the
     // shop's 40-square panels) stay as drawn.
-    check(!mhfu::gpu::hud_scale::is_map_ring({330.0f, 60.0f, 410.0f, 140.0f}, 0x09165C20u),
+    check(!mhfu::gpu::hud_scale::is_map_ring({330.0f, 60.0f, 410.0f, 140.0f}, hud_texture(0x09165C20u)),
         "an 80 square from another texture is no ring");
     check(!mhfu::gpu::hud_scale::is_map_ring({250.0f, 60.0f, 330.0f, 140.0f}, kRing),
         "a large ring centred off the map is not");
@@ -2352,7 +2359,7 @@ void test_paintball_ring_stays_on_map() {
     check(!mhfu::gpu::hud_scale::is_map_ring({323.0f, 129.0f, 367.0f, 173.0f},
               mhfu::gpu::hud_scale::kAreaMapTexture),
         "the map's own window is not a ring");
-    check(!mhfu::gpu::hud_scale::is_map_ring({344.0f, 48.0f, 360.0f, 160.0f}, 0x09165BA0u),
+    check(!mhfu::gpu::hud_scale::is_map_ring({344.0f, 48.0f, 360.0f, 160.0f}, hud_texture(0x09165BA0u)),
         "a window's side over the map is not a ring");
     Frame shop;
     quest(shop);
@@ -2420,14 +2427,14 @@ void test_aim_reticle_is_not_a_map_mark() {
     // aiming, and the party list's letters and the item bar's corners then
     // kept the game's size. A learned reticle only keeps a sprite off the map.
     constexpr std::uint32_t kFont = 0x040CC000u;
-    constexpr std::uint32_t kAtlas = 0x09156BA0u;
+    constexpr std::uint32_t kAtlas = hud_texture(0x09156BA0u);
     const Scales sizes = Scales::from_percent(60u, 75u, 65u);
     Frame shared;
     shared.aiming = true;
     std::vector<Vertex> clock = quad(8.0f, 8.0f, 60.0f, 56.0f);
     scale_quads(clock, sizes, shared, kAtlas, Owner::QuestHud);
     std::vector<Vertex> bar = quad(328.0f, 208.0f, 456.0f, 216.0f);
-    scale_quads(bar, sizes, shared, 0x09163C20u, Owner::QuestHud);
+    scale_quads(bar, sizes, shared, hud_texture(0x09163C20u), Owner::QuestHud);
     std::vector<Vertex> overhead = quad(205.0f, 128.0f, 213.0f, 142.0f);
     scale_quads(overhead, sizes, shared, kFont, Owner::QuestHud);
     std::vector<Vertex> tile = quad(232.0f, 140.0f, 248.0f, 148.0f);
@@ -2461,23 +2468,23 @@ void test_quest_windows_keep_their_pieces() {
     const Scales sizes = Scales::from_percent(60u, 75u, 65u);
     Frame frame;
     std::vector<Vertex> clock = quad(8.0f, 8.0f, 60.0f, 56.0f);
-    scale_quads(clock, sizes, frame, 0x09156BA0u, Owner::QuestHud);
+    scale_quads(clock, sizes, frame, hud_texture(0x09156BA0u), Owner::QuestHud);
     std::vector<Vertex> tile = quad(316.0f, 32.0f, 468.0f, 184.0f);
     scale_quads(tile, sizes, frame, mhfu::gpu::hud_scale::kAreaMapTexture, Owner::QuestHud);
     std::vector<Vertex> bar = quad(328.0f, 208.0f, 456.0f, 216.0f);
-    scale_quads(bar, sizes, frame, 0x09163C20u, Owner::QuestHud);
+    scale_quads(bar, sizes, frame, hud_texture(0x09163C20u), Owner::QuestHud);
 
     // "Lou broke off from the group!": the item bar's frame, in the middle.
     std::vector<Vertex> left = quad(104.0f, 128.0f, 120.0f, 144.0f);
-    scale_quads(left, sizes, frame, 0x091643A0u, Owner::QuestHud);
+    scale_quads(left, sizes, frame, hud_texture(0x091643A0u), Owner::QuestHud);
     check(stays(left, 104.0f, 128.0f), "the banner's left side is not a status icon");
     std::vector<Vertex> item_side = quad(312.0f, 216.0f, 328.0f, 224.0f);
-    scale_quads(item_side, sizes, frame, 0x091643A0u, Owner::QuestHud);
+    scale_quads(item_side, sizes, frame, hud_texture(0x091643A0u), Owner::QuestHud);
     check(!stays(item_side, 312.0f, 216.0f), "the same frame in the item bar's place is still the item bar");
 
     // A list window over the map draws its side before its body.
     std::vector<Vertex> side = quad(344.0f, 48.0f, 360.0f, 160.0f);
-    scale_quads(side, sizes, frame, 0x09165BA0u, Owner::QuestHud);
+    scale_quads(side, sizes, frame, hud_texture(0x09165BA0u), Owner::QuestHud);
     check(stays(side, 344.0f, 48.0f), "a window's side over the map is not a mark on it");
     std::vector<Vertex> mark = quad(351.0f, 165.0f, 363.0f, 177.0f);
     scale_quads(mark, sizes, frame, mhfu::gpu::hud_scale::kMapIconTexture, Owner::QuestHud);
@@ -2485,13 +2492,13 @@ void test_quest_windows_keep_their_pieces() {
 
     // Its title strip, a row above where the ammo bar is drawn.
     std::vector<Vertex> strip = quad(312.0f, 176.0f, 456.0f, 192.0f);
-    scale_quads(strip, sizes, frame, 0x09165C20u, Owner::QuestHud);
+    scale_quads(strip, sizes, frame, hud_texture(0x09165C20u), Owner::QuestHud);
     std::vector<Vertex> edge = quad(312.0f, 192.0f, 456.0f, 200.0f);
-    scale_quads(edge, sizes, frame, 0x09166420u, Owner::QuestHud);
+    scale_quads(edge, sizes, frame, hud_texture(0x09166420u), Owner::QuestHud);
     check(stays(strip, 312.0f, 176.0f) && stays(edge, 312.0f, 192.0f), "a window's title strip is not the ammo bar");
     Frame gun;
     std::vector<Vertex> gun_clock = quad(8.0f, 8.0f, 60.0f, 56.0f);
-    scale_quads(gun_clock, sizes, gun, 0x09156BA0u, Owner::QuestHud);
+    scale_quads(gun_clock, sizes, gun, hud_texture(0x09156BA0u), Owner::QuestHud);
     std::vector<Vertex> ammo = quad(312.0f, 184.0f, 472.0f, 200.0f);
     scale_quads(ammo, sizes, gun, 0u, Owner::QuestHud);
     check(!stays(ammo, 312.0f, 184.0f), "the ammo bar where it was traced still takes the item bar's size");
@@ -2515,7 +2522,7 @@ void test_menu_over_the_party_list() {
         return q;
     };
     const auto stays = [](const std::vector<Vertex> &q, float x0, float y0) { return q[0].x == x0 && q[0].y == y0; };
-    constexpr std::uint32_t kAtlas = 0x09156BA0u;
+    constexpr std::uint32_t kAtlas = hud_texture(0x09156BA0u);
     constexpr std::uint32_t kFont = 0x040CC000u;
     const Scales sizes = Scales::from_percent(60u, 70u, 65u);
     const auto draw = [&](Frame &frame, float x0, float y0, float x1, float y1, std::uint32_t texture) {
@@ -2536,7 +2543,7 @@ void test_menu_over_the_party_list() {
     check(draw(menu, 12.0f, 40.0f, 28.0f, 48.0f, kAtlas), "a menu's corner in the clock's box stays");
     check(draw(menu, 8.0f, 152.0f, 24.0f, 160.0f, kAtlas), "a menu's corner in the badge column stays");
     // The window's own pieces in the party list's band stay as drawn.
-    check(draw(menu, 16.0f, 58.0f, 40.0f, 82.0f, 0x091874A0u), "the equipment page's icon stays");
+    check(draw(menu, 16.0f, 58.0f, 40.0f, 82.0f, hud_texture(0x091874A0u)), "the equipment page's icon stays");
     check(draw(menu, 16.0f, 96.0f, 23.0f, 110.0f, kFont), "a menu letter on a name's row stays");
     check(draw(menu, 114.0f, 96.0f, 121.0f, 110.0f, kFont), "a menu letter past the plates stays");
     check(draw(menu, 65.0f, 128.0f, 79.0f, 142.0f, kFont), "a wide menu letter the size of a buff stays");
@@ -2553,7 +2560,8 @@ void test_menu_over_the_party_list() {
     menu.begin();
     menu.begin();
     draw(menu, 8.0f, 8.0f, 60.0f, 56.0f, kAtlas);
-    check(!draw(menu, 112.0f, 58.0f, 124.0f, 72.0f, 0x09187000u), "after the menu, a buff takes Status again");
+    check(!draw(menu, 112.0f, 58.0f, 124.0f, 72.0f, hud_texture(0x09187000u)),
+        "after the menu, a buff takes Status again");
 }
 
 int main() {

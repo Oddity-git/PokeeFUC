@@ -277,8 +277,8 @@ void present_frame(Runtime &rt) {
         // Layered armor puts its wrappers in place here, between two frames.
         game::layered::frame(rt);
         game::item_box::frame(rt);
-        game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
     }
+    if constexpr (kSharpnessGauge) game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
     // The extras ported to FUComplete as well, each at its title's addresses.
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);
     if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);

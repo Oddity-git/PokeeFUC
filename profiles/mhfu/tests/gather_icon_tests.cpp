@@ -32,6 +32,12 @@ constexpr std::uint32_t kGatherObjectAt = kFreedomUnite ? 0x08A62D9Cu : 0x08A5DD
 constexpr std::uint32_t kStageTableAt = kFreedomUnite ? 0x09CE4808u : 0x09CDF678u;
 constexpr std::uint32_t kCarveTableAt = kFreedomUnite ? 0x09A4F1A0u : 0x09A4ADA0u;
 constexpr std::uint32_t kVillageStateAt = kFreedomUnite ? 0x09B22E70u : 0x09B1D9E8u;
+// The gather pictures' tables (game/gather_art.cpp).
+constexpr std::uint32_t kPointOffsetAt = kFreedomUnite ? 0x08A5C584u : 0x08A57534u;
+constexpr std::uint32_t kItemRecordsAt = kFreedomUnite ? 0x0899D2BCu : 0x0899A23Cu;
+constexpr std::uint32_t kIconSpritesAt = kFreedomUnite ? 0x0893ABECu : 0x08938014u;
+constexpr std::uint32_t kSpritesAt = kFreedomUnite ? 0x089392C8u : 0x089366F0u;
+constexpr std::uint32_t kTintsAt = kFreedomUnite ? 0x0893AB7Cu : 0x08937FA4u;
 // lobby_task's case for a mining outcrop, in its table of point types.
 constexpr std::uint32_t kMiningCaseAt = kFreedomUnite ? 0x09B0F33Cu : 0x09B09EBCu;
 
@@ -1019,7 +1025,7 @@ void plant_list(psprecomp::GuestMemory &memory, std::uint16_t id, std::uint32_t 
     std::initializer_list<std::array<std::uint16_t, 2>> pairs) {
     memory.store32(kGatherObjectAt, kArtObject);
     memory.store32(kArtObject + 80u, kArtBase);
-    memory.store32(0x08A5C584u, kArtOffsets);
+    memory.store32(kPointOffsetAt, kArtOffsets);
     memory.store32(kArtBase + kArtOffsets + static_cast<std::uint32_t>(id) * 4u, entry);
     std::uint32_t at = kArtBase + entry;
     for (const std::array<std::uint16_t, 2> &pair : pairs) {
@@ -1033,13 +1039,13 @@ void plant_list(psprecomp::GuestMemory &memory, std::uint16_t id, std::uint32_t 
 // An item with an icon: its record, the icon's sprite, the rectangle and the tint.
 void plant_item(psprecomp::GuestMemory &memory, std::uint16_t item, std::uint8_t icon, std::uint8_t tint,
     std::uint16_t sprite, std::array<std::uint16_t, 4> rect, std::array<std::uint8_t, 3> colour) {
-    const std::uint32_t record = 0x0899D2BCu + static_cast<std::uint32_t>(item) * 24u;
+    const std::uint32_t record = kItemRecordsAt + static_cast<std::uint32_t>(item) * 24u;
     memory.store8(record + 1u, icon);
     memory.store8(record + 2u, tint);
-    memory.store16(0x0893ABECu + static_cast<std::uint32_t>(icon) * 2u, sprite);
-    const std::uint32_t at = 0x089392C8u + static_cast<std::uint32_t>(sprite) * 12u;
+    memory.store16(kIconSpritesAt + static_cast<std::uint32_t>(icon) * 2u, sprite);
+    const std::uint32_t at = kSpritesAt + static_cast<std::uint32_t>(sprite) * 12u;
     for (std::uint32_t i = 0; i < 4u; ++i) memory.store16(at + i * 2u, rect[i]);
-    const std::uint32_t rgb = 0x0893AB7Cu + static_cast<std::uint32_t>(tint) * 4u;
+    const std::uint32_t rgb = kTintsAt + static_cast<std::uint32_t>(tint) * 4u;
     for (std::uint32_t i = 0; i < 3u; ++i) memory.store8(rgb + i, colour[i]);
 }
 
@@ -1063,7 +1069,7 @@ void test_gather_items() {
 
     // A bone pile as traced: mostly a husk (icon 28), then two bones (icon 10).
     const auto icon_of = [&](std::uint16_t item, std::uint8_t icon, std::uint8_t tint) {
-        const std::uint32_t record = 0x0899D2BCu + static_cast<std::uint32_t>(item) * 24u;
+        const std::uint32_t record = kItemRecordsAt + static_cast<std::uint32_t>(item) * 24u;
         memory.store8(record + 1u, icon);
         memory.store8(record + 2u, tint);
     };

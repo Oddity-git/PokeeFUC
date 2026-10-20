@@ -93,7 +93,9 @@ template <typename Memory>
 // The item atlas: the 256 by 256 CLUT8 sheet at this GE texture address. The
 // HUD draws item icons from it (game/item_atlas.hpp), and the marks on the
 // area map too (gpu/hud_scale.hpp).
-inline constexpr std::uint32_t kItemAtlas = 0x091874A0u;
+// FUComplete's HUD textures sit 0x4400 lower: its atlas is at 0x091830A0
+// (MHFU_TRACE_CAPTURE in a quest: the item bar's icon and the map's marks).
+inline constexpr std::uint32_t kItemAtlas = kFreedomUniteLayout ? 0x091874A0u : 0x091830A0u;
 
 // GameSys: the word at kGameSysPointer. The loaded stage is the halfword at
 // +0x6AF0E. FUComplete keeps the pointer at 0x089C7508 (lui 0x89c, lw 0x7508

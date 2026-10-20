@@ -42,13 +42,13 @@ inline constexpr bool kFreedomUniteExtras = kTitle == Title::FreedomUnite;
 
 // The extras ported to FUComplete: their addresses were traced again in its
 // executable and overlays, so they run under both titles.
-// Analog camera (camera/game_camera.cpp), without lock-on, which is not ported.
+// Analog camera (camera/game_camera.cpp).
 inline constexpr bool kAnalogCamera = true;
 // Lock-on and its marker (camera/lock_on.cpp): the entity list, the hunter
 // vtable and the camera object, at each title's addresses.
 inline constexpr bool kLockOn = true;
 // Hold to gather (game/gather_icon.cpp): its gather list, carve table and farm
-// points. The gather icon itself is drawn with Freedom Unite's item art.
+// points.
 inline constexpr bool kGatherHold = true;
 // Aspect ratio's Fill (camera/game_aspect.cpp): the camera object's projection.
 inline constexpr bool kGameAspect = true;
@@ -61,10 +61,14 @@ inline constexpr bool kEmptyItemSlot = true;
 inline constexpr bool kHideHud = true;
 // Damage numbers (game/damage_numbers.cpp): game_task's hit and status tick.
 inline constexpr bool kDamageNumbers = true;
-// Not ported yet: they stay off, and their rows stay out of the menu.
-inline constexpr bool kUiScaling = kFreedomUniteExtras;      // UI Scaling (gpu/hud_scale)
-inline constexpr bool kSharpnessGauge = kFreedomUniteExtras; // Modern sharpness gauge
-inline constexpr bool kGatherIcon = kFreedomUniteExtras;
-inline constexpr bool kLayeredArmor = kFreedomUniteExtras; // Layered armor and equipment models
+// The extras that read the HUD's textures, which FUComplete keeps 0x4400
+// lower (game::layout::kItemAtlas): UI Scaling (gpu/hud_scale), the modern
+// sharpness gauge and the gather icon with its pictures (game/gather_art).
+inline constexpr bool kUiScaling = true;
+inline constexpr bool kSharpnessGauge = true;
+inline constexpr bool kGatherIcon = true;
+// Not ported: FUComplete's equipment code and records differ from Freedom
+// Unite's, so layered armor and equipment models stay off and out of the menu.
+inline constexpr bool kLayeredArmor = kFreedomUniteExtras;
 
 } // namespace mhfu
