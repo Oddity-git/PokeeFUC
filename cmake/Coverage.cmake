@@ -8,6 +8,9 @@ if(PSPRECOMP_COVERAGE)
     if(PSPRECOMP_SANITIZERS)
         message(FATAL_ERROR "Use separate build directories for coverage and sanitizers")
     endif()
-    add_compile_options(-fprofile-instr-generate -fcoverage-mapping -O0 -g)
+    # The flags are Clang's. A C compiler of another family (third-party C
+    # sources, such as the KTX2 decoder's zstd) is left uninstrumented.
+    add_compile_options("$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fprofile-instr-generate;-fcoverage-mapping;-O0;-g>"
+                        "$<$<COMPILE_LANG_AND_ID:C,Clang,AppleClang>:-fprofile-instr-generate;-fcoverage-mapping;-O0;-g>")
     add_link_options(-fprofile-instr-generate)
 endif()
