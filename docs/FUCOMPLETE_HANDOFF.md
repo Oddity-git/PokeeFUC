@@ -78,6 +78,7 @@ The game boots, plays through the village, Guild Hall and quests, and saves on L
 
 1. **Play-test FUComplete's options.** The hunting horn tweak, the Guild Hall chest and drink buff, and the rest. Field of view has a live control of Pokee's own (Video > Field of view, `video.fov_scale`); FUComplete's own option sets the player's field of view in a quest and still applies at the next start. Also check the camera tilt and the Guild Hall features, then record the results in `COMPATIBILITY.md` with the commit tested.
 2. **Overlays FUComplete patches.** The bow and bowgun aim extras stay off while game_task runs interpreted. Building libraries from the dumps (`build_overlay_dumps.sh`) after a full village-and-quest run removes most of that.
-3. **A formatting-only commit** for the files this branch touches, once feature work settles.
-4. **Android** (`android-port`, PR #3): continue there, with the same title gating.
-5. **Each Pokee sync:** merge, gate new extras, and port them one at a time as in step 4 of the build history.
+3. **A release's first start** writes `EBOOT.FUC.ELF` and prints the developer message about generating the corpus and rebuilding. A release player only needs to start the game again, so that message should say so (and the first run could mention why it is slow).
+4. **A formatting-only commit** for the files this branch touches, once feature work settles.
+5. **Android** (`android-port`, PR #3): continue there, with the same title gating.
+6. **Each Pokee sync:** merge, gate new extras, and port them one at a time as in step 4 of the build history.

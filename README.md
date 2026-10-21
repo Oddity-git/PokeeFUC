@@ -35,7 +35,7 @@ cd pokeefuc-<version>-linux-x86_64
 ./pokee-fuc
 ```
 
-The first start asks for the FUComplete-patched image, checks it and prepares the game. Settings and saves live in `~/.local/share/Pokee/FUC` (the Flatpak keeps them in its own data directory). PokeeFUC installs beside the standard Pokee build.
+The first start asks for the FUComplete-patched image, checks it and prepares the game. It also writes FUComplete's patched executable and runs it once, so it is slower; **start PokeeFUC again** afterwards. A release already contains the compiled code, so nothing is rebuilt. Settings and saves live in `~/.local/share/Pokee/FUC` (the Flatpak keeps them in its own data directory). PokeeFUC installs beside the standard Pokee build.
 
 ### From source
 
