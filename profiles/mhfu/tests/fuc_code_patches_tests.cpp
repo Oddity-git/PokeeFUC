@@ -6,12 +6,14 @@
 
 #include "psprecomp/elf32.hpp"
 #include "psprecomp/guest_memory.hpp"
+#include "psprecomp/runtime.hpp"
 
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -89,18 +91,19 @@ void test_watch_writes_once_settled() {
     }
     check(mhfu::fuc::patched_path(executable) == dir / "EBOOT.FUC.ELF", "the patched file sits beside the executable");
     const psprecomp::Elf32Image elf = psprecomp::Elf32Image::from_file(executable);
-    psprecomp::GuestMemory memory(32u * 1024u * 1024u);
+    psprecomp::Runtime runtime(32u * 1024u * 1024u);
+    psprecomp::GuestMemory &memory = runtime.memory();
     (void)elf.load_and_relocate(memory, kLoad);
     mhfu::fuc::watch(elf, executable, kLoad);
 
     bool written = false;
-    for (int frame = 0; frame < 60 && !written; ++frame) written = mhfu::fuc::frame(memory);
+    for (int frame = 0; frame < 60 && !written; ++frame) written = mhfu::fuc::frame(runtime);
     check(!written && !std::filesystem::exists(dir / "EBOOT.FUC.ELF"), "unchanged code writes nothing");
 
     memory.store32(kLoad + 12u, 0x0A28D67Bu);
     int frames = 0;
     while (!written && frames < 200) {
-        written = mhfu::fuc::frame(memory);
+        written = mhfu::fuc::frame(runtime);
         ++frames;
     }
     check(written, "a change that holds is written");
@@ -109,14 +112,68 @@ void test_watch_writes_once_settled() {
     check(!file.empty() &&
             psprecomp::Elf32Image::from_bytes(file, "written").read_word_at_vaddr(kLoad + 12u) == 0x0A28D67Bu,
         "the file holds the changed word");
-    for (int frame = 0; frame < 120; ++frame) check(!mhfu::fuc::frame(memory), "and is written once");
+    for (int frame = 0; frame < 120; ++frame) check(!mhfu::fuc::frame(runtime), "and is written once");
 
     set_environment("MHFU_FUC_CODE_PATCHES", "0");
     std::filesystem::remove(dir / "EBOOT.FUC.ELF");
     mhfu::fuc::watch(elf, executable, kLoad);
-    for (int frame = 0; frame < 200; ++frame) (void)mhfu::fuc::frame(memory);
+    for (int frame = 0; frame < 200; ++frame) (void)mhfu::fuc::frame(runtime);
     check(!std::filesystem::exists(dir / "EBOOT.FUC.ELF"), "MHFU_FUC_CODE_PATCHES=0 leaves the code unwatched");
     set_environment("MHFU_FUC_CODE_PATCHES", "");
+    std::filesystem::remove_all(dir);
+}
+
+void compiled_stand_in(psprecomp::Runtime &, psprecomp::AllegrexContext &) {}
+
+// Running from the file the corpus was generated from, a changed word's code is
+// interpreted: every registration within a unit's span of it, and nothing
+// further away. The file is not written.
+void test_compiled_code_is_interpreted() {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "pokee_fuc_code_patches_compiled";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path executable = dir / "EBOOT.FUC.ELF";
+    {
+        const std::vector<std::uint8_t> bytes = image_bytes();
+        std::ofstream(executable, std::ios::binary)
+            .write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+    const psprecomp::Elf32Image elf = psprecomp::Elf32Image::from_file(executable);
+    psprecomp::Runtime runtime(32u * 1024u * 1024u);
+    psprecomp::GuestMemory &memory = runtime.memory();
+    (void)elf.load_and_relocate(memory, kLoad);
+    const std::uint32_t changed = kLoad + 12u;
+    const std::uint32_t near_before = changed - mhfu::fuc::kUnitSpan + 4u;
+    const std::uint32_t near_after = changed + mhfu::fuc::kUnitSpan - 4u;
+    const std::uint32_t far_before = changed - mhfu::fuc::kUnitSpan;
+    const std::uint32_t far_after = changed + mhfu::fuc::kUnitSpan;
+    for (const std::uint32_t at : {kLoad, near_before, near_after, far_before, far_after})
+        runtime.register_function(at, &compiled_stand_in, "compiled");
+    mhfu::fuc::watch(elf, executable, kLoad, true);
+
+    mhfu::fuc::code_flushed(runtime);
+    check(runtime.function_at(kLoad) == &compiled_stand_in, "unchanged code stays compiled");
+    memory.store32(changed, 0x0A28D67Bu);
+    mhfu::fuc::code_flushed(runtime);
+    check(runtime.function_at(kLoad) != &compiled_stand_in && runtime.function_at(kLoad) != nullptr,
+        "the block before a changed word is interpreted");
+    check(
+        runtime.function_at(near_before) != &compiled_stand_in && runtime.function_at(near_after) != &compiled_stand_in,
+        "and every registration within the unit's span");
+    check(runtime.function_at(far_before) == &compiled_stand_in && runtime.function_at(far_after) == &compiled_stand_in,
+        "while code a unit away stays compiled");
+    check(!runtime.has_function(changed), "nothing is registered where nothing was");
+    for (int frame = 0; frame < 200; ++frame) check(!mhfu::fuc::frame(runtime), "a compiled executable is not written");
+    const std::vector<std::uint8_t> file = read(executable);
+    check(psprecomp::Elf32Image::from_bytes(file, "kept").read_word_at_vaddr(changed) != 0x0A28D67Bu,
+        "and the file keeps the words the corpus was generated from");
+
+    std::vector<std::uint32_t> one{changed};
+    std::set<std::uint32_t> done;
+    runtime.register_function(kLoad, &compiled_stand_in, "compiled");
+    check(mhfu::fuc::run_interpreted(runtime, one, done) == 3u, "run_interpreted replaces the three in its span");
+    check(mhfu::fuc::run_interpreted(runtime, one, done) == 0u, "and none twice");
+
     std::filesystem::remove_all(dir);
 }
 
@@ -125,6 +182,7 @@ void test_watch_writes_once_settled() {
 int main() {
     test_ranges_and_changes();
     test_watch_writes_once_settled();
+    test_compiled_code_is_interpreted();
     if (failures != 0) {
         std::cerr << failures << " failure(s)\n";
         return 1;

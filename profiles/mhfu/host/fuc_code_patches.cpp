@@ -3,6 +3,9 @@
 #include "platform/utf8_path.hpp"
 #include "psprecomp/elf32.hpp"
 #include "psprecomp/guest_memory.hpp"
+#include "psprecomp/interpreter.hpp"
+#include "psprecomp/common.hpp"
+#include "psprecomp/runtime.hpp"
 
 #include <cstdlib>
 #include <fstream>
@@ -28,12 +31,16 @@ std::uint32_t word_in(const std::vector<std::uint8_t> &bytes, std::size_t at) {
 
 struct Watch {
     bool on{};
+    bool compiled{};
     std::vector<CodeRange> ranges;
     std::vector<std::uint8_t> file;
     std::filesystem::path executable;
     std::uint64_t frame{};
     std::size_t last_changed{};
     bool done{};
+    // Words already handed to the interpreter, and the registrations replaced.
+    std::set<std::uint32_t> interpreted_words;
+    std::set<std::uint32_t> interpreted;
 };
 
 Watch &watched() {
@@ -55,7 +62,65 @@ bool write_file(const std::filesystem::path &path, const std::vector<std::uint8_
     return !ec;
 }
 
+// Runs the guest code at ctx.pc, as it is in memory, until it reaches another
+// registered address. The dispatcher calls it in place of a compiled function.
+void interpret(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    (void)psprecomp::interpret_allegrex(runtime, ctx);
+}
+
+// With a compiled executable: the changed words not yet interpreted go to the
+// interpreter, with the code around them.
+void interpret_new_changes(psprecomp::Runtime &runtime, Watch &w) {
+    if (!w.compiled || !interpret_changes()) return;
+    std::vector<std::uint32_t> fresh;
+    for (const std::uint32_t address : changed_addresses(w.ranges, runtime.memory()))
+        if (w.interpreted_words.insert(address).second) fresh.push_back(address);
+    if (fresh.empty()) return;
+    const std::size_t replaced = run_interpreted(runtime, fresh, w.interpreted);
+    std::cout << "[fuc] FUComplete's loader changed " << fresh.size() << (fresh.size() == 1u ? " word" : " words")
+              << " of the code compiled from " << path_to_utf8(w.executable.filename()) << " (first at "
+              << psprecomp::hex32(fresh.front()) << "); " << replaced << " compiled blocks around them run interpreted"
+              << std::endl;
+}
+
 } // namespace
+
+bool interpret_changes() {
+    static const bool on = [] {
+        const char *value = std::getenv("MHFU_FUC_INTERPRET_CHANGES");
+        return value == nullptr || std::string_view(value) != "0";
+    }();
+    return on;
+}
+
+std::vector<std::uint32_t> changed_addresses(
+    const std::vector<CodeRange> &ranges, const psprecomp::GuestMemory &memory) {
+    std::vector<std::uint32_t> changed;
+    for (const CodeRange &range : ranges) {
+        const auto bytes = static_cast<std::uint32_t>(range.words.size() * 4u);
+        if (memory.raw_pointer(range.address, bytes) == nullptr) continue;
+        for (std::size_t i = 0; i < range.words.size(); ++i) {
+            const std::uint32_t address = range.address + static_cast<std::uint32_t>(i * 4u);
+            if (memory.load32(address) != range.words[i]) changed.push_back(address);
+        }
+    }
+    return changed;
+}
+
+std::size_t run_interpreted(
+    psprecomp::Runtime &runtime, std::span<const std::uint32_t> addresses, std::set<std::uint32_t> &done) {
+    std::size_t replaced = 0;
+    for (const std::uint32_t word : addresses) {
+        const std::uint32_t first = word >= kUnitSpan ? word - kUnitSpan + 4u : 0u;
+        for (std::uint32_t at = first; at < word + kUnitSpan; at += 4u) {
+            if (done.contains(at) || !runtime.has_function(at)) continue;
+            runtime.register_function(at, &interpret, "mhfu_fuc_interpreted");
+            done.insert(at);
+            ++replaced;
+        }
+    }
+    return replaced;
+}
 
 std::vector<CodeRange> code_ranges(const psprecomp::Elf32Image &elf, std::uint32_t load_base) {
     std::vector<CodeRange> ranges;
@@ -105,9 +170,10 @@ std::filesystem::path patched_path(const std::filesystem::path &executable) {
     return executable.parent_path() / "EBOOT.FUC.ELF";
 }
 
-void watch(const psprecomp::Elf32Image &elf, std::filesystem::path executable, std::uint32_t load_base) {
+void watch(const psprecomp::Elf32Image &elf, std::filesystem::path executable, std::uint32_t load_base, bool compiled) {
     Watch &w = watched();
     w = Watch{};
+    w.compiled = compiled;
     if (const char *value = std::getenv("MHFU_FUC_CODE_PATCHES"); value != nullptr && std::string_view(value) == "0")
         return;
     w.ranges = code_ranges(elf, load_base);
@@ -116,7 +182,12 @@ void watch(const psprecomp::Elf32Image &elf, std::filesystem::path executable, s
     w.on = !w.ranges.empty();
 }
 
-bool frame(const psprecomp::GuestMemory &memory) {
+void code_flushed(psprecomp::Runtime &runtime) {
+    Watch &w = watched();
+    if (w.on && !w.done) interpret_new_changes(runtime, w);
+}
+
+bool frame(psprecomp::Runtime &runtime) {
     Watch &w = watched();
     if (!w.on || w.done) return false;
     ++w.frame;
@@ -127,6 +198,13 @@ bool frame(const psprecomp::GuestMemory &memory) {
         return false;
     }
     if (w.frame % kCheckEvery != 0u) return false;
+    // The corpus was generated from this file: it is not written again, since
+    // the next start would then match no corpus at all.
+    if (w.compiled) {
+        interpret_new_changes(runtime, w);
+        return false;
+    }
+    const psprecomp::GuestMemory &memory = runtime.memory();
     const std::size_t changed = changed_words(w.ranges, memory);
     const bool settled = changed != 0u && changed == w.last_changed;
     w.last_changed = changed;

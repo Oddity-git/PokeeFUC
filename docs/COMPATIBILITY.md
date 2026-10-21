@@ -95,6 +95,7 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Layered armor | ✅ seen by the player; in the village, every part set to nothing showed the bare hunter |
 | HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ imported and played by the player; its 6127 entries read, title, loading screen, HUD and village drawn from it in a scripted run |
 | Eat in the Guild Hall, Item Sets, Change Equipment in the Guild Hall | ❔ their code signatures match FUComplete's memory and their hooks go in, in a scripted run in the village; not yet used by a player. Item Sets and Change Equipment choose with ○, as FUComplete's box does |
+| FUComplete's options in the menu, a CONFIG.BIN other than the corpus's (File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on) | ✅ in a scripted run: written from the menu, read at the next start; the executable's changed word and lobby_task's six run interpreted, the rest compiled, at full speed in the village. ❔ each option's effect in the game |
 
 ## Updating this page
 

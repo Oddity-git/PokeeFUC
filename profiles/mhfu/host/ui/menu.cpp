@@ -36,6 +36,7 @@
 #include "input/bindings.hpp"
 #include "install/game_identity.hpp"
 #include "install/installer.hpp"
+#include "fuc_config.hpp"
 #include "install/user_data.hpp"
 #include "kernel/fast_forward.hpp"
 #include "kernel/fast_loading.hpp"
@@ -1222,6 +1223,42 @@ void Menu::controls() {
     }
 }
 
+// FUComplete's own options (fuc_config.hpp), read from and written to its
+// CONFIG.BIN. Its loader reads the file when the game starts, so a changed
+// option says so until the next start.
+void fucomplete_rows() {
+    namespace fc = fuc_config;
+    std::filesystem::path stick = savedata::memory_stick();
+    if (stick.empty()) stick = install::user_data_directory() / "ms0";
+    const std::filesystem::path path = fc::config_path(stick);
+    static std::optional<std::vector<std::uint8_t>> at_start = fc::read(path);
+    static std::optional<std::vector<std::uint8_t>> bytes = at_start;
+    section("FUComplete");
+    if (!bytes) {
+        info_row("CONFIG.BIN", "Not found yet: FUComplete writes it the first time the game starts");
+        return;
+    }
+    for (const fc::Option &option : fc::options()) {
+        const int current = fc::choice(*bytes, option);
+        const std::string value = current >= 0 ? option.choices[static_cast<std::size_t>(current)].label : "Other";
+        RowOptions o;
+        o.description = option.description;
+        if (option.locked) {
+            o.disabled = true;
+            o.note = "Kept for your save";
+        } else if (at_start && fc::value(*at_start, option) != fc::value(*bytes, option)) {
+            o.note = "Applies when " MHFU_APP_NAME " starts again";
+        }
+        const int delta = choice_row(option.label, value, o);
+        if (delta == 0 || option.locked) continue;
+        const int count = static_cast<int>(option.choices.size());
+        const int next = current < 0 ? 0 : cycle(current, delta, count);
+        std::vector<std::uint8_t> changed = *bytes;
+        fc::set(changed, option, static_cast<std::size_t>(next));
+        if (fc::write(path, changed)) bytes = std::move(changed);
+    }
+}
+
 void Menu::game() {
     settings::Settings &s = settings::current();
     section("Hunting");
@@ -1499,6 +1536,7 @@ void Menu::game() {
         settings::save();
 
     ImGui::Dummy({0.0f, font_gap()});
+    if constexpr (kTitle == Title::FUComplete) fucomplete_rows();
     if (button_row(
             "Restore game defaults", {false, {}, "Every setting on this page back to how " MHFU_APP_NAME " ships."})) {
         const settings::Settings &d = settings::defaults();

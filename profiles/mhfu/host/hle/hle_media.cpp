@@ -305,7 +305,7 @@ std::uint32_t allocate_key_quest_block(std::uint32_t size) {
 void present_frame(Runtime &rt) {
     load_trace::note_flip();
     // FUComplete's loader changes the game's code while the title runs.
-    if constexpr (kTitle == Title::FUComplete) (void)fuc::frame(rt.memory());
+    if constexpr (kTitle == Title::FUComplete) (void)fuc::frame(rt);
     // Overlays are swapped between frames; re-check before drawing the next one.
     revalidate_overlays(rt);
     // These read Freedom Unite's memory (title.hpp); another game's stays

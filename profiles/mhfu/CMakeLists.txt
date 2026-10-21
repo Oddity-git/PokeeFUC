@@ -254,6 +254,7 @@ set(MHFU_HOST_SOURCES
     host/audio/sas_core.cpp
     host/camera_probe.cpp
     host/fuc_code_patches.cpp
+    host/fuc_config.cpp
     host/camera/camera_input.cpp
     host/camera/game_aspect.cpp
     host/camera/game_camera.cpp
@@ -870,6 +871,16 @@ target_link_libraries(mhfu_overlay_slot_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_overlay_slot_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_overlay_slot_tests COMMAND mhfu_overlay_slot_tests)
+endif()
+
+# FUComplete's CONFIG.BIN as the menu reads and writes it. No game data.
+add_executable(mhfu_fuc_config_tests
+    tests/fuc_config_tests.cpp
+    host/fuc_config.cpp)
+target_include_directories(mhfu_fuc_config_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+set_target_properties(mhfu_fuc_config_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_fuc_config_tests COMMAND mhfu_fuc_config_tests)
 endif()
 
 # FUComplete's loader changing the executable's code, and the executable
