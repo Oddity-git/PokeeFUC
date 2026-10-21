@@ -8,8 +8,10 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <string_view>
 
 namespace mhfu::camera {
 namespace {
@@ -150,6 +152,24 @@ bool prepare_game_aspect(psprecomp::Runtime &runtime) {
 void game_aspect_frame(psprecomp::Runtime &runtime, float aspect) {
     if (!state.prepared) return;
     psprecomp::GuestMemory &memory = runtime.memory();
+    // MHFU_TRACE_FOV=1: the live camera's field of view, when it changes. The
+    // FUComplete build can change the camera's code while the game runs.
+    static const bool trace_fov = [] {
+        const char *value = std::getenv("MHFU_TRACE_FOV");
+        return value != nullptr && std::string_view(value) != "" && std::string_view(value) != "0";
+    }();
+    if (trace_fov) {
+        const std::uint32_t camera = camera_address(memory);
+        const std::uint32_t bits = camera != 0u ? memory.load32(camera + kFieldOfView) : 0u;
+        static std::uint32_t last_camera{};
+        static std::uint32_t last_bits{};
+        if (camera != last_camera || bits != last_bits) {
+            std::cout << "[fov] camera 0x" << std::hex << std::setfill('0') << std::setw(8) << camera << std::dec
+                      << std::setfill(' ') << " fov " << std::bit_cast<float>(bits) << "\n";
+            last_camera = camera;
+            last_bits = bits;
+        }
+    }
     const float game = std::bit_cast<float>(kGameAspectBits);
     // Within a hair of the game's own shape is the game's own shape, written
     // bit for bit as the game has it.

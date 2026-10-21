@@ -21,6 +21,13 @@ profile_dir="$(cd "$here/../.." && pwd)"
 repo_dir="$(cd "$profile_dir/../.." && pwd)"
 work="${POKEE_WORK:?set POKEE_WORK to the work directory}"
 jobs="${POKEE_JOBS:-4}"
+title="${MHFU_TITLE:-FU}"
+title="$(printf '%s' "$title" | tr '[:lower:]' '[:upper:]')"
+case "$title" in
+    FU) title_suffix="" ;;
+    FUC) title_suffix="_fuc" ;;
+    *) echo "error: MHFU_TITLE must be FU or FUC, not $title" >&2; exit 2 ;;
+esac
 # shellcheck source=sources.sh
 source "$here/sources.sh"
 
@@ -74,6 +81,7 @@ step "Configuring Pokee (release)"
 cmake -S "$repo_dir" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DPSPRECOMP_PROFILE=mhfu \
+    -DMHFU_TITLE="$title" \
     -DMHFU_RELEASE=ON \
     -DMHFU_FFMPEG=bundled \
     -DMHFU_FFMPEG_DOWNLOAD_DIR="$sources" \
@@ -106,6 +114,11 @@ rm -rf "$stage"
 mkdir -p "$stage/lib" "$stage/overlays" "$stage/fonts" "$stage/licenses"
 install -m 755 "$build/bin/Pokee" "$stage/Pokee"
 cp "$build/bin/overlays/"*.so "$stage/overlays/"
+if [[ "$title" == FUC ]]; then
+    # FUComplete's loader patches overlays as they load; the code each library
+    # came from lets such an overlay still run compiled.
+    python3 "$profile_dir/tools/overlay_code.py" "$stage/overlays" "$profile_dir/overlays$title_suffix" > /dev/null
+fi
 strip --strip-unneeded "$stage/Pokee" "$stage/overlays/"*.so
 
 # The libraries built above that the executable needs, directly or through

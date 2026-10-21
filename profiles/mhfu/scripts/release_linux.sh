@@ -2,15 +2,17 @@
 # Build a Linux release: the Flatpak bundle and the portable tarball.
 #
 #   release_linux.sh [--version VERSION] [--jobs N] [--skip-build]
-#                    [--no-flatpak] [--no-tarball]
+#                    [--title FU|FUC] [--no-flatpak] [--no-tarball]
 #
 # From a checkout and the game data a source build uses (EBOOT.ELF and
-# disc.iso in profiles/mhfu/game, see prepare_game.sh), this builds the
-# executable, all overlay libraries and the bundled SDL3 and FFmpeg inside the
-# Steam Runtime 3 "sniper" SDK container (packaging/linux/build_in_sdk.sh),
-# packs both artifacts, checks that neither contains any game data, and
-# prints their SHA-256 checksums. Everything lands in out/release-linux; the
-# artifacts in out/release-linux/dist.
+# disc.iso in profiles/mhfu/game, or game_fuc for FUComplete, see
+# prepare_game.sh), this builds the executable, all overlay libraries and the
+# bundled SDL3 and FFmpeg inside the Steam Runtime 3 "sniper" SDK container
+# (packaging/linux/build_in_sdk.sh), packs both artifacts, checks that neither
+# contains any game data, and prints their SHA-256 checksums. Everything lands
+# in out/release-linux or out/release-linux_fuc; the artifacts in its dist.
+#
+#   --title FU|FUC     the game to build (default FU, or MHFU_TITLE)
 #
 # Needs podman (or docker), flatpak with the Flathub remote, curl, ostree and
 # about 25 GB of free space. The first run takes an hour or more; later runs
@@ -29,35 +31,58 @@ packaging="$profile_dir/packaging/linux"
 # shellcheck source=../packaging/linux/sources.sh
 source "$packaging/sources.sh"
 
-app_id=io.github.teamgdb.Pokee
-work="${POKEE_WORK:-$repo_dir/out/release-linux}"
-dist="$work/dist"
-stage="$work/stage/pokee"
-# USA Freedom Unite decrypted EBOOT.ELF. Same value as
-# mhfu::install::kFreedomUniteUsa.executable_sha256 in host/install/game_identity.hpp.
-expected_executable_sha256=3070954e2dc88fd0b0836c0c1dc526531aca4a213b0f18806e324963efb514f4
-
 version=""
 jobs=4
 skip_build=0
 make_flatpak=1
 make_tarball=1
+title="${MHFU_TITLE:-FU}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --version) version="${2:?--version needs a value}"; shift 2 ;;
         --jobs) jobs="${2:?--jobs needs a value}"; shift 2 ;;
         --skip-build) skip_build=1; shift ;;
+        --title) title="${2:?--title needs a value}"; shift 2 ;;
         --no-flatpak) make_flatpak=0; shift ;;
         --no-tarball) make_tarball=0; shift ;;
         -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option $1" >&2; exit 2 ;;
     esac
 done
+title="$(printf '%s' "$title" | tr '[:lower:]' '[:upper:]')"
+case "$title" in
+    FU)
+        title_suffix=""
+        app_id=io.github.teamgdb.Pokee
+        app_name=Pokee
+        command=pokee
+        artifact=pokee
+        # USA Freedom Unite decrypted EBOOT.ELF. Same value as
+        # mhfu::install::kFreedomUniteUsa.executable_sha256 in host/install/game_identity.hpp.
+        expected_executable_sha256=3070954e2dc88fd0b0836c0c1dc526531aca4a213b0f18806e324963efb514f4
+        ;;
+    FUC)
+        title_suffix="_fuc"
+        app_id=io.github.teamgdb.PokeeFUC
+        app_name=PokeeFUC
+        command=pokee-fuc
+        artifact=pokeefuc
+        # Every FUComplete version changes its executable, so there is no
+        # pinned hash; the loader-patched EBOOT.FUC.ELF is the build's input.
+        expected_executable_sha256=""
+        ;;
+    *) echo "error: MHFU_TITLE must be FU or FUC, not $title" >&2; exit 2 ;;
+esac
+work="${POKEE_WORK:-$repo_dir/out/release-linux$title_suffix}"
+dist="$work/dist"
+stage="$work/stage/pokee"
+game_dir="$profile_dir/game$title_suffix"
+overlay_dir="$profile_dir/overlays$title_suffix"
 if [[ -z "$version" ]]; then
     version="$(git -C "$repo_dir" describe --tags --always --dirty)"
     version="${version#v}"
 fi
-name="pokee-$version-linux-x86_64"
+name="$artifact-$version-linux-x86_64"
 export SOURCE_DATE_EPOCH="$(git -C "$repo_dir" log -1 --format=%ct)"
 
 step() { printf '\n=== %s\n' "$*"; }
@@ -126,17 +151,22 @@ check_no_game_data() {
 }
 
 # ---------------------------------------------------------------------------
-step "Pokee $version for Linux"
+step "$app_name $version for Linux"
 if [[ -n "$(git -C "$repo_dir" status --porcelain --untracked-files=no)" ]]; then
     echo "warning: the checkout has uncommitted changes; the version says -dirty" >&2
 fi
 
 if [[ $skip_build -eq 0 ]]; then
-    game_dir="$profile_dir/game"
     [[ -e "$game_dir/EBOOT.ELF" && -e "$game_dir/disc.iso" ]] ||
         fail "$game_dir needs EBOOT.ELF and disc.iso; run scripts/prepare_game.sh first"
-    [[ "$(sha256 "$game_dir/EBOOT.ELF")" == "$expected_executable_sha256" ]] ||
-        fail "$game_dir/EBOOT.ELF is not the supported executable"
+    if [[ -n "$expected_executable_sha256" ]]; then
+        [[ "$(sha256 "$game_dir/EBOOT.ELF")" == "$expected_executable_sha256" ]] ||
+            fail "$game_dir/EBOOT.ELF is not the supported executable"
+    else
+        # FUComplete's loader-patched ELF: plain, unlike the encrypted PSP EBOOT.
+        [[ "$(head -c 4 "$game_dir/EBOOT.ELF" | od -An -tx1 | tr -d ' \n')" == "7f454c46" ]] ||
+            fail "$game_dir/EBOOT.ELF is not a plain ELF; the FUComplete build needs EBOOT.FUC.ELF"
+    fi
 
     if command -v podman > /dev/null; then container=podman
     elif command -v docker > /dev/null; then container=docker
@@ -163,17 +193,24 @@ if [[ $skip_build -eq 0 ]]; then
     mkdir -p "$work/home"
     "$container" run --rm "${user_args[@]}" --security-opt label=disable \
         "${mounts[@]}" -w "$repo_dir" \
-        -e HOME="$work/home" -e POKEE_WORK="$work" -e POKEE_JOBS="$jobs" \
+        -e HOME="$work/home" -e POKEE_WORK="$work" -e POKEE_JOBS="$jobs" -e MHFU_TITLE="$title" \
         "$SDK_IMAGE" bash "$packaging/build_in_sdk.sh"
 fi
 
 [[ -x "$stage/Pokee" ]] || fail "nothing staged in $stage; run without --skip-build"
 overlay_count="$(find "$stage/overlays" -name '*.so' | wc -l)"
 # One library per overlay corpus.
-expected_overlays="$(find "$profile_dir/overlays" -name meta.txt | wc -l)"
+expected_overlays="$(find "$overlay_dir" -name meta.txt | wc -l)"
 expected_overlays="${expected_overlays//[[:space:]]/}"
 [[ "$overlay_count" -eq "$expected_overlays" ]] ||
     fail "expected $expected_overlays overlay libraries, found $overlay_count"
+if [[ "$title" == FUC ]]; then
+    # FUComplete's loader patches overlays as they load; the code each library
+    # came from lets such an overlay still run compiled.
+    step "Writing the overlay code files"
+    python3 "$profile_dir/tools/overlay_code.py" "$stage/overlays" "$overlay_dir" > /dev/null ||
+        fail "could not write the overlay code files"
+fi
 check_no_game_data "$stage" "the staged build"
 rm -rf "$dist"
 mkdir -p "$dist"
@@ -185,8 +222,12 @@ if [[ $make_tarball -eq 1 ]]; then
     rm -rf "$work/tarball"
     mkdir -p "$tree"
     cp -a "$stage/." "$tree/"
-    install -m 755 "$packaging/pokee.sh" "$tree/pokee"
-    install -m 644 "$packaging/README.txt" "$tree/README.txt"
+    install -m 755 "$packaging/$command.sh" "$tree/$command"
+    if [[ "$title" == FUC ]]; then
+        install -m 644 "$packaging/README-FUC.txt" "$tree/README.txt"
+    else
+        install -m 644 "$packaging/README.txt" "$tree/README.txt"
+    fi
     tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" \
         -C "$work/tarball" -cf - "$name" | gzip -n -9 > "$dist/$name.tar.gz"
     rm -rf "$work/tarball"
@@ -211,7 +252,7 @@ if [[ $make_flatpak -eq 1 ]]; then
     rm -rf "$source_dir"
     mkdir -p "$source_dir/files"
     cp -al "$stage" "$source_dir/pokee"
-    install -m 755 "$packaging/pokee.sh" "$source_dir/files/pokee"
+    install -m 755 "$packaging/$command.sh" "$source_dir/files/$command"
     install -m 644 "$packaging/$app_id.desktop" "$source_dir/files/"
     install -m 644 "$repo_dir/docs/images/emblem.svg" "$source_dir/files/$app_id.svg"
     sed -e "s/@VERSION@/$version/" -e "s/@DATE@/$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%d)/" \
@@ -247,7 +288,8 @@ cp "$work/sources/ffmpeg-$FFMPEG_VERSION.tar.xz" "$dist/" ||
     cat SHA256SUMS
 )
 {
-    echo "Pokee $version for Linux (x86-64)"
+    echo "$app_name $version for Linux (x86-64)"
+    echo "Title: $title"
     echo "Built from: $(git -C "$repo_dir" rev-parse HEAD)"
     echo "Build environment: $SDK_IMAGE"
     echo "Flatpak runtime: org.freedesktop.Platform//$FLATPAK_RUNTIME_VERSION"

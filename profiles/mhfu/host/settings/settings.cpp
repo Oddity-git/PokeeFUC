@@ -231,6 +231,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.hud_edges); },
             [](const Settings &s) { return std::string(s.hud_edges ? "1" : "0"); },
             [](Settings &s, const char *t) { s.hud_edges = variable_flag(t); }},
+        {"video.fov_scale", "MHFU_FOV_SCALE",
+            [](Settings &s, const std::string &t) { return parse_float(t, 0.5f, 2.0f, s.fov_scale); },
+            [](const Settings &s) { return format_float(s.fov_scale); },
+            [](Settings &s, const char *t) { s.fov_scale = variable_float(t, 1.0f, 0.5f, 2.0f); }},
         BOOL_FIELD("video.sharp_screen", sharp_screen),
         BOOL_FIELD("video.sharp_textures", sharp_textures),
         {"video.texture_pack", "MHFU_TEXTURE_PACK",
@@ -313,8 +317,7 @@ const std::vector<Field> &fields() {
                 return true;
             },
             [](const Settings &s) { return s.font; }, [](Settings &s, const char *t) { s.font = t; }},
-        {"text.crisp", "MHFU_CRISP_TEXT",
-            [](Settings &s, const std::string &t) { return parse_bool(t, s.crisp_text); },
+        {"text.crisp", "MHFU_CRISP_TEXT", [](Settings &s, const std::string &t) { return parse_bool(t, s.crisp_text); },
             [](const Settings &s) { return std::string(s.crisp_text ? "1" : "0"); },
             [](Settings &s, const char *t) { s.crisp_text = variable_flag(t); }},
         {"video.ui_textures", "MHFU_UI_TEXTURES",
@@ -324,7 +327,9 @@ const std::vector<Field> &fields() {
                 if (!kUiTextures.parse(t, s.ui_textures)) s.ui_textures = UiTextures::Off;
             }},
         {"video.hud.map", "MHFU_HUD_MAP",
-            [](Settings &s, const std::string &t) { return parse_uint(t, kMinMapItemScale, kMaxMapItemScale, s.hud.map); },
+            [](Settings &s, const std::string &t) {
+                return parse_uint(t, kMinMapItemScale, kMaxMapItemScale, s.hud.map);
+            },
             [](const Settings &s) { return std::to_string(s.hud.map); },
             [](Settings &s, const char *t) {
                 std::uint32_t value = s.hud.map;

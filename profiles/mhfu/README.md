@@ -45,15 +45,25 @@ The encrypted header uses tag `0xC0CB167C`. `generate.sh` translates the residen
 
 [FUComplete](https://github.com/FUComplete/Patch) is not a Freedom Unite mod: it patches **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) with an English translation, built-in event quests and its own mod loader. It is a different executable, so it gets a build of its own, configured with `-DMHFU_TITLE=FUC`:
 
+A Linux release (Flatpak and portable tarball) is on the fork's
+[releases page](https://github.com/Oddity-git/PokeeFUC/releases). To build it
+yourself:
+
 ```bash
 cmake -S . -B out/fuc -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSPRECOMP_PROFILE=mhfu -DMHFU_TITLE=FUC
 cmake --build out/fuc --target Pokee -j 2
-out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"          # the image FUCTool made
-MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.ELF" profiles/mhfu/scripts/generate.sh out/fuc
-cmake -S . -B out/fuc && cmake --build out/fuc --target Pokee -j 2
-profiles/mhfu/scripts/build_overlays.sh out/fuc                      # optional, long
-profiles/mhfu/packaging/linux/install_user.sh out/fuc                # Linux: add PokeeFUC to the app menu
+out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"   # the image FUCTool made
+out/fuc/bin/Pokee                                       # first start: writes EBOOT.FUC.ELF; quit
+MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.FUC.ELF" profiles/mhfu/scripts/generate.sh out/fuc
+cmake --build out/fuc --target Pokee -j 2
+profiles/mhfu/scripts/build_overlays.sh out/fuc                      # about 40 minutes, resumable
+profiles/mhfu/packaging/linux/install_user.sh out/fuc --overlays out/fuc/bin/overlays
 ```
+
+The first start is needed before generating: FUComplete's loader rewrites the
+executable as the game starts, and writes the result as `EBOOT.FUC.ELF` in the
+data folder. The corpus must come from that file, not from the disc's
+executable.
 
 **FUComplete's changes to the game's code.** Its loader rewrites words of the executable's code when the game starts: jumps from the file I/O into its own code for the file replacer, and the save keys for its Save Region option. Compiled code runs the words it was generated from, so the corpus has to be generated from the executable as the loader leaves it. The first start finds the changes, writes that executable as `EBOOT.FUC.ELF` beside `EBOOT.ELF`, and prints `[fuc] FUComplete's loader changed N words of the game's code`. Generate again from it and rebuild:
 
@@ -85,7 +95,7 @@ What differs from the Freedom Unite build:
 | Corpus, overlays, game, analysis | `generated/`, `overlays/`, `game/`, `analysis/` | `generated_fuc/`, `overlays_fuc/`, `game_fuc/`, `analysis_fuc/` |
 | Overlay slots | the four read from Freedom Unite's `DATA.BIN` | the load addresses of the executable's `*.ovl` sections |
 | `DATA.BIN` | obfuscated | stored plain; `databin.py` and `build_overlays.sh` read either |
-| Extras (analog camera, hold to gather, aspect ratio, HUD hiding, UI scaling, damage numbers, gather icon, sharpness gauge, empty item slot, give any rarity, lock-on, item box, layered armor) | on | on at FUComplete's own addresses (`host/title.hpp`), except the fast item box, which FUComplete already has |
+| Extras (analog camera, hold to gather, aspect ratio, HUD hiding, UI scaling, damage numbers, gather icon, sharpness gauge, empty item slot, give any rarity, lock-on, item box, layered armor, key quests, Eat in the Guild Hall, Item Sets, Change Equipment) | on | on at FUComplete's own addresses (`host/title.hpp`), except the fast item box, which FUComplete already has |
 | Mods page | the community's `DATA.BIN` mods | off: FUComplete has its own file replacer (`ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP`) |
 
 **On Android** the FUComplete build is a separate app, **PokeeFUC** (`io.github.teamgdb.pokeefuc`), so it installs beside Pokee with its own storage and saves. An Android build directory configured with `-DMHFU_TITLE=FUC` packs it: `release_android.sh` then writes `pokeefuc-<version>-android-arm64.apk`. The phone cannot generate the corpus, so generate it on a computer first, from `EBOOT.FUC.ELF` as above, and build any overlay dumps there too; the Android build compiles the `generated_fuc/` and `overlays_fuc/` it finds in the checkout. The app then asks for the same FUComplete image on its first start. Like the Linux copy, the APK holds code recompiled from your own game: keep it to yourself. See [RELEASING.md](../../docs/RELEASING.md#pokeefuc).
@@ -469,6 +479,7 @@ The Android app starts from other defaults where a phone differs, with the same 
 | Video | Display | `video.fullscreen` | | Window or fullscreen |
 | Video | Window size | `video.window_scale` | | ×1–×4 of 480×272; default ×2 |
 | Video | Aspect ratio | `video.aspect` | | `original` (the PSP's shape, black bars; the default), `stretch` (stretched to the window) or `fill` (the game's view takes the window's shape). Older versions wrote `video.keep_aspect`, which is still read and written |
+| Video | Field of view | `video.fov_scale` | `MHFU_FOV_SCALE` | 0.5–2.0 (the menu offers 50–150%), the camera's field of view as a share of the game's own; default 1. It follows what the game sets, in the village and in quests, and applies while the game runs |
 | Video | Scaling filter | `video.sharp_screen` | | Smooth or sharp scaling of the finished picture to the window |
 | Video | Texture filter | `video.sharp_textures` | | Smooth (bilinear) or sharp (nearest) texture sampling |
 | Video | Texture pack | `video.texture_pack` | `MHFU_TEXTURE_PACK` | On (default) or off: draw an installed [HD texture pack](#hd-texture-packs) instead of the game's textures. The footer shows how many textures the pack has and how many are on the GPU, or where the pack was looked for |
@@ -622,7 +633,7 @@ The meal is the game's own: Pokee runs the kitchen's menu (`0x09C1CC38` in `game
 
 **Show Key Quests** (Mods, `game.key_quests`, off unless `MHFU_KEY_QUESTS=1`) marks the key quests: on each level of the Village Chief's, Nekoht's and the Guild's quests, the few quests that must be cleared before that level's Urgent Quest is offered. Their names read *[Key]* and the name, for example *[Key] Battle of the Blos*, in the quest lists, the quest's details and wherever else the game shows the name, in every language. The other quests, the Urgent Quests themselves and training, treasure and event quests keep their names. A change applies to a list opened after it, and to one already open once it scrolls.
 
-The game knows which quests are key: each quest's record in the quest packs (`DATA.BIN` entries 5342 to 5352) has bit `0x04` set in its fourth byte, and bit `0x02` on the Urgent Quest. The game loads a pack unchanged and reads a quest's name through offsets in it each time it draws the name. When the game has read a pack, Pokee finds it in memory, byte for byte as on the disc (or as a mod changed it), and points the names of its key quests at copies with the mark, kept in a block of guest memory of its own. Turning it off puts the game's offsets back. `MHFU_TRACE_KEY_QUESTS=1` prints each pack found and how many names were marked. See `game/key_quests.hpp` for what was traced.
+The game knows which quests are key: each quest's record in the quest packs (`DATA.BIN` entries 5342 to 5352 in Freedom Unite, 5310 to 5320 in FUComplete) has bit `0x04` set in its fourth byte, and bit `0x02` on the Urgent Quest. The game reads a quest's name through offsets in the pack each time it draws the name. When the game has read a pack, Pokee finds every copy of it in memory, byte for byte as on the disc (or as a mod changed it), and points the names of its key quests at copies with the mark, kept in a block of guest memory of its own. FUComplete reads a pack into a staging buffer and then copies it to the list's own, so each copy is tagged against its own start: a name offset belongs to one copy, and one sent to another points into nothing. Turning it off puts the game's offsets back. `MHFU_TRACE_KEY_QUESTS=1` prints each pack found, every address, and how many names were marked. See `game/key_quests.hpp` for what was traced.
 
 ## Game text
 
@@ -1349,6 +1360,7 @@ The marker does not project through the view a draw uploaded. That view has no t
 | `MHFU_TRACE_GATHER=1` | One `[gather]` line when the point under the [gather icon](#gather-icon) changes, or when there is none: its address, id, kind and position. `[gather] carve` gives a body's record address and its halfwords from `+16` when it comes into reach. `[gather] hold` is each repeated press of [Hold to gather](#gather-icon). `[gather] farm` gives the Pokke Farm mining outcrop or bug thicket in reach: its point address, type, index and uses left. `[gather] fishing` gives the fishing spot in reach, its record address and position, or `none` |
 | `MHFU_TRACE_HITS=1` | Each call of the routine that takes health off a monster (the one [damage numbers](#damage-numbers) watch, `0x09AC7A08`) whose return finds the health changed: a `[hit] call` line with the arguments, the saved registers, `ra`, `sp`, the float arguments and the health; the chain of return addresses and the functions they lie in (`ra@start`); the 32 words on the stack, code-looking ones marked `*`; the 16 words behind each argument that points into RAM; and the health before and after. The monster's own update calls the routine every frame without changing anything; such a caller is named once and its calls are not printed. A drop in a monster's health between two frames that no call made is reported as written elsewhere. Works with the setting off. `MHFU_TRACE_HITS_LIMIT` caps the hits printed (default 200). How the attack's own record, with the point of contact and the part struck, is being looked for |
 | `MHFU_TRACE_BODIES=1` | How long a dead monster lies before the game removes it, and which of its fields count that time. A `[bodies] … died` line when a monster on the quest entity list reaches zero health, with its species and stage. When the body leaves the list, its slot comes back to life or changes species, a line with the frames and seconds it lay there, then up to 16 fields from the first 4 KiB of the entity that moved like a timer: in one direction only, at least 20 times, by exactly 1 for a byte or halfword and in even steps for a float, with the frame of its first step (`s16 +0x2A4: 900 -> 0 in 900 changes from frame 3`). A field's first change may be a jump, where the timer starts. Then up to 32 bytes that held still from the death and changed at most four times, the first of them in the body's last 120 frames, the earliest first (`flag +0x3C: 0x1 -> 0x5 at frame 470 of 477 (2 changes)`): a state or flag the removal may follow from. Leaving a quest forgets the bodies without a report. With `MHFU_TRACE_BODIES_WATCH=OFFSET` (such as `0x244`, where a Giaprey's body sinks) and `PSPRECOMP_WATCH_WRITE` set to any address, the first Velociprey, Genprey, Ioprey or Giaprey body has that field watched: every guest write to it is a `[watch-write]` line with the code address that made it. Arming the watch slows every store. How the despawn timer of small monsters is being looked for |
+| `MHFU_TRACE_FOV=1` | The camera's field of view, once whenever it changes: the projection camera's address and value, and, when a Field of view scale is set, when the camera's update is wrapped |
 | `MHFU_TRACE_SHARPNESS=1` | One `[sharpness]` line whenever the [modern sharpness gauge](#modern-sharpness-gauge)'s reading changes: the points and the most, the colour as the gauge finds it and the game's own colour byte (+1522), the colour's start and end, and how full it is. Works with the setting off |
 | `MHFU_TRACE_VIEWS=N` | Every N game frames, one line per distinct view and projection the frame's transformed draws used: how many draws and vertices, the eye position, yaw and pitch, the matrices and the render targets |
 | `MHFU_TRACE_CAMERA=1` | One line per frame for the camera the game itself set: the second stick's offset from centre, the yaw and pitch read out of the frame's busiest view matrix, the turn since the previous frame, the view's up axis (a negative second number is an upside-down picture), and the camera's world position. Reads the game's own camera, so it tells a stepped turn from a continuous one |
