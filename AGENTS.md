@@ -28,6 +28,7 @@ Read the documents relevant to the task before changing code, testing, packaging
 | [DATA_BIN.md](docs/DATA_BIN.md) | Archive layout, obfuscation, overlay entries, file IDs and mod I/O |
 | [EQUIPMENT_MODS.md](docs/EQUIPMENT_MODS.md) | Equipment mods' typed file ids, and the armor model records layered armor reads |
 | [LAYERED_ARMOR.md](docs/LAYERED_ARMOR.md) | Appearance overrides, model hooks, reload behavior and multiplayer visibility |
+| [FUCOMPLETE_PORT.md](docs/FUCOMPLETE_PORT.md) | The FUComplete build (PokeeFUC): how it was ported, how addresses are mapped, CONFIG.BIN options, state, open problems and keeping up with Pokee |
 
 The [profile README](profiles/mhfu/README.md) covers player settings, environment variables, controls, saves, mods and networking. For device-specific testing in a developer's environment, also read [LOCAL_TESTING.md](LOCAL_TESTING.md) when present, as described below.
 
