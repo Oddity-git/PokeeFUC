@@ -66,8 +66,14 @@ void look(psprecomp::GuestMemory &memory, EntryBytes bytes) {
             it = s.pending.erase(it);
             continue;
         }
-        const std::optional<std::uint32_t> base = find_pack(ram, psprecomp::GuestMemory::kPhysicalBase, pack);
-        if (!base) {
+        // The game may hold more than one copy: FUComplete reads a pack into a
+        // staging buffer and copies it to the list's own. An offset points
+        // from a pack's start, so each copy has to be tagged against itself;
+        // tagging only the staging copy leaves the list's copy pointing at
+        // nothing.
+        const std::vector<std::uint32_t> bases =
+            find_packs(ram, psprecomp::GuestMemory::kPhysicalBase, pack, psprecomp::GuestMemory::kPhysicalBase);
+        if (bases.empty()) {
             if (--it->second <= 0) {
                 if (s.trace) std::cout << "[key quests] entry " << entry << " not found in memory\n";
                 it = s.pending.erase(it);
@@ -77,11 +83,16 @@ void look(psprecomp::GuestMemory &memory, EntryBytes bytes) {
             continue;
         }
         const std::uint32_t slot = s.block + (entry - kFirstPack) * kSlot;
-        Loaded loaded{*base, tag(memory, *base, *names, slot, kSlot)};
-        if (s.trace)
-            std::cout << "[key quests] entry " << entry << " at 0x" << hex(*base) << ": " << loaded.patches.size()
-                      << " of " << names->size() << " names tagged\n";
-        s.loaded[entry] = std::move(loaded);
+        std::vector<Patch> patches;
+        for (const std::uint32_t base : bases)
+            for (Patch &patch : tag(memory, base, *names, slot, kSlot)) patches.push_back(patch);
+        if (s.trace) {
+            std::cout << "[key quests] entry " << entry << ": " << names->size() << " names tagged";
+            for (const std::uint32_t base : bases) std::cout << (base == bases.front() ? " at 0x" : ", 0x") << hex(base);
+            for (std::size_t i = 0; i < names->size(); ++i) std::cout << (i == 0u ? ": " : "; ") << (*names)[i].text;
+            std::cout << "\n";
+        }
+        s.loaded[entry] = Loaded{bases.front(), std::move(patches)};
         it = s.pending.erase(it);
     }
 }
@@ -114,21 +125,25 @@ std::optional<std::vector<Name>> key_names(std::span<const std::uint8_t> pack) {
     return names;
 }
 
-std::optional<std::uint32_t> find_pack(std::span<const std::uint8_t> ram, std::uint32_t ram_base,
+std::vector<std::uint32_t> find_packs(std::span<const std::uint8_t> ram, std::uint32_t ram_base,
     std::span<const std::uint8_t> pack, std::uint32_t from) {
-    if (pack.empty() || pack.size() > ram.size()) return std::nullopt;
+    std::vector<std::uint32_t> bases;
+    if (pack.empty() || pack.size() > ram.size()) return bases;
     const std::size_t head = std::min<std::size_t>(pack.size(), 256u);
     const std::boyer_moore_horspool_searcher searcher(pack.begin(), pack.begin() + static_cast<std::ptrdiff_t>(head));
     auto at = ram.begin() + (from > ram_base ? std::min<std::size_t>(from - ram_base, ram.size()) : 0u);
     while (true) {
         at = std::search(at, ram.end(), searcher);
-        if (at == ram.end()) return std::nullopt;
+        if (at == ram.end()) return bases;
         // Packs are word aligned, and the rest must match too.
         const auto offset = static_cast<std::size_t>(at - ram.begin());
         if (offset % 4u == 0u && ram.size() - offset >= pack.size() &&
-            std::equal(pack.begin(), pack.end(), at))
-            return ram_base + static_cast<std::uint32_t>(offset);
-        ++at;
+            std::equal(pack.begin(), pack.end(), at)) {
+            bases.push_back(ram_base + static_cast<std::uint32_t>(offset));
+            at += static_cast<std::ptrdiff_t>(pack.size());
+        } else {
+            ++at;
+        }
     }
 }
 
@@ -147,8 +162,8 @@ std::vector<Patch> tag(psprecomp::GuestMemory &memory, std::uint32_t base, const
         for (std::uint32_t i = 0; i < text.size(); ++i) memory.store8(at + i, static_cast<std::uint8_t>(text[i]));
         memory.store8(at + length - 1u, 0u);
         used += length;
-        // The game adds the offset to the pack's start, so one outside the
-        // pack is as good as one inside.
+        // The game adds the offset to its pack's start. One outside the pack
+        // is as good as one inside, as long as it belongs to this copy.
         const std::uint32_t replacement = at - base;
         memory.store32(address, replacement);
         patches.push_back(Patch{address, name.name, replacement});

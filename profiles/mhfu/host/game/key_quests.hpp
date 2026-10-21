@@ -31,9 +31,12 @@
 // When the file I/O has served a whole pack (file_loaded), the next frames
 // look for that pack in guest RAM, byte for byte as the game got it, and point
 // the names of its key quests at "[Key] " copies in a block of guest memory of
-// our own. Each word is checked before it is written; turning the switch off
-// puts every word back that still holds our offset. Turning it on looks once
-// for packs already loaded. Off from the start, nothing runs.
+// our own. FUComplete reads a pack into a staging buffer and copies it to the
+// list's own, so every copy found is tagged against its own start; a name
+// offset sent to the wrong copy would point into nothing. Each word is checked
+// before it is written; turning the switch off puts every word back that still
+// holds our offset. Turning it on looks once for packs already loaded. Off
+// from the start, nothing runs.
 
 #include "psprecomp/guest_memory.hpp"
 #include "title.hpp"
@@ -77,9 +80,9 @@ struct Name {
 // when the bytes are not a pack as traced.
 [[nodiscard]] std::optional<std::vector<Name>> key_names(std::span<const std::uint8_t> pack);
 
-// Where in `ram` (guest address `ram_base`) an exact copy of `pack` starts,
-// looking from guest address `from`. None when there is none.
-[[nodiscard]] std::optional<std::uint32_t> find_pack(std::span<const std::uint8_t> ram, std::uint32_t ram_base,
+// Where in `ram` (guest address `ram_base`) each exact copy of `pack` starts,
+// looking from guest address `from`. Empty when there is none.
+[[nodiscard]] std::vector<std::uint32_t> find_packs(std::span<const std::uint8_t> ram, std::uint32_t ram_base,
     std::span<const std::uint8_t> pack, std::uint32_t from = 0u);
 
 // A word changed in a loaded pack.
@@ -98,11 +101,11 @@ std::vector<Patch> tag(psprecomp::GuestMemory &memory, std::uint32_t base, const
 // Puts back each word that still holds our offset. Returns how many.
 std::size_t untag(psprecomp::GuestMemory &memory, const std::vector<Patch> &patches);
 
-// From the file I/O: the game has read the whole of `entry`.
-void file_loaded(std::uint32_t entry);
-
 using Allocate = std::uint32_t (*)(std::uint32_t size);
 using EntryBytes = std::vector<std::uint8_t> (*)(std::uint32_t entry);
+
+// From the file I/O: the game has read the whole of `entry`.
+void file_loaded(std::uint32_t entry);
 
 // At the flip: follows the switch, and tags the packs read since.
 void frame(psprecomp::GuestMemory &memory, Allocate allocate, EntryBytes bytes);

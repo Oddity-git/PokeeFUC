@@ -45,6 +45,7 @@ Differences that are not just addresses, found this way:
 - **Box menu rows** are 18 pixels high, not 20 (`kRecordRows` in `item_sets.cpp`).
 - **HUD textures** are 0x4400 lower; FUComplete's name plate is 8 pixels shorter (`hud_scale.hpp`).
 - **Quest packs** in DATA.BIN are entries 5310–5320, 32 below Freedom Unite's 5342–5352, with the same key quests flagged.
+- **Quest packs are copied**: FUComplete reads a pack into a staging buffer and copies it to the quest list's own. A quest's name is an offset from a pack's start, so `game/key_quests.cpp` tags every copy it finds against that copy's own start. Tagging only the read's copy leaves the list's copy pointing outside RAM, which crashed the game when the list drew the name.
 - **DATA.BIN is stored plain** (no cipher): `Directory::parse(..., plain)` and `ArchiveView(..., plain)`.
 - **GameSys option byte +0x6ADE0**: in FUComplete it is set, which makes the follow camera snap back to a vertical preset; the camera driver reads it as 0 while it owns the pitch (and then holds the gate negative so the behind placement stays off). Upstream reads the same byte as "placement off".
 
@@ -68,15 +69,14 @@ FUComplete reads `ms0:/PSP/SAVEDATA/FUCDAT/CONFIG.BIN` at boot (64 bytes; option
 
 ## State
 
-Verified by the player in FUComplete: analog camera and tilt, lock-on, hold to gather, gather icon, UI scaling, hide HUD, empty item slot, sharpness gauge, layered armor, KTX2 HD texture pack, the three Guild Hall features (Eat in the Guild Hall, Item Sets, Change Equipment), key quests' menu row.
+Verified by the player in FUComplete: analog camera and tilt, lock-on, hold to gather, gather icon, UI scaling, hide HUD, empty item slot, sharpness gauge, layered armor, KTX2 HD texture pack, the three Guild Hall features (Eat in the Guild Hall, Item Sets, Change Equipment), and the key quest marks (the Village Chief's 2★ list reads *[Key] Liver of Legend!*, scrolled whole).
 
 Open:
 
-1. **Key quest marks do not show in FUComplete.** The packs are entries 5310–5320 and the archive is now read plain, so reads are reported (`[key quests] entry N read` with `MHFU_TRACE_KEY_QUESTS=1`). Not yet seen: whether the game loads the pack unchanged into RAM when the quest list opens, as Freedom Unite does. At boot all eleven are read and then not found in RAM (probably an integrity scan, not the list's load). Next step: a traced session where the player opens the Village Chief's 2★ list; if the pack is not found then, look for its name strings in RAM to see how the game holds it.
-2. **CONFIG.BIN options' effects** are not checked in the game (FoV, horn tweak, minimap, True Raw, Lao/Shen, full chest, drink buff, Dos audio). The mechanism is checked: the changed code runs interpreted, the rest compiled.
-3. **Give Any Rarity Item** and **Change Equipment's sync to other hunters** need a second player.
-4. **True Attack Value** is off in FUComplete (its True Raw does the same). Port it only if wanted.
-5. **Upstream release flows** (`release_*.sh`, Flatpak) know nothing of FUComplete, and do not ship `.code` files. Only `install_user.sh` installs PokeeFUC.
+1. **CONFIG.BIN options' effects** are not checked in the game (FoV, horn tweak, minimap, True Raw, Lao/Shen, full chest, drink buff, Dos audio). The mechanism is checked: the changed code runs interpreted, the rest compiled.
+2. **Give Any Rarity Item** and **Change Equipment's sync to other hunters** need a second player.
+3. **True Attack Value** is off in FUComplete (its True Raw does the same). Port it only if wanted.
+4. **Upstream release flows** (`release_*.sh`, Flatpak) know nothing of FUComplete, and do not ship `.code` files. Only `install_user.sh` installs PokeeFUC.
 
 ## Keeping up with Pokee
 

@@ -42,6 +42,7 @@ Method that worked, and that should continue:
 - Trace, don't recall. Use the `MHFU_TRACE_*` switches and compare against the Freedom Unite build at the same moment.
 - Find each Freedom Unite instruction pattern in FUComplete's code. The executable's code mostly sits a few words, or 0x2FC, lower, and 0x2948 higher in places.
 - Data moved too: GameSys is at 0x089C7508, the camera object at 0x089C6CB4, the entity manager at 0x09D146E0, and the item atlas at 0x091830A0.
+- The game may hold several copies of a file it read. FUComplete reads a quest pack into a staging buffer and copies it to the list's own; a name offset belongs to one copy, so the key quests tag every copy against its own start (tagging only the staging copy crashed the game on the list's copy).
 - `profiles/mhfu/tools/databin.py` reads FUComplete's `DATA.BIN`, which is stored without the obfuscation.
 
 ## Building and running
@@ -71,18 +72,12 @@ Follow the [profile README's FUComplete section](../profiles/mhfu/README.md#fuco
 
 ## Current state
 
-The game boots, plays through the village, Guild Hall and quests, and saves on Linux. Every extra in `title.hpp` except True Attack Value is on for FUComplete. Player checks are recorded in [COMPATIBILITY.md](COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
+The game boots, plays through the village, Guild Hall and quests, and saves on Linux. Every extra in `title.hpp` except True Attack Value is on for FUComplete, including the `[Key]` marks on the quest lists. Player checks are recorded in [COMPATIBILITY.md](COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
 
 ## Open work, in order
 
-1. **Show Key Quests shows no `[Key]` marks.**
-   - The quest data is correct. FUComplete's entries 5310 to 5320 each flag their key quests; "Liver of Legend!" in 5311 is one.
-   - The cause is that `game/key_quests.cpp` learns about loaded packs through the mods module (`mods::entry_completed` in `hle_io.cpp`, `mods::entry_bytes` in `hle_media.cpp`). That module is off in the FUComplete build, so every pack is reported as "not a quest pack as traced" (`MHFU_TRACE_KEY_QUESTS=1`).
-   - A fix that lets the mods module read the archive only to spot quest packs, with mods still off, is pushed (`Directory::parse(..., plain)`, `ArchiveView(..., plain)`; `[key quests] entry N read` in the trace). It still needs:
-     - an in-game check that "[Key] Liver of Legend!" appears in the Village Chief's 2★ list. At boot all eleven packs are read and are then not in RAM (probably an integrity scan); whether the list's own load leaves the pack unchanged in RAM, as in Freedom Unite, is not known yet;
-     - a regression test.
-2. **Play-test FUComplete's options.** Field of view, the hunting horn tweak, the Guild Hall chest and drink buff, and the rest. Also check the camera tilt and the Guild Hall features, then record the results in `COMPATIBILITY.md` with the commit tested.
-3. **Overlays FUComplete patches.** The bow and bowgun aim extras stay off while game_task runs interpreted. Building libraries from the dumps (`build_overlay_dumps.sh`) after a full village-and-quest run removes most of that.
-4. **A formatting-only commit** for the files this branch touches, once feature work settles.
-5. **Android** (`android-port`, PR #3): continue there, with the same title gating.
-6. **Each Pokee sync:** merge, gate new extras, and port them one at a time as in step 4 of the build history.
+1. **Play-test FUComplete's options.** Field of view, the hunting horn tweak, the Guild Hall chest and drink buff, and the rest. Also check the camera tilt and the Guild Hall features, then record the results in `COMPATIBILITY.md` with the commit tested.
+2. **Overlays FUComplete patches.** The bow and bowgun aim extras stay off while game_task runs interpreted. Building libraries from the dumps (`build_overlay_dumps.sh`) after a full village-and-quest run removes most of that.
+3. **A formatting-only commit** for the files this branch touches, once feature work settles.
+4. **Android** (`android-port`, PR #3): continue there, with the same title gating.
+5. **Each Pokee sync:** merge, gate new extras, and port them one at a time as in step 4 of the build history.
