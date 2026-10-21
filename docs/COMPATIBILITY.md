@@ -79,7 +79,7 @@ Game runs used isolated or copied save data and finite deadlines. Captures were 
 
 ## FUComplete build (`MHFU_TITLE=FUC`)
 
-Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTool, its default configuration, `c65526f`. Checked by a player and with scripted runs:
+Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTool, its default configuration. The key quest marks were checked at `0001933`; the other rows were checked at `c65526f`, except the Guild Hall features, which the player has since used. Checked by a player and with scripted runs:
 
 | | Linux |
 | --- | --- |
@@ -94,7 +94,8 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Give Any Rarity Item | ❔ needs another hunter |
 | Layered armor | ✅ seen by the player; in the village, every part set to nothing showed the bare hunter |
 | HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ imported and played by the player; its 6127 entries read, title, loading screen, HUD and village drawn from it in a scripted run |
-| Eat in the Guild Hall, Item Sets, Change Equipment in the Guild Hall | ❔ their code signatures match FUComplete's memory and their hooks go in, in a scripted run in the village; not yet used by a player. Item Sets and Change Equipment choose with ○, as FUComplete's box does |
+| Eat in the Guild Hall, Item Sets, Change Equipment in the Guild Hall | ✅ the player has used all three; Item Sets and Change Equipment choose with ○, as FUComplete's box does. ❔ Change Equipment's sync to other hunters needs a second player |
+| Show Key Quests' `[Key]` marks | ✅ at `0001933`, seen by the player: the Village Chief's 2★ list reads *[Key] Liver of Legend!* beside the other three key quests, and the whole list scrolled without a crash. The packs are DATA.BIN entries 5310 to 5320, read plain |
 | FUComplete's options in the menu, a CONFIG.BIN other than the corpus's (File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on) | ✅ in a scripted run: written from the menu, read at the next start; the executable's changed word and lobby_task's six run interpreted, the rest compiled, at full speed in the village. ❔ each option's effect in the game |
 
 ## Updating this page
