@@ -508,11 +508,12 @@ int main(int argc, char **argv) {
         psprecomp::Runtime runtime(guest_ram);
         for (const EmbeddedNid &entry : kEmbeddedNids) runtime.nids().add(entry.library, entry.nid, entry.name);
         (void)elf.load_and_relocate(runtime.memory(), mhfu::kLoadBase);
-        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete) mhfu::fuc::watch(elf, executable, mhfu::kLoadBase);
         // generate.sh stamps the executable it translated. Registering any
         // other corpus would run that game's code at overlapping addresses.
         const bool corpus_matches = mhfu::kCorpusExecutableSha256[0] != '\0' &&
             sha256 == mhfu::kCorpusExecutableSha256;
+        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete)
+            mhfu::fuc::watch(elf, executable, mhfu::kLoadBase, corpus_matches);
         if (corpus_matches) psprecomp::register_generated_functions(runtime);
         const std::size_t generated_functions = runtime.function_count();
         mhfu::install_profile(runtime, elf, paths);

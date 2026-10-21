@@ -236,13 +236,13 @@ void test_switch() {
     reset();
     disc().clear();
     const std::vector<std::uint8_t> pack = build_pack(kQuests);
-    disc()[5345u] = pack;
+    disc()[kFirstPack + 3u] = pack;
     disc()[5346u] = std::vector<std::uint8_t>(64u, 0u); // not a pack as traced
     psprecomp::GuestMemory memory(kMemory);
     place(memory, kPackAt, pack);
 
     check(!settings.key_quests, "off by default");
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     frame(memory, &allocate_block, &disc_bytes);
     check(allocations == 0 && name_in_memory(memory, kPackAt, 2u, 0u) == "Battle of the Blos",
         "off, nothing runs and nothing is tagged");
@@ -258,7 +258,7 @@ void test_switch() {
     // The game loads the pack again elsewhere.
     const std::uint32_t again = kPackAt + 0x40000u;
     place(memory, again, pack);
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     file_loaded(1234u); // not a pack
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "[Key] Commander in the Flames", "a pack read again is tagged");
@@ -271,7 +271,7 @@ void test_switch() {
     settings.key_quests = false;
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "Commander in the Flames", "turned off, the names are put back");
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "Commander in the Flames", "and stay the game's while off");
 
@@ -286,9 +286,9 @@ void test_no_block() {
     auto &settings = mhfu::settings::current();
     reset();
     disc().clear();
-    disc()[5345u] = build_pack(kQuests);
+    disc()[kFirstPack + 3u] = build_pack(kQuests);
     psprecomp::GuestMemory memory(kMemory);
-    place(memory, kPackAt, disc()[5345u]);
+    place(memory, kPackAt, disc()[kFirstPack + 3u]);
     allocations = 0;
     settings.key_quests = true;
     frame(memory, &no_block, &disc_bytes);

@@ -107,11 +107,16 @@ count=0
 if [[ -d "$overlays" ]]; then
     mkdir -p "$prefix/overlays"
     # Replace the set, so a library from an older build is not left behind.
-    find "$prefix/overlays" -mindepth 1 -maxdepth 1 -name '*.so' -delete
+    find "$prefix/overlays" -mindepth 1 -maxdepth 1 \( -name '*.so' -o -name '*.code' \) -delete
     while IFS= read -r -d '' library; do
         cp -f "$library" "$prefix/overlays/"
         count=$((count + 1))
     done < <(find "$overlays" -mindepth 1 -maxdepth 1 -name '*.so' -print0)
+    # The code each library was generated from, so an overlay changed in a few
+    # words (FUComplete's options, a mod's patch) still runs compiled.
+    if [[ -d "$overlay_source_dir" ]]; then
+        python3 "$profile_dir/tools/overlay_code.py" "$prefix/overlays" "$overlay_source_dir" > /dev/null || true
+    fi
 fi
 cat > "$prefix/$command" << EOF
 #!/bin/sh

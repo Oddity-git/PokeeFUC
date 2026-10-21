@@ -36,6 +36,7 @@
 // for packs already loaded. Off from the start, nothing runs.
 
 #include "psprecomp/guest_memory.hpp"
+#include "title.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -45,8 +46,10 @@
 
 namespace mhfu::game::key_quests {
 
-inline constexpr std::uint32_t kFirstPack = 5342u;
-inline constexpr std::uint32_t kLastPack = 5352u;
+// FUComplete's DATA.BIN keeps the same eleven packs 32 entries lower, 5310
+// to 5320, with the same key quests flagged in each.
+inline constexpr std::uint32_t kFirstPack = kTitle == Title::FreedomUnite ? 5342u : 5310u;
+inline constexpr std::uint32_t kLastPack = kFirstPack + 10u;
 inline constexpr std::uint32_t kFlags = 3u;
 inline constexpr std::uint8_t kKeyBit = 0x04u;
 inline constexpr std::uint32_t kLanguagesWord = 0x14u;
