@@ -2097,16 +2097,18 @@ void test_hud_scale_draws() {
         const auto left = mhfu::gpu::hud_scale::place_at_edges(clock, clock_game, half_wide);
         check(left.moved && left.dx == -120.0f && clock[0].x == 4.0f && clock[2].x == 30.0f,
             "a left piece moves by the gap");
-        std::vector<Vertex> right = join(quad(398.0f, 32.0f, 474.0f, 184.0f), quad(400.0f, 40.0f, 420.0f, 60.0f));
+        // The map (316, 32)-(468, 184) in the game's pixels, fitted by half,
+        // and a mark on it.
+        std::vector<Vertex> right = join(quad(278.0f, 32.0f, 354.0f, 184.0f), quad(280.0f, 40.0f, 288.0f, 60.0f));
         const std::vector<Vertex> right_game = right;
         // A copy already at another size moves the same way, judged by the game's quads.
-        right[0].x = 410.0f;
+        right[0].x = 290.0f;
         const auto map = mhfu::gpu::hud_scale::place_at_edges(right, right_game, half_wide);
-        check(map.moved && map.dx == 120.0f && right[0].x == 530.0f && right[2].x == 594.0f && right[6].x == 520.0f,
+        check(map.moved && map.dx == 120.0f && right[0].x == 410.0f && right[2].x == 474.0f && right[6].x == 400.0f,
             "the map and a mark on it go right together");
-        std::vector<Vertex> both = join(quad(124.0f, 8.0f, 150.0f, 56.0f), quad(398.0f, 32.0f, 474.0f, 184.0f));
+        std::vector<Vertex> both = join(quad(124.0f, 8.0f, 150.0f, 56.0f), quad(278.0f, 32.0f, 354.0f, 184.0f));
         const auto split = mhfu::gpu::hud_scale::place_at_edges(both, std::vector<Vertex>(both), half_wide);
-        check(!split.moved && both[0].x == 124.0f && both[6].x == 398.0f, "a draw with pieces on both sides stays");
+        check(!split.moved && both[0].x == 124.0f && both[6].x == 278.0f, "a draw with pieces on both sides stays");
         // The item box as fitted: its left column and the body reaching the map's side.
         std::vector<Vertex> window = join(quad(196.0f, 30.0f, 210.0f, 120.0f), quad(330.0f, 30.0f, 360.0f, 60.0f));
         const auto box = mhfu::gpu::hud_scale::place_at_edges(window, std::vector<Vertex>(window), half_wide);
@@ -2115,6 +2117,20 @@ void test_hud_scale_draws() {
         std::vector<Vertex> middle = quad(200.0f, 120.0f, 280.0f, 150.0f);
         const auto stays = mhfu::gpu::hud_scale::place_at_edges(middle, std::vector<Vertex>(middle), half_wide);
         check(!stays.moved && middle[0].x == 200.0f, "a draw in the middle stays");
+        // A menu wholly on one side is still a menu. The item box's top edge,
+        // (216, 28)-(456, 36) in the game's pixels, fitted by half.
+        std::vector<Vertex> menu = quad(228.0f, 28.0f, 348.0f, 36.0f);
+        const auto menu_move = mhfu::gpu::hud_scale::place_at_edges(menu, std::vector<Vertex>(menu), half_wide);
+        check(!menu_move.moved && menu[0].x == 228.0f, "a menu wholly on one side stays");
+        // A notice's letters over the map stay too: they are not a map mark.
+        std::vector<Vertex> notice_letter = quad(320.0f, 40.0f, 325.0f, 54.0f);
+        const auto letter_move =
+            mhfu::gpu::hud_scale::place_at_edges(notice_letter, std::vector<Vertex>(notice_letter), half_wide);
+        check(!letter_move.moved && notice_letter[0].x == 320.0f, "a notice's letters stay");
+        // The item bar itself still goes to its side.
+        std::vector<Vertex> items = quad(276.0f, 200.0f, 356.0f, 264.0f);
+        const auto items_move = mhfu::gpu::hud_scale::place_at_edges(items, std::vector<Vertex>(items), half_wide);
+        check(items_move.moved && items_move.dx == 120.0f && items[0].x == 396.0f, "the item bar still goes right");
         std::vector<Vertex> unfitted = quad(8.0f, 8.0f, 60.0f, 56.0f);
         check(!mhfu::gpu::hud_scale::place_at_edges(unfitted, std::vector<Vertex>(unfitted), none).moved &&
                 unfitted[0].x == 8.0f,

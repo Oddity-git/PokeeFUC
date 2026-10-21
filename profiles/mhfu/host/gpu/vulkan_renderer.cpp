@@ -8735,7 +8735,8 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
         if (edge_owner == hud::Owner::QuestHud) {
             const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;
             std::vector<GpuVertex> edged = scale_corners ? corner_scaled : unscaled;
-            edge_move = hud_scale::place_at_edges(edged, unscaled, fit);
+            const std::uint32_t edge_texture = call.texture.enabled ? call.texture.address : 0u;
+            edge_move = hud_scale::place_at_edges(edged, unscaled, fit, edge_texture);
             if (edge_move.moved) {
                 corner_scaled = std::move(edged);
                 scale_corners = true;

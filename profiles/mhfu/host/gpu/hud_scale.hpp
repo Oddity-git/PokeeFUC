@@ -282,18 +282,27 @@ struct EdgeMove {
     float dx{};
 };
 
+// Defined below, after the rectangles: whether a quad is one of the quest HUD
+// pieces the edges move, or a menu, a notice or another draw that stays.
+[[nodiscard]] inline Piece piece_of(Rect rect, std::uint32_t texture);
+
 // Moves the draw `placed` (six vertices a quad) to its side, judged by each
 // quad of `unscaled`, the draw as the game made it before the interface
-// sizes, in fitted pixels. The draw moves only when every quad goes the same
-// way: a window or a line of text that reaches over the middle, such as a
-// menu's help box or the item box, stays in one piece where it is.
+// sizes, in fitted pixels. Only quest HUD pieces move, and only when every
+// quad goes the same way: a window, a notice or a line of text reaching over
+// the middle, such as a menu's help box or the item box, stays in one piece
+// where it is. A menu can be wholly on one side and still be a menu, so the
+// rectangles alone are not enough.
 template <typename Vertex>
-EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &unscaled, InterfaceFit fit) {
+EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &unscaled, InterfaceFit fit,
+    std::uint32_t texture = 0) {
     EdgeMove move;
     const float gap = edge_gap(fit);
     if (gap <= 0.0f || placed.size() != unscaled.size() || placed.size() < 6u) return move;
     for (std::size_t first = 0; first + 6u <= unscaled.size(); first += 6u) {
-        const EdgeSide side = edge_side(fit.to_game(quad_bounds(unscaled, first)));
+        const Rect game = fit.to_game(quad_bounds(unscaled, first));
+        if (piece_of(game, texture) == Piece::None) return EdgeMove{};
+        const EdgeSide side = edge_side(game);
         const float dx = side == EdgeSide::Left ? -gap : side == EdgeSide::Right ? gap : 0.0f;
         if (dx == 0.0f || (first > 0u && dx != move.dx)) return EdgeMove{};
         move.dx = dx;
