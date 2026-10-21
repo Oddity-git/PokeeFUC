@@ -35,12 +35,14 @@ void test_desktop_is_the_declared_defaults() {
         "the desktop defaults are Settings{} as declared");
     check(desktop.aspect == Aspect::Original && !desktop.fullscreen && desktop.mouse,
         "the desktop keeps the original aspect, a window and the mouse");
+    check(!desktop.hud_edges, "the desktop keeps the interface in the PSP's proportions");
     check(desktop.fast_loading && !desktop.unthrottled, "loads run fast and the game keeps real time otherwise");
 }
 
 void test_android() {
     const Settings android = defaults_for(Platform::Android);
     check(android.aspect == Aspect::Fill, "a phone fills its wide screen");
+    check(android.hud_edges, "a phone's interface goes out to its wide screen's sides");
     check(android.fullscreen, "a phone is full screen");
     check(!android.mouse, "a phone does not capture a mouse");
     check(android.analog_camera && android.right_stick == RightStick::Camera,
@@ -2070,6 +2072,51 @@ void test_hud_scale_draws() {
     const Rect both = mhfu::gpu::hud_scale::united({10.0f, 20.0f, 30.0f, 40.0f}, {35.0f, 5.0f, 25.0f, 15.0f});
     check(both.x0 == 10.0f && both.y0 == 5.0f && both.x1 == 35.0f && both.y1 == 40.0f,
         "united holds both rectangles, either way round");
+
+    // The interface at the screen's sides: a half-wide fit leaves a gap of
+    // 120 game pixels each side. Each piece goes to its own side by the game's
+    // rectangle, so a bar's end cap past the middle stays with its bar.
+    using mhfu::gpu::hud_scale::EdgeSide;
+    using mhfu::gpu::hud_scale::edge_side;
+    check(edge_side({8.0f, 8.0f, 60.0f, 56.0f}) == EdgeSide::Left, "the quest clock goes left");
+    check(edge_side({320.0f, 9.0f, 344.0f, 21.0f}) == EdgeSide::Left, "health's end cap goes left with its bar");
+    check(edge_side({316.0f, 32.0f, 468.0f, 184.0f}) == EdgeSide::Right, "the area map goes right");
+    check(edge_side({276.0f, 70.0f, 336.0f, 130.0f}) == EdgeSide::Right,
+        "the window shown as a monster is found goes right with the map");
+    check(edge_side({312.0f, 200.0f, 472.0f, 264.0f}) == EdgeSide::Right, "the item bar goes right");
+    check(edge_side({312.0f, 184.0f, 472.0f, 200.0f}) == EdgeSide::Right, "a bowgun's ammo bar goes right");
+    check(edge_side({8.0f, 230.0f, 48.0f, 262.0f}) == EdgeSide::Left, "a piece in the bottom-left corner goes left");
+    check(edge_side({160.0f, 120.0f, 320.0f, 150.0f}) == EdgeSide::Centre, "a notice across the middle stays");
+    check(mhfu::gpu::hud_scale::edge_gap(none) == 0.0f && mhfu::gpu::hud_scale::edge_gap(half_wide) == 120.0f &&
+            mhfu::gpu::hud_scale::edge_gap(InterfaceFit{1.0f, 0.5f}) == 0.0f,
+        "only a screen wider than the PSP's leaves a gap at the sides");
+    {
+        // The draws as fitted: the clock at x 124-150, the map at x 398-474.
+        std::vector<Vertex> clock = quad(124.0f, 8.0f, 150.0f, 56.0f);
+        const std::vector<Vertex> clock_game = clock;
+        const auto left = mhfu::gpu::hud_scale::place_at_edges(clock, clock_game, half_wide);
+        check(left.moved && left.uniform && left.dx == -120.0f && clock[0].x == 4.0f && clock[2].x == 30.0f &&
+                left.bounds.x0 == 4.0f && left.bounds.x1 == 30.0f,
+            "a left piece moves by the gap, with its scissor");
+        std::vector<Vertex> both = join(quad(124.0f, 8.0f, 150.0f, 56.0f), quad(398.0f, 32.0f, 474.0f, 184.0f));
+        const std::vector<Vertex> both_game = both;
+        // A copy already at another size moves the same way, judged by the game's quads.
+        both[6].x = 410.0f;
+        const auto split = mhfu::gpu::hud_scale::place_at_edges(both, both_game, half_wide);
+        check(split.moved && !split.uniform && both[0].x == 4.0f && both[6].x == 530.0f && both[8].x == 594.0f &&
+                split.bounds.x0 == 4.0f && split.bounds.x1 == 594.0f,
+            "pieces on both sides go their own ways, and the bounds take in both");
+        std::vector<Vertex> middle = quad(200.0f, 120.0f, 280.0f, 150.0f);
+        const auto stays = mhfu::gpu::hud_scale::place_at_edges(middle, std::vector<Vertex>(middle), half_wide);
+        check(!stays.moved && middle[0].x == 200.0f, "a draw in the middle stays");
+        std::vector<Vertex> unfitted = quad(8.0f, 8.0f, 60.0f, 56.0f);
+        check(!mhfu::gpu::hud_scale::place_at_edges(unfitted, std::vector<Vertex>(unfitted), none).moved &&
+                unfitted[0].x == 8.0f,
+            "with no gap nothing moves");
+        std::vector<Vertex> short_copy = quad(124.0f, 8.0f, 150.0f, 56.0f);
+        check(!mhfu::gpu::hud_scale::place_at_edges(short_copy, std::vector<Vertex>{}, half_wide).moved,
+            "a draw whose game copy does not match is left alone");
+    }
 
     // A name over a hunter shrinks toward the point the game placed it, and
     // the bounds it took come back for the scissor.

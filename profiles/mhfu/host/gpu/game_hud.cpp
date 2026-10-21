@@ -928,6 +928,9 @@ void frame(psprecomp::Runtime &runtime, std::uint64_t presented_frames) {
     // menu with a panel in that piece's corner is resized with it.
     const settings::Settings::InterfaceScale &hud = settings::current().hud;
     const bool sized = hud.names != 100u || hud.map != 100u || hud.health != 100u || hud.item_bar != 100u;
+    // The interface at the screen's sides moves the quest HUD only, so it too
+    // has to tell the HUD from a menu.
+    const bool edges = settings::current().hud_edges && settings::current().aspect == settings::Aspect::Fill;
     if (s.capture.requested) {
         s.capture.at_flip(s.frame);
         std::cout << "[capture] tracing the 2D packets of frames " << s.capture.first << "-"
@@ -935,7 +938,7 @@ void frame(psprecomp::Runtime &runtime, std::uint64_t presented_frames) {
                   << s.capture.first + 1u << "-" << s.capture.first + CaptureSchedule::kFrames << std::endl;
     }
     const bool wanted =
-        s.hidden || s.trace_first != ~0ull || s.capture.pending() || sized || s.names_wanted || s.cover_wanted;
+        s.hidden || s.trace_first != ~0ull || s.capture.pending() || sized || edges || s.names_wanted || s.cover_wanted;
     if (!s.installed && wanted && s.available) {
         s.installed = true;
         if (!install_all(runtime, std::make_index_sequence<kWrapped>{})) {

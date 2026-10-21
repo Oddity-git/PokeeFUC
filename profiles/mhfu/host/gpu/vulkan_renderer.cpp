@@ -8722,6 +8722,25 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
             }
         }
     }
+    // video.hud_edges: under Fill on a wide screen, each quest HUD piece goes
+    // out to its side of the screen (hud_scale::place_at_edges), after its
+    // size and the sharpness cut. Only game_task's own draws move: a menu, a
+    // name over a hunter, or a draw before the HUD can be told apart stays.
+    hud_scale::EdgeMove edge_move;
+    if (fit.any() && through_quads && !named.is_name && framebuffer_source.target == nullptr &&
+        impl.shows(call.target.color_address) && settings::current().hud_edges) {
+        const hud::Owner edge_owner =
+            hud_owner != hud::Owner::Unknown ? hud_owner : hud::owner_of(call.command_address, call.call_return);
+        if (edge_owner == hud::Owner::QuestHud) {
+            const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;
+            std::vector<GpuVertex> edged = scale_corners ? corner_scaled : unscaled;
+            edge_move = hud_scale::place_at_edges(edged, unscaled, fit);
+            if (edge_move.moved) {
+                corner_scaled = std::move(edged);
+                scale_corners = true;
+            }
+        }
+    }
     // Timed by hand: the variables this part sets are used after it, and a
     // draw that runs out of frame space returns from inside it untimed.
     const bool split_vertices = perf::split_enabled();
@@ -9110,6 +9129,18 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
         static_cast<float>(sx1), static_cast<float>(sy1), static_cast<float>(sx2 + 1u), static_cast<float>(sy2 + 1u)};
     fit.apply(edges[0], edges[1]);
     fit.apply(edges[2], edges[3]);
+    // A draw moved to one side takes its scissor and its map with it; one whose
+    // quads went different ways has its scissor take in where they landed.
+    if (edge_move.moved && edge_move.uniform) {
+        edges[0] += edge_move.dx;
+        edges[2] += edge_move.dx;
+        if (map_bounds) {
+            map_bounds->x0 += edge_move.dx;
+            map_bounds->x1 += edge_move.dx;
+        }
+    } else if (edge_move.moved) {
+        hud_scale::include_in_scissor(edges[0], edges[1], edges[2], edges[3], edge_move.bounds);
+    }
     if (map_bounds) hud_scale::include_in_scissor(edges[0], edges[1], edges[2], edges[3], *map_bounds);
     if (name_bounds) hud_scale::include_in_scissor(edges[0], edges[1], edges[2], edges[3], *name_bounds);
     const auto to_pixels = [](float edge, float scale, std::uint32_t size) {

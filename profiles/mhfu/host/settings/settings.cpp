@@ -227,6 +227,10 @@ const std::vector<Field> &fields() {
             [](const Settings &s) { return std::string(s.aspect == Aspect::Stretch ? "0" : "1"); }, nullptr},
         {"video.aspect", nullptr, [](Settings &s, const std::string &t) { return kAspects.parse(t, s.aspect); },
             [](const Settings &s) { return kAspects.format(s.aspect); }, nullptr},
+        {"video.hud_edges", "MHFU_HUD_EDGES",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.hud_edges); },
+            [](const Settings &s) { return std::string(s.hud_edges ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.hud_edges = variable_flag(t); }},
         BOOL_FIELD("video.sharp_screen", sharp_screen),
         BOOL_FIELD("video.sharp_textures", sharp_textures),
         {"video.texture_pack", "MHFU_TEXTURE_PACK",
@@ -1045,6 +1049,7 @@ Settings defaults_for(Platform platform) {
     Settings values{};
     if (platform == Platform::Android) {
         values.aspect = Aspect::Fill;
+        values.hud_edges = true;
         values.fullscreen = true;
         values.mouse = false;
     }

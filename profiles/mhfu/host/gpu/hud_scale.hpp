@@ -239,6 +239,74 @@ struct InterfaceFit {
     }
 };
 
+// Under Fill on a screen wider than the PSP's, the fit leaves the quest
+// interface in a PSP-shaped box in the middle. With video.hud_edges each
+// piece goes out to its own side of the screen instead, by the gap the fit
+// left there: the clock, the bars and the party list to the left, the map
+// and the item bar to the right. What sits in the middle, such as a notice
+// across the screen, stays. A piece is placed by the game's rectangle of
+// each quad, before any interface size, so a bar's end cap past the middle
+// stays with its bar.
+enum class EdgeSide { Centre, Left, Right };
+
+[[nodiscard]] inline EdgeSide edge_side(Rect game) {
+    const Rect r = normalized(game);
+    // The map, its marks and the window shown as a monster is found.
+    if (r.x0 >= kMapLeft - 48.0f && r.y0 >= kMapTop - 8.0f && r.y1 <= kMapBottom + 16.0f) return EdgeSide::Right;
+    // Health and stamina with their end caps, which reach past the middle.
+    if (r.x0 >= kVitalLeft - 4.0f && r.y1 <= kVitalBottom + 1.0f) return EdgeSide::Left;
+    // The item bar, its name, and a bowgun's ammo or a bow's coatings above it.
+    if (r.x0 >= kItemLeft - 16.0f && r.y0 >= kBowgunTop) return EdgeSide::Right;
+    const float centre = 0.5f * (r.x0 + r.x1);
+    if (centre < 176.0f) return EdgeSide::Left;
+    if (centre > 304.0f) return EdgeSide::Right;
+    return EdgeSide::Centre;
+}
+
+// How far a piece moves to its side, in the game's 480 pixels: the gap
+// between the fitted interface and the screen's edge. 0 when the screen is
+// not wider than the PSP's.
+[[nodiscard]] inline float edge_gap(InterfaceFit fit) {
+    return fit.x > 0.0f && fit.x < 1.0f ? InterfaceFit::kCentreX * (1.0f - fit.x) : 0.0f;
+}
+
+// What place_at_edges did. `uniform`: every quad moved by `dx`, so the
+// draw's scissor can move with it; otherwise its quads went different ways
+// and `bounds` is where they landed.
+struct EdgeMove {
+    bool moved{};
+    bool uniform{};
+    float dx{};
+    Rect bounds{};
+};
+
+// Moves each quad of `placed` (six vertices each) to its side, judged by the
+// same quad of `unscaled`, the draw as the game made it before the interface
+// sizes, in fitted pixels.
+template <typename Vertex>
+EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &unscaled, InterfaceFit fit) {
+    EdgeMove move;
+    const float gap = edge_gap(fit);
+    if (gap <= 0.0f || placed.size() != unscaled.size() || placed.size() < 6u) return move;
+    bool first_quad = true;
+    move.uniform = true;
+    for (std::size_t first = 0; first + 6u <= placed.size(); first += 6u) {
+        const EdgeSide side = edge_side(fit.to_game(quad_bounds(unscaled, first)));
+        const float dx = side == EdgeSide::Left ? -gap : side == EdgeSide::Right ? gap : 0.0f;
+        if (first_quad) {
+            move.dx = dx;
+            first_quad = false;
+        } else if (dx != move.dx) {
+            move.uniform = false;
+        }
+        if (dx == 0.0f) continue;
+        move.moved = true;
+        for (std::size_t i = 0; i < 6u; ++i) placed[first + i].x += dx;
+    }
+    if (move.moved) move.bounds = bounds_of(placed);
+    return move;
+}
+
 // The large area-map tile, (316, 32)-(468, 184). The small window is
 // travelling_map_window(); it counts only while the quest HUD is up and the
 // quad samples kAreaMapTexture. The shop and the return-to-town prompt draw
