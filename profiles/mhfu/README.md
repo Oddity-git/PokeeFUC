@@ -45,15 +45,25 @@ The encrypted header uses tag `0xC0CB167C`. `generate.sh` translates the residen
 
 [FUComplete](https://github.com/FUComplete/Patch) is not a Freedom Unite mod: it patches **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) with an English translation, built-in event quests and its own mod loader. It is a different executable, so it gets a build of its own, configured with `-DMHFU_TITLE=FUC`:
 
+A Linux release (Flatpak and portable tarball) is on the fork's
+[releases page](https://github.com/Oddity-git/PokeeFUC/releases). To build it
+yourself:
+
 ```bash
 cmake -S . -B out/fuc -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSPRECOMP_PROFILE=mhfu -DMHFU_TITLE=FUC
 cmake --build out/fuc --target Pokee -j 2
-out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"          # the image FUCTool made
-MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.ELF" profiles/mhfu/scripts/generate.sh out/fuc
-cmake -S . -B out/fuc && cmake --build out/fuc --target Pokee -j 2
-profiles/mhfu/scripts/build_overlays.sh out/fuc                      # optional, long
-profiles/mhfu/packaging/linux/install_user.sh out/fuc                # Linux: add PokeeFUC to the app menu
+out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"   # the image FUCTool made
+out/fuc/bin/Pokee                                       # first start: writes EBOOT.FUC.ELF; quit
+MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.FUC.ELF" profiles/mhfu/scripts/generate.sh out/fuc
+cmake --build out/fuc --target Pokee -j 2
+profiles/mhfu/scripts/build_overlays.sh out/fuc                      # about 40 minutes, resumable
+profiles/mhfu/packaging/linux/install_user.sh out/fuc --overlays out/fuc/bin/overlays
 ```
+
+The first start is needed before generating: FUComplete's loader rewrites the
+executable as the game starts, and writes the result as `EBOOT.FUC.ELF` in the
+data folder. The corpus must come from that file, not from the disc's
+executable.
 
 **FUComplete's changes to the game's code.** Its loader rewrites words of the executable's code when the game starts: jumps from the file I/O into its own code for the file replacer, and the save keys for its Save Region option. Compiled code runs the words it was generated from, so the corpus has to be generated from the executable as the loader leaves it. The first start finds the changes, writes that executable as `EBOOT.FUC.ELF` beside `EBOOT.ELF`, and prints `[fuc] FUComplete's loader changed N words of the game's code`. Generate again from it and rebuild:
 
