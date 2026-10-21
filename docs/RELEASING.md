@@ -340,7 +340,7 @@ cmake --build out/android-fuc -j 2
 profiles/mhfu/scripts/release_android.sh out/android-fuc
 ```
 
-The same key can sign both apps. The APK holds code recompiled from the game: a PokeeFUC APK built from your FUComplete image is for your own devices, not for publishing.
+The same key can sign both apps. The APK holds code recompiled from the game: the fork publishes PokeeFUC's Android test build on its GitHub releases, with the same terms as its Linux builds (no game data inside; players supply their own patched image). Keep the release key and its password private and backed up: Android installs an update only over the same key, and uninstalling deletes saves.
 
 ### What the script does
 
