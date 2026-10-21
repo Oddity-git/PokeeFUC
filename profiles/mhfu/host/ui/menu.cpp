@@ -1874,12 +1874,14 @@ void Menu::mods() {
                 settings::save();
             }
         }
-        if (toggle_row("Show Key Quests", s.key_quests,
-                options_for("game.key_quests",
-                    "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
-                    "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
-            s.key_quests = !s.key_quests;
-            settings::save();
+        if constexpr (kKeyQuests) {
+            if (toggle_row("Show Key Quests", s.key_quests,
+                    options_for("game.key_quests",
+                        "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
+                        "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
+                s.key_quests = !s.key_quests;
+                settings::save();
+            }
         }
     }
     mods_page(back_);

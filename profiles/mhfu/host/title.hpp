@@ -82,10 +82,12 @@ inline constexpr bool kItemSets = true;
 // loader and archive rows.
 inline constexpr bool kHallEquipment = true;
 
-// Not yet ported to FUComplete, which has its own True Raw display in
-// CONFIG.BIN: True Attack Value (game/true_attack.cpp) and the key quest marks
-// (game/key_quests.cpp) read Freedom Unite's equipment screens and quest lists.
+// The key quest marks (game/key_quests.cpp): the quest packs, at their own
+// DATA.BIN entries in each title.
+inline constexpr bool kKeyQuests = true;
+// Not ported to FUComplete, which has its own True Raw display in CONFIG.BIN:
+// True Attack Value (game/true_attack.cpp) reads Freedom Unite's equipment
+// screens.
 inline constexpr bool kTrueAttack = kFreedomUniteExtras;
-inline constexpr bool kKeyQuests = kFreedomUniteExtras;
 
 } // namespace mhfu
