@@ -59,6 +59,7 @@ FUComplete reads `ms0:/PSP/SAVEDATA/FUCDAT/CONFIG.BIN` at boot (64 bytes; option
 - **Overlays**: an image no library matches exactly is matched against each library's own code (`<library>.code`, written by `tools/overlay_code.py`, run by `install_user.sh`). The library of the same overlay name and base that differs least (≤ 1/64 of its words) is installed, and the units around the differing words are interpreted the same way.
 - `MHFU_FUC_INTERPRET_CHANGES=0` turns both off. With the options File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on, one executable word (FoV, 0x08886DA4) and six `lobby_task` words differ.
 - Options that patch code a feature hooks make that feature's signature fail, and the feature stays off. Guild Hall Full Chest does that to Pokee's Change Equipment, which is intended.
+- **Field of view** is FUComplete's option for the player's view in a quest, and its code word is read by the loader at boot. Pokee also has Video > Field of view (`video.fov_scale`, `MHFU_FOV_SCALE`), which scales the camera's field of view in the projection update, so it changes while the game runs and in the village too; FUComplete's own option stays at the next start.
 
 ## Testing
 
