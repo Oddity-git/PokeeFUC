@@ -5,7 +5,10 @@
 #include "psprecomp/runtime.hpp"
 
 #include <bit>
+#include <cstdlib>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 namespace {
 using namespace mhfu::camera;
@@ -49,6 +52,29 @@ struct Fixture {
     }
     [[nodiscard]] const psprecomp::GuestMemory &memory() const { return runtime.memory(); }
 };
+
+// MHFU_TRACE_FOV=1 prints the camera's field of view when it changes, and only
+// then. It is read once, at the first frame, so this runs first.
+void test_field_of_view_trace() {
+    setenv("MHFU_TRACE_FOV", "1", 1);
+    Fixture f;
+    check(prepare_game_aspect(f.runtime), "the matching game code is accepted");
+    std::ostringstream out;
+    std::streambuf *const saved = std::cout.rdbuf(out.rdbuf());
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string first = out.str();
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string unchanged = out.str();
+    write_float(f.runtime.memory(), kCamera + 0xCu, 1.2f);
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string changed = out.str();
+    std::cout.rdbuf(saved);
+    unsetenv("MHFU_TRACE_FOV");
+    check(first.find("[fov] camera 0x08900000 fov 0.872222") != std::string::npos,
+        "the trace names the camera and its field of view");
+    check(unchanged == first, "an unchanged field of view prints nothing");
+    check(changed.find("fov 1.2") != std::string::npos, "a changed one prints again");
+}
 
 void test_own_shape_writes_nothing() {
     Fixture f;
@@ -115,6 +141,7 @@ int main() {
         std::cout << "skipped: not available for this build's title\n";
         return 0;
     }
+    test_field_of_view_trace();
     test_own_shape_writes_nothing();
     test_wide_and_back();
     test_camera_set_up_later();

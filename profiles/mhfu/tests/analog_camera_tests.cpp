@@ -489,7 +489,12 @@ void test_hook_waits_for_the_option() {
         !f.runtime.invoke_chained_direct<&original, 29u, 1u, helper>(f.ctx), "turning the option on installs the hook");
 }
 
-void projection_stand_in(psprecomp::Runtime &, psprecomp::AllegrexContext &) {}
+float projection_saw{};
+
+// Records the field of view the game's projection update would build from.
+void projection_stand_in(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    projection_saw = std::bit_cast<float>(runtime.memory().load32(ctx.gpr[4] + 0x0Cu));
+}
 
 void test_projection_hook_for_field_of_view() {
     Fixture f;
@@ -497,9 +502,18 @@ void test_projection_hook_for_field_of_view() {
     f.runtime.memory().store32(kProjectionUpdate + 0x0Cu, 0xC4810010u); // lwc1 f1,0x10(a0)
     f.runtime.memory().store32(kProjectionUpdate + 0x10u, 0xC480000Cu); // lwc1 f0,0xc(a0)
     mhfu::settings::current().fov_scale = 1.25f;
+    setenv("MHFU_TRACE_FOV", "1", 1); // says when the update is wrapped
     f.flip(0.0f, 0.0f);
+    unsetenv("MHFU_TRACE_FOV");
     check(f.runtime.function_at(kProjectionUpdate) != &projection_stand_in,
         "a field of view scale wraps the projection update");
+    // The wrapper scales the value the game wrote, then runs the update.
+    write_float(f.runtime.memory(), camera_address + 0x0Cu, 0.8f);
+    psprecomp::AllegrexContext ctx{};
+    ctx.gpr[4] = camera_address;
+    projection_saw = 0.0f;
+    f.runtime.function_at(kProjectionUpdate)(f.runtime, ctx);
+    check(std::abs(projection_saw - 1.0f) < 1.0e-6f, "the projection is built from the scaled field of view");
     mhfu::settings::current().fov_scale = 1.0f;
 }
 
