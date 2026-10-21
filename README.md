@@ -1,6 +1,6 @@
 # PokeeFUC
 
-PokeeFUC runs **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) patched with [FUComplete](https://github.com/FUComplete/Patch) natively on Linux, by recompiling the game's PSP code to C++. It is the FUComplete build of [Pokee](https://github.com/LocalBBQ/Pokee), which runs *Monster Hunter Freedom Unite* (USA); the base project and its build are described [below](#the-base-project).
+PokeeFUC runs **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) patched with [FUComplete](https://github.com/FUComplete/Patch) natively on Linux, by recompiling the game's PSP code to C++. An Android arm64 build is published as a test build. It is the FUComplete build of [Pokee](https://github.com/LocalBBQ/Pokee), which runs *Monster Hunter Freedom Unite* (USA); the base project and its build are described [below](#the-base-project).
 
 > **This project does not include the game.** You need your own legally obtained copy of Monster Hunter Portable 2nd G, and you must patch it with FUComplete yourself.
 
@@ -13,7 +13,7 @@ The FUComplete project provides the patch and its own instructions; it is separa
 
 ## Install on Linux
 
-Linux is the platform tested so far. Windows and macOS are not built yet; an Android port is in progress on its own branch.
+Linux is the platform tested on a desktop; an Android test build is [below](#install-on-android). Windows and macOS are not built yet.
 
 ### Release
 
@@ -56,6 +56,12 @@ profiles/mhfu/packaging/linux/install_user.sh out/fuc --overlays out/fuc/bin/ove
 The corpus is generated from `EBOOT.FUC.ELF`, not from the disc's executable: FUComplete's loader rewrites words of the executable at start-up, and compiled code runs the words it was generated from. The first start writes the loader's result as `EBOOT.FUC.ELF`; from then on the build starts from it.
 
 Full details: [the FUComplete section of the profile README](profiles/mhfu/README.md#fucomplete-work-in-progress) and [the port handoff](docs/FUCOMPLETE_HANDOFF.md).
+
+## Install on Android
+
+An arm64 APK for Android 10 or later with Vulkan 1.1 is on the same [releases page](https://github.com/Oddity-git/PokeeFUC/releases). Install it with `adb install -r` or by opening it on the phone. It installs beside the standard Pokee app, keeps its data across updates signed with the same key, and asks for the FUComplete-patched image on its first start.
+
+Do not uninstall an earlier PokeeFUC APK to update it: uninstalling deletes its data, saves included. This build is a **test build** and has been checked on the emulator, not yet on a phone.
 
 ## Status
 
