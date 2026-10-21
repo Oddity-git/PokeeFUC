@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -26,8 +27,9 @@ void check(bool condition, const char *message) {
 
 namespace fc = mhfu::fuc_config;
 
-const fc::Option *find(std::string_view label) {
-    for (const fc::Option &option : fc::options())
+// The span is the caller's, so the pointer into it outlives this call.
+const fc::Option *find(const std::span<const fc::Option> &all, std::string_view label) {
+    for (const fc::Option &option : all)
         if (label == option.label) return &option;
     return nullptr;
 }
@@ -54,18 +56,19 @@ void test_options() {
         previous = option.offset + option.bytes;
         check(!option.choices.empty() && option.description != nullptr, "each has choices and a description");
     }
-    const fc::Option *region = find("Save Region");
+    const std::span<const fc::Option> all = fc::options();
+    const fc::Option *region = find(all, "Save Region");
     check(region != nullptr && region->locked, "Save Region is shown but locked");
-    for (const fc::Option &option : fc::options())
-        check(!option.locked || &option == region, "and it is the only locked one");
+    for (const fc::Option &option : all) check(!option.locked || &option == region, "and it is the only locked one");
 }
 
 void test_values() {
     const std::vector<std::uint8_t> bytes = shipped();
-    const fc::Option *view = find("Field of View");
-    const fc::Option *height = find("Starting Camera Height");
-    const fc::Option *drink = find("Guild Hall Drink Buff");
-    const fc::Option *region = find("Save Region");
+    const std::span<const fc::Option> all = fc::options();
+    const fc::Option *view = find(all, "Field of View");
+    const fc::Option *height = find(all, "Starting Camera Height");
+    const fc::Option *drink = find(all, "Guild Hall Drink Buff");
+    const fc::Option *region = find(all, "Save Region");
     check(view != nullptr && height != nullptr && drink != nullptr && region != nullptr, "the options are found");
     check(fc::value(bytes, *view) == 0x5F3Fu && fc::choice(bytes, *view) == 0, "the default field of view");
     check(fc::choice(bytes, *height) == 3, "camera height 4");
@@ -84,7 +87,7 @@ void test_values() {
     fc::set(changed, *drink, 9u);
     check(changed[0x1B] == 0x01u, "a choice out of range changes nothing");
     changed[0x17] = 0x7Fu;
-    check(fc::choice(changed, *find("Minimap Size")) == -1, "a value no choice has reads as none of them");
+    check(fc::choice(changed, *find(all, "Minimap Size")) == -1, "a value no choice has reads as none of them");
 }
 
 void test_files() {
