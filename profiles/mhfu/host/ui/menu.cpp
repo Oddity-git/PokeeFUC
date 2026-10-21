@@ -110,10 +110,6 @@ int cycle(int value, int delta, int count) {
     return ((value + delta) % count + count) % count;
 }
 
-float gain(const settings::Settings &s) {
-    return s.mute ? 0.0f : static_cast<float>(s.volume) / 100.0f;
-}
-
 // The menu's pages, in the order of kTabs. settings.ini keeps a page by
 // name, so the order can change between versions.
 enum class Page { Video, Audio, Controls, Game, Network, Mods, System };
@@ -600,13 +596,17 @@ void Menu::video() {
         }
     }
     {
-        static const char *const kPerf[] = {"Off", "Overlay", "Overlay and log", "Log only"};
+        static const char *const kPerf[] = {
+            "Off", "Overlay", "Overlay and log", "Log only", "Compact", "Compact and log"};
+        constexpr int kCount = static_cast<int>(sizeof(kPerf) / sizeof(kPerf[0]));
         const int current = static_cast<int>(s.perf);
         if (const int delta = choice_row("Performance", kPerf[current],
                 options_for("video.performance",
                     "Frame times and speed in the top-left corner, and a [perf] line "
-                    "per second on the console. F3 shows or hides the overlay."))) {
-            s.perf = static_cast<settings::PerfDisplay>(cycle(current, delta, 4));
+                    "per second on the console. Compact is one line in the bottom-left corner: "
+                    "frames shown, the game's frame rate and its speed, green at full speed. "
+                    "F3 shows or hides the overlay."))) {
+            s.perf = static_cast<settings::PerfDisplay>(cycle(current, delta, kCount));
             renderer().set_perf_overlay(perf::options().overlay);
             settings::save();
         }
@@ -684,21 +684,28 @@ void Menu::audio() {
     if (slider_row(
             "Volume", volume, 0, 100, 5, "%d%%", locked("audio.volume", "Loudness of everything the game plays."))) {
         s.volume = static_cast<std::uint32_t>(volume);
-        sink.set_volume(gain(s));
+        sink.apply_settings();
         settings::save();
     }
     if (toggle_row("Mute", s.mute, locked("audio.mute", "Silence the game without losing the volume setting."))) {
         s.mute = !s.mute;
-        sink.set_volume(gain(s));
+        sink.apply_settings();
+        settings::save();
+    }
+    if (toggle_row("Mute in background", s.background_mute,
+            locked("audio.background_mute", "Silence the game while its window is not the one in front."))) {
+        s.background_mute = !s.background_mute;
+        sink.apply_settings();
         settings::save();
     }
     info_row(
         "Device", device ? (paused_ ? "44100 Hz stereo, paused while this menu is open" : "44100 Hz stereo") : "None");
     ImGui::Dummy({0.0f, font_gap()});
-    if (button_row("Restore audio defaults", {!device, {}, "Full volume, not muted."})) {
+    if (button_row("Restore audio defaults", {!device, {}, "Full volume, not muted, heard in the background."})) {
         s.volume = settings::defaults().volume;
         s.mute = settings::defaults().mute;
-        sink.set_volume(gain(s));
+        s.background_mute = settings::defaults().background_mute;
+        sink.apply_settings();
         settings::save();
     }
 }
@@ -947,6 +954,14 @@ void Menu::controls() {
         s.trigger = static_cast<float>(trigger) / 100.0f;
         settings::save();
     }
+    if (toggle_row("Gamepad in background", s.background_gamepad,
+            options_for("input.background_gamepad",
+                "Let the game read the gamepad while its window is not the one in front. Another "
+                "game open at the same time may read the same presses. The keyboard and mouse "
+                "only ever reach the window in front."))) {
+        s.background_gamepad = !s.background_gamepad;
+        settings::save();
+    }
     {
         static const char *const kModes[] = {"Camera", "D-pad", "Off"};
         const int current = static_cast<int>(s.right_stick);
@@ -966,14 +981,25 @@ void Menu::controls() {
     {
         RowOptions o = options_for("input.analog_camera",
             "Turn and tilt the quest camera as far as the stick is pushed, instead of the "
-            "game's fixed-speed turn and vertical presets. Release holds the angle; the D-pad "
-            "and recentre return to the game's camera. Off is the game's own camera, untouched.");
+            "game's fixed-speed turn and vertical presets. Release holds the angle; a recentre "
+            "returns to the game's camera. Off is the game's own camera, untouched.");
         if (!camera && !o.disabled) {
             o.disabled = true;
             o.note = "Camera stick is not the camera";
         }
         if (toggle_row("Analog camera", s.analog_camera, o)) {
             s.analog_camera = !s.analog_camera;
+            settings::save();
+        }
+        o = options_for("input.dpad_camera",
+            "Let the D-pad also turn the game's camera left and right and step its height, "
+            "alongside the analog camera. Off, the D-pad leaves the camera to the stick.");
+        if (!s.analog_camera && !o.disabled) {
+            o.disabled = true;
+            o.note = "Analog camera is off";
+        }
+        if (toggle_row("D-pad camera", s.dpad_camera, o)) {
+            s.dpad_camera = !s.dpad_camera;
             settings::save();
         }
         o = options_for("input.camera_speed", "How fast the camera turns at full deflection, in degrees a second.");
@@ -1090,9 +1116,11 @@ void Menu::controls() {
         restore("input.confirm", s.confirm_south, d.confirm_south);
         restore("input.dead_zone", s.dead_zone, d.dead_zone);
         restore("input.trigger", s.trigger, d.trigger);
+        restore("input.background_gamepad", s.background_gamepad, d.background_gamepad);
         restore("input.right_stick", s.right_stick, d.right_stick);
         restore("input.right_stick_zone", s.right_stick_zone, d.right_stick_zone);
         restore("input.analog_camera", s.analog_camera, d.analog_camera);
+        restore("input.dpad_camera", s.dpad_camera, d.dpad_camera);
         restore("input.camera_speed", s.camera_speed, d.camera_speed);
         restore("input.aim_speed", s.aim_speed, d.aim_speed);
         restore("input.invert_camera_x", s.invert_camera_x, d.invert_camera_x);
@@ -1215,6 +1243,16 @@ void Menu::game() {
                     "slots filled has no room for it. Off: the game's own bar, which starts on the first item and "
                     "wraps from the last item to the first."))) {
             s.empty_item_slot = !s.empty_item_slot;
+            settings::save();
+        }
+    }
+    if constexpr (kTrueAttack) {
+        if (toggle_row("True Attack Value", s.true_attack,
+                options_for("game.true_attack",
+                    "On: the equipment screens show a weapon's attack as the game counts it, without the "
+                    "class factor (a great sword's 672 shows as 140), as FUComplete's True Raw does. Damage is "
+                    "the same either way. Off (default): the game's own numbers."))) {
+            s.true_attack = !s.true_attack;
             settings::save();
         }
     }
@@ -1835,6 +1873,13 @@ void Menu::mods() {
                 s.hall_meal = !s.hall_meal;
                 settings::save();
             }
+        }
+        if (toggle_row("Show Key Quests", s.key_quests,
+                options_for("game.key_quests",
+                    "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
+                    "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
+            s.key_quests = !s.key_quests;
+            settings::save();
         }
     }
     mods_page(back_);

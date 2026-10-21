@@ -112,7 +112,8 @@ const Names<PresentMode> kPresentModes{
     {{PresentMode::Fifo, "vsync"}, {PresentMode::Mailbox, "mailbox"}, {PresentMode::Immediate, "immediate"}}};
 const Names<Aspect> kAspects{{{Aspect::Original, "original"}, {Aspect::Stretch, "stretch"}, {Aspect::Fill, "fill"}}};
 const Names<PerfDisplay> kPerfDisplays{{{PerfDisplay::Off, "off"}, {PerfDisplay::Overlay, "overlay"},
-    {PerfDisplay::OverlayAndLog, "overlay+log"}, {PerfDisplay::Log, "log"}}};
+    {PerfDisplay::OverlayAndLog, "overlay+log"}, {PerfDisplay::Log, "log"}, {PerfDisplay::Compact, "compact"},
+    {PerfDisplay::CompactAndLog, "compact+log"}}};
 const Names<RightStick> kRightSticks{
     {{RightStick::Camera, "camera"}, {RightStick::DPad, "dpad"}, {RightStick::Off, "off"}}};
 const Names<LockOnStyle> kLockOnStyles{{{LockOnStyle::Follow, "follow"}, {LockOnStyle::Focus, "focus"}}};
@@ -288,6 +289,8 @@ const std::vector<Field> &fields() {
                 // `1` has always meant the overlay and the log, `log` the log only.
                 if (std::strcmp(t, "log") == 0)
                     s.perf = PerfDisplay::Log;
+                else if (std::strcmp(t, "compact") == 0 || std::strcmp(t, "compact+log") == 0)
+                    kPerfDisplays.parse(t, s.perf);
                 else
                     s.perf = *t != '\0' && variable_flag(t) ? PerfDisplay::OverlayAndLog : PerfDisplay::Off;
             }},
@@ -356,6 +359,7 @@ const std::vector<Field> &fields() {
         {"audio.volume", nullptr, [](Settings &s, const std::string &t) { return parse_uint(t, 0u, 100u, s.volume); },
             [](const Settings &s) { return std::to_string(s.volume); }, nullptr},
         BOOL_FIELD("audio.mute", mute),
+        BOOL_FIELD("audio.background_mute", background_mute),
         {"input.confirm", "MHFU_PAD_FACE",
             [](Settings &s, const std::string &t) {
                 if (t == "south")
@@ -429,6 +433,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.analog_camera); },
             [](const Settings &s) { return std::string(s.analog_camera ? "1" : "0"); },
             [](Settings &s, const char *t) { s.analog_camera = variable_flag(t); }},
+        {"input.dpad_camera", "MHFU_DPAD_CAMERA",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.dpad_camera); },
+            [](const Settings &s) { return std::string(s.dpad_camera ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.dpad_camera = variable_flag(t); }},
         {"input.lock_on", "MHFU_LOCK_ON", [](Settings &s, const std::string &t) { return parse_bool(t, s.lock_on); },
             [](const Settings &s) { return std::string(s.lock_on ? "1" : "0"); },
             [](Settings &s, const char *t) { s.lock_on = variable_flag(t); }},
@@ -459,6 +467,7 @@ const std::vector<Field> &fields() {
             [](Settings &s, const char *t) { s.aim_speed = variable_float(t, 90.0f, 10.0f, 360.0f); }},
         BOOL_FIELD("input.invert_camera_x", invert_camera_x),
         BOOL_FIELD("input.invert_camera_y", invert_camera_y),
+        BOOL_FIELD("input.background_gamepad", background_gamepad),
         {"input.mouse", "MHFU_MOUSE", [](Settings &s, const std::string &t) { return parse_bool(t, s.mouse); },
             [](const Settings &s) { return std::string(s.mouse ? "1" : "0"); },
             [](Settings &s, const char *t) { s.mouse = variable_flag(t); }},
@@ -565,6 +574,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.give_any_rarity); },
             [](const Settings &s) { return std::string(s.give_any_rarity ? "1" : "0"); },
             [](Settings &s, const char *t) { s.give_any_rarity = variable_flag(t); }},
+        {"game.true_attack", "MHFU_TRUE_ATTACK",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.true_attack); },
+            [](const Settings &s) { return std::string(s.true_attack ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.true_attack = variable_flag(t); }},
         {"game.hall_equipment", "MHFU_HALL_EQUIPMENT",
             [](Settings &s, const std::string &t) { return parse_bool(t, s.hall_equipment); },
             [](const Settings &s) { return std::string(s.hall_equipment ? "1" : "0"); },
@@ -577,6 +590,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.hall_meal); },
             [](const Settings &s) { return std::string(s.hall_meal ? "1" : "0"); },
             [](Settings &s, const char *t) { s.hall_meal = variable_flag(t); }},
+        {"game.key_quests", "MHFU_KEY_QUESTS",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.key_quests); },
+            [](const Settings &s) { return std::string(s.key_quests ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.key_quests = variable_flag(t); }},
         {"game.gather_icon_size", "MHFU_GATHER_ICON_SIZE",
             [](Settings &s, const std::string &t) {
                 return parse_uint(t, kMinGatherIconSize, kMaxGatherIconSize, s.gather_icon_size);

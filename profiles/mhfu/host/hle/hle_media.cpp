@@ -18,11 +18,14 @@
 #include "game/item_atlas.hpp"
 #include "game/empty_item_slot.hpp"
 #include "game/give_rarity.hpp"
+#include "game/true_attack.hpp"
 #include "game/hall_equipment.hpp"
 #include "game/hall_meal.hpp"
 #include "game/item_sets.hpp"
 #include "game/item_box.hpp"
+#include "game/key_quests.hpp"
 #include "game/layered_armor.hpp"
+#include "mods/mhfu_mods.hpp"
 #include "game/sharpness_gauge.hpp"
 #include "platform/utf8_path.hpp"
 
@@ -291,6 +294,14 @@ std::uint32_t allocate_guest_block(std::uint32_t size) {
     return block != nullptr ? block->address : 0u;
 }
 
+// The key quests' tagged names, from the top of user memory as well.
+std::uint32_t allocate_key_quest_block(std::uint32_t size) {
+    const std::int32_t uid = kernel().allocate_block("mhfu_key_quests", 1u, size, 0u);
+    if (uid < 0) return 0u;
+    const MemoryBlock *block = kernel().find_block(uid);
+    return block != nullptr ? block->address : 0u;
+}
+
 void present_frame(Runtime &rt) {
     load_trace::note_flip();
     // FUComplete's loader changes the game's code while the title runs.
@@ -311,9 +322,11 @@ void present_frame(Runtime &rt) {
     // The extras ported to FUComplete as well, each at its title's addresses.
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);
     if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);
+    if constexpr (kTrueAttack) game::true_attack::frame(rt);
     if constexpr (kHallEquipment) game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
     if constexpr (kItemSets) game::item_sets::frame(rt);
     if constexpr (kHallMeal) game::hall_meal::frame(rt, &call_guest_with_result);
+    if constexpr (kKeyQuests) game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
 #if defined(MHFU_HAS_RENDERER)
     if (!media().renderer || !media().renderer->available()) {
         perf::end_frame(kernel().now_us());

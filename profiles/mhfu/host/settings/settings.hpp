@@ -31,7 +31,9 @@ enum class PresentMode { Fifo, Mailbox, Immediate };
 // game the window's shape: its view widens or narrows to match (the vertical
 // field of view stays), and the 2D interface keeps the PSP's proportions.
 enum class Aspect { Original, Stretch, Fill };
-enum class PerfDisplay { Off, Overlay, OverlayAndLog, Log };
+// Compact is one line of the overlay (frame rate, game rate and speed) in
+// the bottom-left corner instead of the full panel in the top-left one.
+enum class PerfDisplay { Off, Overlay, OverlayAndLog, Log, Compact, CompactAndLog };
 // How the game's 2D textures are drawn at a high internal resolution
 // (gpu/ui_textures.hpp): as they are, sharp bilinear, or doubled with MMPX.
 enum class UiTextures { Off, Sharp, Mmpx };
@@ -104,6 +106,7 @@ struct Settings {
     // Audio
     std::uint32_t volume{100u}; // percent
     bool mute{};
+    bool background_mute{}; // silent while the window does not have focus
 
     // Controls
     bool confirm_south{}; // confirm (circle) on the south face button
@@ -119,6 +122,10 @@ struct Settings {
     // On by default. Off writes nothing at all, so the camera is exactly as
     // the game made it.
     bool analog_camera{true};
+    // While the analog camera is on, the D-pad also turns the game's own
+    // camera left and right and steps its height levels. Off by default: the
+    // two cameras on one view fought each other.
+    bool dpad_camera{false};
     // The Lock on bind selects a large monster (camera/lock_on.hpp). Nothing
     // happens until the bind is pressed; off, the bind does nothing at all.
     bool lock_on{true};
@@ -141,6 +148,9 @@ struct Settings {
     float aim_speed{90.0f};
     bool invert_camera_x{};
     bool invert_camera_y{};
+    // Read the gamepad while the window does not have focus. Off, an
+    // unfocused window sees a released pad; keyboard and mouse never reach it.
+    bool background_gamepad{};
     // Keyboard and mouse. With the mouse on, the window captures the pointer
     // while the game runs and the mouse turns the camera; Esc frees it.
     bool mouse{true};
@@ -202,6 +212,9 @@ struct Settings {
     // The Guild Hall's Give hands over items of any rarity, not only Rare 1
     // to 3 (game/give_rarity.hpp). Off by default: the game's limit.
     bool give_any_rarity{};
+    // The equipment screens show a weapon's attack without its class factor
+    // (game/true_attack.hpp). Off by default: the game's numbers.
+    bool true_attack{};
     // The Guild Hall's box offers Change Equipment, as the house box does
     // (game/hall_equipment.hpp). On by default. Off: greyed out, as in the
     // game.
@@ -214,6 +227,10 @@ struct Settings {
     // kitchen's menu with △ (game/hall_meal.hpp). On by default. Off: △ does
     // nothing there, as in the game.
     bool hall_meal{true};
+    // A key quest's name reads "[Key] " and its name wherever the game shows
+    // it, the quest lists first (game/key_quests.hpp). Off by default: the
+    // game's own names.
+    bool key_quests{};
     // The mark's size, in percent of the usual disc (kMinGatherIconSize to
     // kMaxGatherIconSize). A larger mark keeps the same proportions.
     std::uint32_t gather_icon_size{100};
