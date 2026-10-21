@@ -285,6 +285,7 @@ struct EdgeMove {
 // Defined below, after the rectangles: whether a quad is one of the quest HUD
 // pieces the edges move, or a menu, a notice or another draw that stays.
 [[nodiscard]] inline Piece piece_of(Rect rect, std::uint32_t texture);
+[[nodiscard]] inline bool is_notice_piece(Rect rect, std::uint32_t texture);
 
 // Moves the draw `placed` (six vertices a quad) to its side, judged by each
 // quad of `unscaled`, the draw as the game made it before the interface
@@ -301,7 +302,13 @@ EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &
     if (gap <= 0.0f || placed.size() != unscaled.size() || placed.size() < 6u) return move;
     for (std::size_t first = 0; first + 6u <= unscaled.size(); first += 6u) {
         const Rect game = fit.to_game(quad_bounds(unscaled, first));
-        if (piece_of(game, texture) == Piece::None) return EdgeMove{};
+        const Piece piece = piece_of(game, texture);
+        // The map's own window and panels are not sized as map marks, but
+        // they belong in the map's slot and move with it. A notice drawn over
+        // that slot does not.
+        const bool map_panel = piece == Piece::None &&
+            contains({kMapLeft, kMapTop, kMapRight, kMapBottom}, game) && !is_notice_piece(game, texture);
+        if (piece == Piece::None && !map_panel) return EdgeMove{};
         const EdgeSide side = edge_side(game);
         const float dx = side == EdgeSide::Left ? -gap : side == EdgeSide::Right ? gap : 0.0f;
         if (dx == 0.0f || (first > 0u && dx != move.dx)) return EdgeMove{};

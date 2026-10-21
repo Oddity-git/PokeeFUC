@@ -2106,6 +2106,16 @@ void test_hud_scale_draws() {
         const auto map = mhfu::gpu::hud_scale::place_at_edges(right, right_game, half_wide);
         check(map.moved && map.dx == 120.0f && right[0].x == 410.0f && right[2].x == 474.0f && right[6].x == 400.0f,
             "the map and a mark on it go right together");
+        // The map's sliding window belongs to the map's slot and moves with it.
+        std::vector<Vertex> map_window = quad(280.0f, 40.0f, 294.0f, 152.0f);
+        const auto window_move =
+            mhfu::gpu::hud_scale::place_at_edges(map_window, std::vector<Vertex>(map_window), half_wide);
+        check(window_move.moved && window_move.dx == 120.0f, "the map's window moves with it");
+        // A long notice row over that slot stays.
+        std::vector<Vertex> notice_row = quad(295.0f, 160.0f, 353.0f, 168.0f);
+        const auto row_move =
+            mhfu::gpu::hud_scale::place_at_edges(notice_row, std::vector<Vertex>(notice_row), half_wide);
+        check(!row_move.moved, "a notice row over the map stays");
         std::vector<Vertex> both = join(quad(124.0f, 8.0f, 150.0f, 56.0f), quad(278.0f, 32.0f, 354.0f, 184.0f));
         const auto split = mhfu::gpu::hud_scale::place_at_edges(both, std::vector<Vertex>(both), half_wide);
         check(!split.moved && both[0].x == 124.0f && both[6].x == 278.0f, "a draw with pieces on both sides stays");
