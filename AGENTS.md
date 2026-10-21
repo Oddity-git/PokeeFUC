@@ -30,6 +30,7 @@ Read the documents relevant to the task before changing code, testing, packaging
 | [LAYERED_ARMOR.md](docs/LAYERED_ARMOR.md) | Appearance overrides, model hooks, reload behavior and multiplayer visibility |
 | [FUCOMPLETE_PORT.md](docs/FUCOMPLETE_PORT.md) | The FUComplete build (PokeeFUC): how it was ported, how addresses are mapped, CONFIG.BIN options, state, open problems and keeping up with Pokee |
 | [FUCOMPLETE_HANDOFF.md](docs/FUCOMPLETE_HANDOFF.md) | How the FUComplete port (PokeeFUC) was built, how its work is run, and what is open |
+| [MODDING_HANDOFF.md](docs/MODDING_HANDOFF.md) | Content mods for PokeeFUC through FUComplete's File Replacer, and host-side features in C++ |
 
 The [profile README](profiles/mhfu/README.md) covers player settings, environment variables, controls, saves, mods and networking. For device-specific testing in a developer's environment, also read [LOCAL_TESTING.md](LOCAL_TESTING.md) when present, as described below.
 

@@ -63,6 +63,8 @@ Working on Linux: FUComplete's loader, menus, character creation, the village, t
 
 Still open: the in-game effect of each `CONFIG.BIN` option; Change Equipment's sync to other hunters, and Give Any Rarity with a second player; the bow and bowgun aim extras while `game_task` runs interpreted; Windows, macOS and Android. The detailed state is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
 
+Content mods (models, textures, audio, quest data) go through FUComplete's **File Replacer**; Pokee's own Mods page is off in this build. The [modding handoff](docs/MODDING_HANDOFF.md) covers that and the other path, features added to PokeeFUC itself in C++.
+
 ## Legal disclaimer
 
 **PokeeFUC** is an independent, open-source project and is not affiliated with, authorized by, sponsored by, or endorsed by CAPCOM, Sony, the FUComplete authors, or any of their affiliates.
