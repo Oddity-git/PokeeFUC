@@ -2114,7 +2114,8 @@ void test_hud_scale_draws() {
                 unfitted[0].x == 8.0f,
             "with no gap nothing moves");
         std::vector<Vertex> short_copy = quad(124.0f, 8.0f, 150.0f, 56.0f);
-        check(!mhfu::gpu::hud_scale::place_at_edges(short_copy, std::vector<Vertex>{}, half_wide).moved,
+        const std::vector<Vertex> one_vertex(1u, short_copy[0]);
+        check(!mhfu::gpu::hud_scale::place_at_edges(short_copy, one_vertex, half_wide).moved,
             "a draw whose game copy does not match is left alone");
     }
 
