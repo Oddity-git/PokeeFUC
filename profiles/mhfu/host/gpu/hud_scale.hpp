@@ -231,6 +231,12 @@ struct InterfaceFit {
         px = kCentreX + (px - kCentreX) * x;
         py = kCentreY + (py - kCentreY) * y;
     }
+    // From where a vertex landed back to the game's pixels.
+    void unapply(float &px, float &py) const {
+        if (x <= 0.0f || y <= 0.0f) return;
+        px = kCentreX + (px - kCentreX) / x;
+        py = kCentreY + (py - kCentreY) / y;
+    }
     // From where the draw landed back to the game's pixels.
     [[nodiscard]] Rect to_game(Rect r) const {
         if (x <= 0.0f || y <= 0.0f) return r;
@@ -270,40 +276,30 @@ enum class EdgeSide { Centre, Left, Right };
     return fit.x > 0.0f && fit.x < 1.0f ? InterfaceFit::kCentreX * (1.0f - fit.x) : 0.0f;
 }
 
-// What place_at_edges did. `uniform`: every quad moved by `dx`, so the
-// draw's scissor can move with it; otherwise its quads went different ways
-// and `bounds` is where they landed.
+// What place_at_edges did: every quad of the draw moved by `dx`.
 struct EdgeMove {
     bool moved{};
-    bool uniform{};
     float dx{};
-    Rect bounds{};
 };
 
-// Moves each quad of `placed` (six vertices each) to its side, judged by the
-// same quad of `unscaled`, the draw as the game made it before the interface
-// sizes, in fitted pixels.
+// Moves the draw `placed` (six vertices a quad) to its side, judged by each
+// quad of `unscaled`, the draw as the game made it before the interface
+// sizes, in fitted pixels. The draw moves only when every quad goes the same
+// way: a window or a line of text that reaches over the middle, such as a
+// menu's help box or the item box, stays in one piece where it is.
 template <typename Vertex>
 EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &unscaled, InterfaceFit fit) {
     EdgeMove move;
     const float gap = edge_gap(fit);
     if (gap <= 0.0f || placed.size() != unscaled.size() || placed.size() < 6u) return move;
-    bool first_quad = true;
-    move.uniform = true;
-    for (std::size_t first = 0; first + 6u <= placed.size(); first += 6u) {
+    for (std::size_t first = 0; first + 6u <= unscaled.size(); first += 6u) {
         const EdgeSide side = edge_side(fit.to_game(quad_bounds(unscaled, first)));
         const float dx = side == EdgeSide::Left ? -gap : side == EdgeSide::Right ? gap : 0.0f;
-        if (first_quad) {
-            move.dx = dx;
-            first_quad = false;
-        } else if (dx != move.dx) {
-            move.uniform = false;
-        }
-        if (dx == 0.0f) continue;
-        move.moved = true;
-        for (std::size_t i = 0; i < 6u; ++i) placed[first + i].x += dx;
+        if (dx == 0.0f || (first > 0u && dx != move.dx)) return EdgeMove{};
+        move.dx = dx;
     }
-    if (move.moved) move.bounds = bounds_of(placed);
+    move.moved = true;
+    for (Vertex &vertex : placed) vertex.x += move.dx;
     return move;
 }
 
@@ -2345,6 +2341,28 @@ void scale_quads(std::vector<Vertex> &vertices, const Scales &scales, Frame &fra
         const bool moved = place.attach_x != place.origin_x || place.attach_y != place.origin_y;
         if (scale == 1.0f && !moved) continue;
         for (std::size_t i = 0; i < 6u; ++i) place_point(vertices[first + i].x, vertices[first + i].y, place, scale);
+    }
+}
+
+// scale_quads() for a draw already fitted under Fill. The pieces' rectangles
+// are the game's pixels, so the draw is sized where the game drew it, and
+// only the vertices that moved are fitted again; the rest keep their fitted
+// position exactly.
+template <typename Vertex>
+void scale_fitted_quads(std::vector<Vertex> &vertices, const Scales &scales, Frame &frame, InterfaceFit fit,
+    std::uint32_t texture = 0, hud::Owner owner = hud::Owner::Unknown, std::vector<Decision> *decisions = nullptr) {
+    if (!fit.any()) {
+        scale_quads(vertices, scales, frame, texture, owner, decisions);
+        return;
+    }
+    std::vector<Vertex> game = vertices;
+    for (Vertex &vertex : game) fit.unapply(vertex.x, vertex.y);
+    const std::vector<Vertex> drawn = game;
+    scale_quads(game, scales, frame, texture, owner, decisions);
+    for (std::size_t i = 0; i < game.size(); ++i) {
+        if (game[i].x == drawn[i].x && game[i].y == drawn[i].y) continue;
+        vertices[i] = game[i];
+        fit.apply(vertices[i].x, vertices[i].y);
     }
 }
 
