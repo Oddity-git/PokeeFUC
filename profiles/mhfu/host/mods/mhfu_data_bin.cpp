@@ -385,10 +385,11 @@ std::int64_t Directory::entry_at(std::uint32_t block) const {
     return static_cast<std::int64_t>(found - blocks.begin()) - 1;
 }
 
-std::optional<Directory> Directory::parse(std::span<const std::uint8_t> encrypted, std::uint64_t archive_bytes) {
+std::optional<Directory> Directory::parse(
+    std::span<const std::uint8_t> encrypted, std::uint64_t archive_bytes, bool stored_plain) {
     if (encrypted.size() < kBlock) return std::nullopt;
     std::vector<std::uint8_t> plain(encrypted.begin(), encrypted.end());
-    decrypt(plain, 0u, 0u);
+    if (!stored_plain) decrypt(plain, 0u, 0u);
     Directory d;
     d.directory_blocks = load32(plain, 0u);
     const std::uint64_t directory_bytes = static_cast<std::uint64_t>(d.directory_blocks) * kBlock;
@@ -490,7 +491,7 @@ std::vector<std::uint8_t> ArchiveView::original(FileId entry) {
     if (entry >= disc_->entries()) return {};
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(disc_->size(entry)));
     bytes.resize(raw_(static_cast<std::uint64_t>(disc_->blocks[entry]) * kBlock, bytes));
-    if (!verbatim_magic(bytes)) decrypt(bytes, disc_->blocks[entry], 0u);
+    if (!plain_ && !verbatim_magic(bytes)) decrypt(bytes, disc_->blocks[entry], 0u);
     return bytes;
 }
 

@@ -205,13 +205,26 @@ void attach_disc(IsoImage *disc) {
     // FUComplete stores DATA.BIN plain and replaces files with its own loader
     // (ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP). These mods are made for Freedom
     // Unite's archive and its file ids.
-    if constexpr (kTitle == Title::FUComplete) {
-        std::cout << "[mods] FUComplete replaces files with its own loader; Pokee's mods are off\n";
-        return;
-    }
     const std::optional<IsoImage::Entry> entry = disc->find(kDataBin);
     if (!entry || entry->directory) return;
     s.range = DiscRange{static_cast<std::uint64_t>(entry->lba) * IsoImage::kSectorSize, entry->size};
+    // The mods stay off there, but the archive is still read: the key quest
+    // marks find which entry the game has read through it.
+    if constexpr (kTitle == Title::FUComplete) {
+        std::cout << "[mods] FUComplete replaces files with its own loader; Pokee's mods are off\n";
+        std::vector<std::uint8_t> head(p3rd::kBlock);
+        head.resize(raw_read(0u, head));
+        const std::uint32_t blocks = head.size() >= 4u
+            ? static_cast<std::uint32_t>(head[0] | head[1] << 8u | head[2] << 16u | head[3] << 24u)
+            : 0u;
+        if (blocks > 0u && blocks < 512u) {
+            std::vector<std::uint8_t> stored(static_cast<std::size_t>(blocks) * p3rd::kBlock);
+            stored.resize(raw_read(0u, stored));
+            s.directory = Directory::parse(stored, s.range->size, true);
+        }
+        if (s.directory) s.view = std::make_unique<ArchiveView>(*s.directory, &raw_read, true);
+        return;
+    }
 
     // The directory is small: its first word says how many blocks it takes.
     std::vector<std::uint8_t> head(p3rd::kBlock);

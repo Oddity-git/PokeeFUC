@@ -169,6 +169,7 @@ std::size_t untag(psprecomp::GuestMemory &memory, const std::vector<Patch> &patc
 void file_loaded(std::uint32_t entry) {
     State &s = state();
     if (!s.on || !is_pack(entry)) return;
+    if (s.trace) std::cout << "[key quests] entry " << entry << " read\n";
     s.pending[entry] = kAttempts;
 }
 
