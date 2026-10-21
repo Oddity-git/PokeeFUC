@@ -66,6 +66,7 @@ struct Settings {
     bool fullscreen{};
     PresentMode present_mode{PresentMode::Fifo};
     Aspect aspect{Aspect::Original};
+    float fov_scale{1.0f};           // the camera's field of view as a share of the game's own
     bool sharp_screen{};             // nearest instead of linear scaling to the window
     bool sharp_textures{};           // nearest instead of linear texture sampling
     bool texture_pack{true};         // draw an installed HD texture pack's images instead of the game's

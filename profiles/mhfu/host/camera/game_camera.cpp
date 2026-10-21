@@ -401,6 +401,9 @@ struct State {
     bool hooked{};
     RotationFunction original{};
     RotationFunction pull_in_original{};
+    // The projection update's wrapper, when a field of view scale needs it.
+    bool projection_hooked{};
+    RotationFunction projection_original{};
     std::uint64_t frame{};
     std::uint64_t last_update{};
     std::uint32_t address{};
@@ -1637,6 +1640,26 @@ std::uint32_t game_camera_aim_dpad(int x, int y) {
     return dpad;
 }
 
+bool scale_projection_fov(psprecomp::GuestMemory &memory, std::uint32_t camera, float scale) {
+    if (!(scale > 0.0f) || std::abs(scale - 1.0f) < 0.001f) return false;
+    const std::uint32_t address = camera + 0x0Cu;
+    if (memory.raw_pointer(address, 4u) == nullptr) return false;
+    const float fov = std::bit_cast<float>(memory.load32(address));
+    if (!std::isfinite(fov) || fov < 0.05f || fov > 3.0f) return false;
+    memory.store32(address, std::bit_cast<std::uint32_t>(fov * scale));
+    return true;
+}
+
+// The projection update runs after the game has written the camera's field of
+// view for this frame and before the projection is built from it. The game
+// writes its own value again next frame, so scaling it here applies once each
+// time and does not grow.
+void projection_update(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    if (state.projection_original == nullptr) return;
+    (void)scale_projection_fov(runtime.memory(), ctx.gpr[4], settings::current().fov_scale);
+    state.projection_original(runtime, ctx);
+}
+
 bool prepare_game_camera(psprecomp::Runtime &runtime, RotationFunction original) {
     state = State{};
     reset();
@@ -1670,6 +1693,8 @@ void game_camera_frame(psprecomp::Runtime &runtime) {
     if (!lock_on_allowed()) lock_on_release("");
     // Another title's monsters are not where lock-on reads them.
     if constexpr (kLockOn) lock_on_frame(runtime.memory());
+    const float fov_scale = settings::current().fov_scale;
+    const bool fov_wanted = std::abs(fov_scale - 1.0f) >= 0.001f;
     if (state.prepared && !state.hooked && (option_on() || pose_wanted || (lock_on_allowed() && lock_on_wanted()))) {
         // Only ever at the game's flip, from an import: no generated frame is
         // live on the host stack, so the dispatch tables can change here.
@@ -1683,6 +1708,21 @@ void game_camera_frame(psprecomp::Runtime &runtime) {
             runtime.register_function(kPullInChoice, &pull_in_choice, "mhfu_camera_pull_in");
         }
         state.hooked = true;
+    }
+    // A field of view scale needs the projection update, which runs after the
+    // game writes the camera's field of view and before it builds the view.
+    if (state.prepared && !state.projection_hooked && fov_wanted && runtime.has_function(kProjectionUpdate)) {
+        const psprecomp::GuestMemory &memory = runtime.memory();
+        // lwc1 f1,0x10(a0); lwc1 f0,0xc(a0): the values it compares.
+        if (memory.load32(kProjectionUpdate + 0x0Cu) == 0xC4810010u &&
+            memory.load32(kProjectionUpdate + 0x10u) == 0xC480000Cu) {
+            state.projection_original = runtime.function_at(kProjectionUpdate);
+            runtime.register_function(kProjectionUpdate, &projection_update, "mhfu_projection_fov");
+            state.projection_hooked = true;
+            if (std::getenv("MHFU_TRACE_FOV") != nullptr)
+                std::cout << "[fov] projection update wrapped at 0x" << std::hex << kProjectionUpdate << std::dec
+                          << std::endl;
+        }
     }
     install_aim_hook(runtime);
     // The aim camera replaces the follow camera, so this update can stop

@@ -30,6 +30,10 @@ using RotationFunction = void (*)(psprecomp::Runtime &, psprecomp::AllegrexConte
 inline constexpr bool kCameraFreedomUnite = kTitle == Title::FreedomUnite;
 // The camera update.
 inline constexpr std::uint32_t kCameraUpdate = kCameraFreedomUnite ? 0x08886E50u : 0x08886B54u;
+// The projection update: compares the camera's field of view with the one the
+// projection was built with, and builds it again when they differ. The game
+// writes the field at +0xC every frame before this call.
+inline constexpr std::uint32_t kProjectionUpdate = kCameraFreedomUnite ? 0x08815384u : 0x08816144u;
 // The aim function in game_task, for action 1001.
 inline constexpr std::uint32_t kAimFunction = kCameraFreedomUnite ? 0x09AA4DD0u : 0x09A9FFA0u;
 // game_task's weapon switch: its table of cases, the bow's case, and that
@@ -123,6 +127,11 @@ void game_camera_anticipate_aim(psprecomp::Runtime &runtime);
 // Full-deflection speed for the current camera: Aim speed while a bow or a
 // bowgun aims, Camera speed otherwise.
 [[nodiscard]] float game_camera_degrees_per_second();
+
+// Scales the projection camera's field of view at `camera + 0xC`, which the
+// game sets before each projection update. False when the value there is not
+// a plausible field of view, or `scale` is 1.
+bool scale_projection_fov(psprecomp::GuestMemory &memory, std::uint32_t camera, float scale);
 
 // The quest camera's eye and look-at point in world space, as its last update
 // left them (+0x0 and +0x10 of the camera structure). Nothing when no update

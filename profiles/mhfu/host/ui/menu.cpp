@@ -397,6 +397,17 @@ void Menu::video() {
             settings::save();
         }
     }
+    {
+        int fov = static_cast<int>(std::lround(s.fov_scale * 100.0f));
+        if (slider_row("Field of view", fov, 50, 150, 5, "%d%% of the game's",
+                options_for("video.fov_scale",
+                    "Widens or narrows the camera's field of view as a share of the game's own. "
+                    "It follows whatever the game sets, in the village and in quests, and the "
+                    "change applies while the game runs."))) {
+            s.fov_scale = static_cast<float>(fov) / 100.0f;
+            settings::save();
+        }
+    }
     if (choice_row("Scaling filter", s.sharp_screen ? "Sharp" : "Smooth",
             options_for("video.sharp_screen",
                 "How the finished picture is scaled to the window: smooth "
