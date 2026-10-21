@@ -15,6 +15,7 @@ from unittest.mock import patch
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 import add_overlay
+import overlay_code
 import embed_shaders
 import databin
 import wrap_overlay
@@ -438,6 +439,69 @@ class BuildToolContracts(unittest.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError):
                     embed_shaders.compile_shader(compiler, str(source), [])
                 self.assertEqual(set(root.glob("*.spv")), before)
+
+class OverlayCodeTests(unittest.TestCase):
+    @staticmethod
+    def elf(code):
+        header = bytearray(overlay_code.EHDR_SIZE + 32)
+        header[:4] = b"\x7fELF"
+        struct.pack_into("<I", header, 28, overlay_code.EHDR_SIZE)
+        struct.pack_into("<I", header, overlay_code.EHDR_SIZE + 4, len(header))
+        struct.pack_into("<I", header, overlay_code.EHDR_SIZE + 16, len(code))
+        return bytes(header) + code
+
+    def run_tool(self, *args):
+        with patch("sys.stdout", io.StringIO()):
+            return overlay_code.main(["overlay_code", *map(str, args)])
+
+    def test_writes_each_library_code_and_skips_the_rest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            libs, sources = root / "libs", root / "sources"
+            libs.mkdir()
+            for name in ("ovl1_a.so", "ovl2_b.dll", "ovl3_c.so", "ovl4_d.so", "other.so", "ovl5_e.txt"):
+                (libs / name).write_bytes(b"")
+            (sources / "ovl1_a").mkdir(parents=True)
+            (sources / "ovl1_a" / "overlay.elf").write_bytes(self.elf(b"\x01\x02\x03\x04"))
+            (sources / "ovl2_b").mkdir()
+            (sources / "ovl2_b" / "overlay.elf").write_bytes(self.elf(b"\x05\x06"))
+            (sources / "ovl3_c").mkdir()
+            (sources / "ovl3_c" / "overlay.elf").write_bytes(b"not an elf")
+            self.assertEqual(self.run_tool(libs, sources), 0)
+            self.assertEqual((libs / "ovl1_a.code").read_bytes(), b"\x01\x02\x03\x04")
+            self.assertEqual((libs / "ovl2_b.code").read_bytes(), b"\x05\x06")
+            self.assertEqual(sorted(p.name for p in libs.glob("*.code")), ["ovl1_a.code", "ovl2_b.code"])
+            out = root / "out"
+            out.mkdir()
+            self.assertEqual(self.run_tool(libs, sources, out), 0)
+            self.assertEqual((out / "ovl1_a.code").read_bytes(), b"\x01\x02\x03\x04")
+
+    def test_a_segment_past_the_end_of_the_file_is_not_code(self):
+        broken = bytearray(self.elf(b"\x01\x02"))
+        struct.pack_into("<I", broken, overlay_code.EHDR_SIZE + 16, 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "overlay.elf"
+            path.write_bytes(bytes(broken))
+            self.assertIsNone(overlay_code.code_of(path))
+
+    @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
+    def test_a_corpus_folder_linked_outside_its_directory_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            libs, sources, elsewhere = root / "libs", root / "sources", root / "elsewhere"
+            for folder in (libs, sources, elsewhere):
+                folder.mkdir()
+            (libs / "ovl1_a.so").write_bytes(b"")
+            (elsewhere / "overlay.elf").write_bytes(self.elf(b"\x01\x02\x03\x04"))
+            (sources / "ovl1_a").symlink_to(elsewhere, target_is_directory=True)
+            self.assertEqual(self.run_tool(libs, sources), 0)
+            self.assertFalse((libs / "ovl1_a.code").exists())
+
+    def test_wrong_arguments_print_the_usage(self):
+        with patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(overlay_code.main(["overlay_code"]), 2)
+        self.assertIn("overlay_code.py", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

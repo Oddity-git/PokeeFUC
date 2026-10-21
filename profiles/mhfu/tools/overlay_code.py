@@ -35,29 +35,37 @@ def code_of(elf_path):
     return data[offset:offset + size]
 
 
+def inside(root, *parts):
+    """The real path of `parts` under `root`, or None when it leads elsewhere."""
+    path = os.path.realpath(os.path.join(root, *parts))
+    return path if path.startswith(root + os.sep) else None
+
+
 def main(argv):
     if len(argv) not in (3, 4):
         sys.stderr.write(__doc__)
         return 2
-    library_dir, source_dir = argv[1], argv[2]
-    output_dir = argv[3] if len(argv) == 4 else library_dir
+    library_dir = os.path.realpath(argv[1])
+    source_dir = os.path.realpath(argv[2])
+    output_dir = os.path.realpath(argv[3]) if len(argv) == 4 else library_dir
     written = 0
     for entry in sorted(os.listdir(library_dir)):
         stem, extension = os.path.splitext(entry)
         if extension not in LIBRARY_EXTENSIONS or not stem.startswith("ovl"):
             continue
-        elf_path = os.path.join(source_dir, stem, "overlay.elf")
-        if not os.path.isfile(elf_path):
+        # A corpus folder or output that a link leads out of its directory is skipped.
+        elf_path = inside(source_dir, stem, "overlay.elf")
+        out_path = inside(output_dir, stem + ".code")
+        if elf_path is None or out_path is None or not os.path.isfile(elf_path):
             continue
         code = code_of(elf_path)
         if code is None:
             continue
-        with open(os.path.join(output_dir, stem + ".code"), "wb") as out:
+        with open(out_path, "wb") as out:
             out.write(code)
         written += 1
     print(f"wrote {written} overlay code file(s)")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

@@ -1,6 +1,6 @@
 # The FUComplete port (PokeeFUC)
 
-How the FUComplete build of the mhfu profile was made, what state it is in, and how to carry on. Written as a handover for the next contributor or coding agent. Read [AGENTS.md](../AGENTS.md) first; this page assumes it. Player-facing details are in the [profile README](../profiles/mhfu/README.md#fucomplete-work-in-progress), verified results in [COMPATIBILITY.md](COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
+How the FUComplete build of the mhfu profile was made, what state it is in, and how to carry on. Written as a handover for the next contributor or coding agent. Read [AGENTS.md](../AGENTS.md) first; this page assumes it. [FUCOMPLETE_HANDOFF.md](FUCOMPLETE_HANDOFF.md) covers the branches, the two working copies and the pull request's CI checks. Player-facing details are in the [profile README](../profiles/mhfu/README.md#fucomplete-work-in-progress), verified results in [COMPATIBILITY.md](COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
 
 ## What it is
 
