@@ -1701,28 +1701,29 @@ struct VulkanRenderer::Impl {
         vertex_offset = at + size;
         return true;
     }
+    // Makes the CPU writes to [begin, end) visible when the vertex memory is
+    // cached but not coherent. Coherent memory needs nothing. The blended
+    // present's scratch area is written during replay too, after the game
+    // frame's own flush, so it is flushed on its own.
+    void flush_vertex_range(VkDeviceSize begin, VkDeviceSize end) {
+        if (vertex_coherent || vertex_memory == VK_NULL_HANDLE || vertex_mapped == nullptr || vertex_bytes == 0u) return;
+        if (begin >= vertex_bytes || end <= begin) return;
+        const VkDeviceSize atom = std::max<VkDeviceSize>(noncoherent_atom, 1u);
+        VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+        range.memory = vertex_memory;
+        range.offset = begin & ~(atom - 1u);
+        if (range.offset >= vertex_bytes) return;
+        VkDeviceSize stop = (end + atom - 1u) & ~(atom - 1u);
+        if (stop <= range.offset) stop = range.offset + atom;
+        range.size = stop >= vertex_bytes ? VK_WHOLE_SIZE : stop - range.offset;
+        vkFlushMappedMemoryRanges(device, 1u, &range);
+    }
     // Makes this frame's CPU writes visible when the vertex memory is cached
     // but not coherent. Coherent memory needs nothing.
     void flush_vertex_writes() {
         const VkDeviceSize atom = std::max<VkDeviceSize>(noncoherent_atom, 1u);
-        if (!vertex_coherent && vertex_memory != VK_NULL_HANDLE && vertex_mapped != nullptr && vertex_bytes != 0u) {
-            const VkDeviceSize region = static_cast<VkDeviceSize>(frame_region) * vertex_region_bytes;
-            if (vertex_offset > region) {
-                VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
-                range.memory = vertex_memory;
-                range.offset = region & ~(atom - 1u);
-                if (range.offset < vertex_bytes) {
-                    VkDeviceSize end = (vertex_offset + atom - 1u) & ~(atom - 1u);
-                    if (end <= range.offset) end = range.offset + atom;
-                    if (end >= vertex_bytes) {
-                        range.size = VK_WHOLE_SIZE;
-                    } else {
-                        range.size = end - range.offset;
-                    }
-                    vkFlushMappedMemoryRanges(device, 1u, &range);
-                }
-            }
-        }
+        const VkDeviceSize region = static_cast<VkDeviceSize>(frame_region) * vertex_region_bytes;
+        if (vertex_offset > region) flush_vertex_range(region, vertex_offset);
         if (hold_coherent || hold_memory == VK_NULL_HANDLE || hold_mapped == nullptr || hold_dirty == 0u) {
             if (hold_coherent) hold_dirty = 0u;
             return;
@@ -9856,9 +9857,10 @@ void VulkanRenderer::Impl::replay(VkCommandBuffer commands, std::uint32_t slot, 
     vkCmdClearAttachments(commands, static_cast<std::uint32_t>(clears.size()), clears.data(), 1u, &whole);
 
     // The slot's scratch area: blended vertices and object blocks.
-    VkDeviceSize scratch_at =
+    const VkDeviceSize scratch_base =
         static_cast<VkDeviceSize>(kFrameRegions) * vertex_region_bytes + slot * kPresentScratchBytes;
-    const VkDeviceSize scratch_end = scratch_at + kPresentScratchBytes;
+    VkDeviceSize scratch_at = scratch_base;
+    const VkDeviceSize scratch_end = scratch_base + kPresentScratchBytes;
     auto *mapped = static_cast<std::uint8_t *>(vertex_mapped);
 
     // What the command buffer has, so that unchanged state is not set again.
@@ -10112,6 +10114,20 @@ void VulkanRenderer::Impl::replay(VkCommandBuffer commands, std::uint32_t slot, 
         ++replayed;
     }
     vkCmdEndRenderPass(commands);
+    // The blended vertices and blocks just written are in host memory too.
+    // On a cached, non-coherent type the game frame's own flush has already
+    // run by now, so this present's writes need a flush of their own before
+    // it is submitted.
+    if (scratch_at > scratch_base) {
+        flush_vertex_range(scratch_base, scratch_at);
+        if (!vertex_coherent) {
+            static const bool logged = [] {
+                std::cout << "[render] blended vertices are flushed from non-coherent vertex memory\n";
+                return true;
+            }();
+            (void)logged;
+        }
+    }
     interpolation_stats.groups += replayed;
     interpolation_stats.flipbook_steps += flipbook_steps;
     interpolation_stats.followed += followed;
