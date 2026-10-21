@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.teamgdb.PokeeFUC</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>PokeeFUC</name>
+  <summary>Native port of Monster Hunter Portable 2nd G with FUComplete</summary>
+  <developer id="io.github.teamgdb">
+    <name>TeamGDB</name>
+  </developer>
+  <description>
+    <p>
+      PokeeFUC runs Monster Hunter Portable 2nd G with the FUComplete patch
+      natively, by static recompilation: the game's PSP code is translated
+      ahead of time into native code and runs on a reimplementation of the PSP
+      system software, with Vulkan graphics, gamepad support and
+      PSP-compatible saves.
+    </p>
+    <p>
+      PokeeFUC does not include any game assets or original game files: no
+      disc image, no copy of the game's executable or data, and no textures,
+      models, audio or video from the game. You must provide the files from
+      your own legally obtained copy of Monster Hunter Portable 2nd G patched
+      with FUComplete: the first start checks that copy and sets the game up
+      from it.
+    </p>
+    <p>
+      PokeeFUC is built from Pokee by its contributors. FUComplete is a
+      separate project. Neither is affiliated with or endorsed by CAPCOM or
+      Sony.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.teamgdb.PokeeFUC.desktop</launchable>
+  <url type="homepage">https://github.com/Oddity-git/PokeeFUC</url>
+  <url type="bugtracker">https://github.com/Oddity-git/PokeeFUC/issues</url>
+  <url type="vcs-browser">https://github.com/Oddity-git/PokeeFUC</url>
+  <categories>
+    <category>Game</category>
+    <category>ActionGame</category>
+  </categories>
+  <supports>
+    <control>gamepad</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-fantasy">moderate</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

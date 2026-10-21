@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PokeeFUC
+GenericName=Native port of Portable 2nd G with FUComplete
+Comment=Play Monster Hunter Portable 2nd G with FUComplete natively from your own patched disc image
+Exec=pokee-fuc
+Icon=io.github.teamgdb.PokeeFUC
+Terminal=false
+Categories=Game;ActionGame;
+Keywords=Monster Hunter;Portable 2nd G;FUComplete;MHP2G;PSP;recompilation;
+StartupNotify=true
