@@ -672,6 +672,25 @@ const std::vector<Field> &fields() {
                 return true;
             },
             [](const Settings &s) { return s.backup_reminded; }, nullptr},
+        {"saves.sync_folder", "MHFU_SYNC_FOLDER",
+            [](Settings &s, const std::string &t) {
+                s.save_sync_folder = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_folder; },
+            [](Settings &s, const char *t) { s.save_sync_folder = t == nullptr ? "" : t; }},
+        {"saves.sync_hash", nullptr,
+            [](Settings &s, const std::string &t) {
+                s.save_sync_hash = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_hash; }, nullptr},
+        {"saves.sync_time", nullptr,
+            [](Settings &s, const std::string &t) {
+                s.save_sync_time = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_time; }, nullptr},
         {"ui.last_folder", nullptr,
             [](Settings &s, const std::string &t) {
                 s.last_folder = t;

@@ -254,6 +254,11 @@ struct Settings {
     bool backup_timestamp{true}; // a backup made from the menu goes to a new folder named by its time
     bool backup_reminder{true};  // remind to back up the saves the first time a new release starts
     std::string backup_reminded; // the release that last showed the reminder (savedata::release_of)
+    // The folder both installations can reach (a path, or a content:// tree
+    // in the Android app), and the save it held at the last sync.
+    std::string save_sync_folder;
+    std::string save_sync_hash;
+    std::string save_sync_time; // for people: "2026-10-22 14:05"
 
     // Layered armor (game/layered_armor.hpp): the hunter drawn in other armor
     // than it wears. Off, nothing of the game is touched. On, each armor part

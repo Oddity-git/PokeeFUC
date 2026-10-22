@@ -32,4 +32,15 @@ struct PickedExport {
 // with everything in it. Nothing when the player cancels.
 [[nodiscard]] std::optional<PickedExport> pick_folder_and_copy(const std::filesystem::path &local);
 
+// A readable name for a picked tree, for showing beside the sync setting.
+[[nodiscard]] std::string describe_tree_uri(const std::string &tree_uri);
+
+// Save sync: the picked tree holds the files of this game's save folder
+// (PARAM.SFO and its data) at its top level. `read_sync_folder` copies them
+// into `staging`, where a local save folder can be checked and hashed;
+// `write_sync_folder` writes the files of `local` into the tree, replacing
+// those of the same name and leaving other files alone.
+bool read_sync_folder(const std::string &tree_uri, const std::filesystem::path &staging, std::string &error);
+bool write_sync_folder(const std::filesystem::path &local, const std::string &tree_uri, std::string &error);
+
 } // namespace mhfu::android
