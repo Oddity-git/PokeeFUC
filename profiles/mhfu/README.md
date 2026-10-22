@@ -845,6 +845,8 @@ After that, **Sync now** compares the two copies by a hash of the save files:
 
 The sync folder is only for this game's save. Do not point it at the data folder itself: that holds the disc image and `EBOOT.FUC.ELF`, which are large and must not be synced. A save folder is a couple of megabytes.
 
+The Flatpak build can write the sync folder you pick anywhere in your home (`--filesystem=home`), because an rclone mount or a Nextcloud folder usually lives there. A folder in Downloads also works.
+
 ### Where saves live and how to back them up
 
 The saves are the folders in `ms0/PSP/SAVEDATA/` of the data directory: `ULUS10391` holds all three character slots, `ULUS10391QST` the downloaded quests, and `ULUS10391DAT` the install data, which the game can rebuild.
