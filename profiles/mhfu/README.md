@@ -560,6 +560,8 @@ The Android app starts from other defaults where a phone differs, with the same 
 | Mods | A row per mod: On, Priority | `[mod <folder>] enabled`, `rank` in `mods.ini` | | Off (default) or on; a higher rank wins where two mods replace the same file |
 | System | Add a timestamp to the backup name | `saves.backup_timestamp` | | On (default): each backup from *Back up saves…* is a new folder named by its time; off: plain folder names, replaced after asking |
 | System | Remind me to back up after updates | `saves.backup_reminder` | `MHFU_BACKUP_REMINDER` | On (default): the first start of a new release asks you to back up your saves; see [Backups](#where-saves-live-and-how-to-back-them-up). `saves.backup_reminded` records the release that last asked |
+| System | Sync folder | `saves.sync_folder` | `MHFU_SYNC_FOLDER` | The folder both devices can see: a path on a computer, or a `content://` tree picked through Android's folder picker. Empty: not set. See [Syncing saves](#syncing-saves-between-devices) |
+| System | Last sync | `saves.sync_hash`, `saves.sync_time` | | The save hash and the time of the last sync, used to tell which copy changed |
 | Network | Ad hoc play | `network.adhoc` | `MHFU_ADHOC` | Off (default) or on; off, the game reports the wireless switch as off |
 | Network | Server | `network.server` | `MHFU_ADHOC_SERVER` | Host name or address of a PSP ad hoc server, optionally `host:port`; empty by default |
 | Network | Nickname | `network.nickname` | `MHFU_ADHOC_NICKNAME` | The name other players see; empty uses the hunter name |
@@ -824,6 +826,27 @@ By hand, the same works with the game closed: copy the folder into `ms0/PSP/SAVE
 - **Export save…** copies the game data and the downloaded quests to a folder you choose, as `MHFU saves <date>_<time>/PSP/SAVEDATA/ULUS10391…`, the layout of a memory stick: copy its `PSP` folder to the root of a PSP's memory stick, or import it on another machine. It always makes a new folder.
 - **Back up saves…** copies every save folder of the game, the install data included, to the backups folder, `save-backups` in the [per-user data directory](#installer), or to a folder you choose. With *Add a timestamp to the backup name* (on by default; `saves.backup_timestamp` in `settings.ini`) each backup is a new folder named by its time, holding the save folders: `save-backups/2026-09-19_19-05-12/ULUS10391/`. With it off, the save folders go straight into the chosen folder (`save-backups/ULUS10391/`), and an earlier backup there is replaced only after you confirm. *Open the backups folder* shows it. To restore a backup, import it.
 - **The reminder.** The first time a new release starts and finds saves, it pauses the game for a moment and asks you to back them up. *Back up now* makes a new timestamped folder in `save-backups` (on Android, in a folder you pick), whatever the timestamp setting says, so it never replaces an earlier backup; the next screen says where the backup went and offers to open that folder. *Continue without a backup* starts the game. Either way the reminder does not come back until the next release. The import's review asks the same before it writes anything, with its own *Back up now*. Turn the reminder off with *Remind me to back up after updates*.
+
+### Syncing saves between devices
+
+**Sync saves** (System, *Saves*) keeps one save on this device and another through a folder both can see. The folder holds only this game's save (`PARAM.SFO`, `MHP2NDG.BIN` and its icon), so it can be copied or restored like any save. It is a normal folder on a computer and a folder picked through Android's system picker on a phone, so Google Drive, Syncthing, Nextcloud and a plain shared folder all work.
+
+Set it up once on each device:
+
+1. **Android.** Install the **Google Drive** app (or Syncthing/Nextcloud) and sign in. In PokeeFUC: System, *Saves*, **Set up save sync…**, *Choose the sync folder…*, and pick the Drive folder. The app keeps the folder permission across restarts.
+2. **Computer.** Sync the same Drive folder to a local folder. Google has no Drive client for Linux; use **rclone** (`rclone config`, then `rclone mount gdrive:PokeeFUC ~/PokeeFUC --vfs-cache-mode writes` and keep it running, for example as a systemd user service), **Insync**, or use Syncthing/Nextcloud. In PokeeFUC: System, *Saves*, **Set up save sync…**, *Choose the sync folder…*, and pick that local folder.
+3. On the device with the save you want to keep, choose **Upload this device's save**. On the other device, open **Sync saves** and choose **Sync now**: it downloads the save, and the save it replaces is kept in the save-data backup folder.
+
+After that, **Sync now** compares the two copies by a hash of the save files:
+
+- only this device changed → it uploads;
+- only the folder changed → it downloads (and keeps the earlier save);
+- both changed → it asks: *Keep this device* or *Use the folder's save*; the other copy is kept as a backup;
+- the same save → nothing happens.
+
+*Upload this device's save* and *Use the folder's save* do one direction whatever the comparison says, and keeping the folder's earlier save before an upload goes to `save-backups/sync-<date>_<time>`. The game reads its save at the title screen, so after a download choose *Restart now* before playing, or at least do not save before restarting.
+
+The sync folder is only for this game's save. Do not point it at the data folder itself: that holds the disc image and `EBOOT.FUC.ELF`, which are large and must not be synced. A save folder is a couple of megabytes.
 
 ### Where saves live and how to back them up
 

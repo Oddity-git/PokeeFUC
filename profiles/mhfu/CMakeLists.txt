@@ -308,6 +308,7 @@ set(MHFU_HOST_SOURCES
     host/save_data/savedata_crypto.cpp
     host/save_data/savedata_store.cpp
     host/save_data/save_transfer.cpp
+    host/save_data/save_sync.cpp
     host/install/executable_preparation.cpp
     host/install/front_end.cpp
     host/install/installer.cpp
@@ -496,6 +497,19 @@ if(PSPRECOMP_BUILD_TESTS)
 endif()
 
 # Camera dispatch, ownership and integration checks without game data.
+# Save sync: hashing a save folder, copying it to a sync folder, and the
+# decision between the two copies.
+add_executable(mhfu_save_sync_tests
+    tests/save_sync_tests.cpp
+    host/save_data/save_sync.cpp
+    host/save_data/param_sfo.cpp)
+target_include_directories(mhfu_save_sync_tests PRIVATE "${MHFU_PROFILE_DIR}/host" "${MHFU_PROFILE_DIR}/third_party")
+target_link_libraries(mhfu_save_sync_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_save_sync_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_save_sync_tests COMMAND mhfu_save_sync_tests)
+endif()
+
 add_executable(mhfu_camera_tests
     tests/analog_camera_tests.cpp
     host/camera/camera_input.cpp
