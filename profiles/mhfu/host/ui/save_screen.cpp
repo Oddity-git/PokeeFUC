@@ -319,7 +319,10 @@ void run_sync() {
         (void)download_sync();
         break;
     case sd::sync::Decision::NoLocal:
-        s.sync_view.note = "There is no save on this device yet.";
+        if (!s.sync_view.remote_hash.empty())
+            (void)download_sync();
+        else
+            s.sync_view.note = "There is no save on this device yet.";
         break;
     case sd::sync::Decision::InSync:
         s.sync_view.note = "Already in sync.";
