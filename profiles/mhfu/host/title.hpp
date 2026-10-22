@@ -92,5 +92,8 @@ inline constexpr bool kHubScaling = true;
 // True Attack Value (game/true_attack.cpp) reads Freedom Unite's equipment
 // screens.
 inline constexpr bool kTrueAttack = kFreedomUniteExtras;
+// True element and status (game/true_element.cpp): the same setting's other
+// half, at Freedom Unite's text routines.
+inline constexpr bool kTrueElement = kTrueAttack;
 
 } // namespace mhfu

@@ -20,6 +20,7 @@
 #include "game/empty_item_slot.hpp"
 #include "game/give_rarity.hpp"
 #include "game/true_attack.hpp"
+#include "game/true_element.hpp"
 #include "game/hall_equipment.hpp"
 #include "game/hall_meal.hpp"
 #include "game/item_sets.hpp"
@@ -325,6 +326,7 @@ void present_frame(Runtime &rt) {
     if constexpr (kGiveRarity) game::give_rarity::frame(rt);
     if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);
     if constexpr (kTrueAttack) game::true_attack::frame(rt);
+    if constexpr (kTrueElement) game::true_element::frame(rt);
     if constexpr (kHallEquipment) game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
     if constexpr (kItemSets) game::item_sets::frame(rt);
     if constexpr (kHallMeal) game::hall_meal::frame(rt, &call_guest_with_result);
