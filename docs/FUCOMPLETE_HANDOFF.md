@@ -80,5 +80,5 @@ The game boots, plays through the village, Guild Hall and quests, and saves on L
 2. **Overlays FUComplete patches.** The bow and bowgun aim extras stay off while game_task runs interpreted. Building libraries from the dumps (`build_overlay_dumps.sh`) after a full village-and-quest run removes most of that.
 3. **A release's first start** writes `EBOOT.FUC.ELF` and prints the developer message about generating the corpus and rebuilding. A release player only needs to start the game again, so that message should say so (and the first run could mention why it is slow).
 4. **A formatting-only commit** for the files this branch touches, once feature work settles.
-5. **Android** (`android-port`, PR #3): continue there, with the same title gating.
+5. **Android** (`android-port`, PR #3): published as a test APK in the fork's releases. Phone-tested with the touch controls and 60/90/120 fps interpolation; the Fill edge fix and the interpolation vertex flush are in versionCode 714. Continue there, with the same title gating, and record what a full quest on the phone checks.
 6. **Each Pokee sync:** merge, gate new extras, and port them one at a time as in step 4 of the build history.

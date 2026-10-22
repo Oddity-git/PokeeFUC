@@ -99,6 +99,8 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Field of view scale (Video, Pokee's own setting) | ✅ at `90f010e`, seen by the player: the camera's view widens and narrows while the game runs, without a restart |
 | FUComplete's options in the menu, a CONFIG.BIN other than the corpus's (File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on) | ✅ in a scripted run: written from the menu, read at the next start; the executable's changed word and lobby_task's six run interpreted, the rest compiled, at full speed in the village. ❔ each option's effect in the game |
 
+**Android arm64 phone** (`android-port`, versionCode 714, `8299f61`): boots from the FUComplete-patched image, the touch controls work, 60/90/120 fps interpolation runs without the vertex burst, and Fill with *Interface at the edges* keeps menus and loot notices whole. ❔ audio quality, a long session, and a full quest on the phone.
+
 ## Updating this page
 
 Run through [the smoke test](TESTING.md) on the platform, then change the cells you checked in the same pull request as the fix, or in a pull request of their own. Add a row to *Tested hardware* with the commit you tested. A result without a commit cannot be compared with anything later, so it does not go in the table.
