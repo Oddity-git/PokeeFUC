@@ -61,7 +61,7 @@ Full details: [the FUComplete section of the profile README](profiles/mhfu/READM
 
 An arm64 APK for Android 10 or later with Vulkan 1.1 is on the same [releases page](https://github.com/Oddity-git/PokeeFUC/releases). Install it with `adb install -r` or by opening it on the phone. It installs beside the standard Pokee app, keeps its data across updates signed with the same key, and asks for the FUComplete-patched image on its first start.
 
-Do not uninstall an earlier PokeeFUC APK to update it: uninstalling deletes its data, saves included. This build is a **test build** and has been checked on the emulator, not yet on a phone.
+Do not uninstall an earlier PokeeFUC APK to update it: uninstalling deletes its data, saves included. It is a **test build**, checked on a phone and the emulator: the touch controls work, 60/90/120 fps interpolation no longer bursts models, and Fill with *Interface at the edges* keeps menus and loot notices whole.
 
 ## Status
 
