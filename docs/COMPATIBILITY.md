@@ -99,8 +99,9 @@ Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTo
 | Scale Guild Hall Quests (Mods) | ✅ at `75548bf`, seen by the player: a 1★ Guild Bulldrome quest felt like its village counterpart, and a later village quest printed `[hub] quest start: last stage 139, offline 1, scaling 0` and kept the game's health. ❔ an online hall was not played |
 | Field of view scale (Video, Pokee's own setting) | ✅ at `90f010e`, seen by the player: the camera's view widens and narrows while the game runs, without a restart |
 | FUComplete's options in the menu, a CONFIG.BIN other than the corpus's (File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on) | ✅ in a scripted run: written from the menu, read at the next start; the executable's changed word and lobby_task's six run interpreted, the rest compiled, at full speed in the village. ❔ each option's effect in the game |
+| Save sync through a folder (System > Saves > Sync saves) | ❔ new in 0.1.6: the hash, copy and decision checks pass; a real phone-to-computer sync has not been played through yet. The desktop folder path and the Android Drive folder need a two-device check |
 
-**Android arm64 phone** (`android-port`, versionCode 714, `8299f61`): boots from the FUComplete-patched image, the touch controls work, 60/90/120 fps interpolation runs without the vertex burst, and Fill with *Interface at the edges* keeps menus and loot notices whole. ❔ audio quality, a long session, and a full quest on the phone.
+**Android arm64 phone** (`android-port`, versionCode 714, `8299f61`): boots from the FUComplete-patched image, the touch controls work, 60/90/120 fps interpolation runs without the vertex burst, and Fill with *Interface at the edges* keeps menus and loot notices whole. ❔ audio quality, a long session, and a full quest on the phone. Save sync's folder picker and persisted Drive permission are new and untested on a phone.
 
 ## Updating this page
 

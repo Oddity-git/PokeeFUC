@@ -945,7 +945,15 @@ void sync_screen(bool back) {
         open_browser(Stage::ChooseSyncFolder);
     if (!settings.save_sync_time.empty()) info_row("Last sync", settings.save_sync_time.c_str());
     if (view.local_summary.exists) info_row("This device", describe(view.local_summary).c_str());
-    if (view.remote_summary.exists) info_row("The folder", describe(view.remote_summary).c_str());
+    if (view.remote_summary.exists) {
+#if defined(MHFU_ANDROID_APP)
+        // The staging copy was made just now, so its file time says nothing
+        // about when the folder's save was written; its size does.
+        info_row("The folder", human_size(view.remote_summary.bytes).c_str());
+#else
+        info_row("The folder", describe(view.remote_summary).c_str());
+#endif
+    }
     ImGui::Dummy({0.0f, px(4.0f)});
     ImGui::Indent(px(16.0f));
     const bool conflict = view.decision == sd::sync::Decision::Conflict ||
