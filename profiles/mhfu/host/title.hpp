@@ -85,9 +85,15 @@ inline constexpr bool kHallEquipment = true;
 // The key quest marks (game/key_quests.cpp): the quest packs, at their own
 // DATA.BIN entries in each title.
 inline constexpr bool kKeyQuests = true;
+// Gathering Hall scaling (game/hub_scaling.cpp): the entity list's health
+// fields, the same in both titles, and each title's quest packs.
+inline constexpr bool kHubScaling = true;
 // Not ported to FUComplete, which has its own True Raw display in CONFIG.BIN:
 // True Attack Value (game/true_attack.cpp) reads Freedom Unite's equipment
 // screens.
 inline constexpr bool kTrueAttack = kFreedomUniteExtras;
+// True element and status (game/true_element.cpp): the same setting's other
+// half, at Freedom Unite's text routines.
+inline constexpr bool kTrueElement = kTrueAttack;
 
 } // namespace mhfu

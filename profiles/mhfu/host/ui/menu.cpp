@@ -769,7 +769,7 @@ bool text_row(const char *id, const char *label, std::string &value, std::size_t
     if (field.focused) draw_selection(draw, start, {start.x + width, start.y + row_height}, 235);
     draw->AddText(
         {start.x + std::round(16.0f * Layer::get().scale()), start.y + (row_height - Layer::get().font_size()) * 0.5f},
-        o.disabled         ? colors::kTextDisabled
+        o.disabled          ? colors::kTextDisabled
             : field.focused ? colors::kAccentBright
                             : colors::kText,
         label);
@@ -1310,9 +1310,10 @@ void Menu::game() {
     if constexpr (kTrueAttack) {
         if (toggle_row("True Attack Value", s.true_attack,
                 options_for("game.true_attack",
-                    "On: the equipment screens show a weapon's attack as the game counts it, without the "
-                    "class factor (a great sword's 672 shows as 140), as FUComplete's True Raw does. Damage is "
-                    "the same either way. Off (default): the game's own numbers."))) {
+                    "On: the equipment screens show a weapon's attack, element and status as the game counts "
+                    "them, as FUComplete's True Raw/Ele/Status does: attack without the class factor (a great "
+                    "sword's 672 shows as 140) and element and status without the trailing zero (fire 250 shows "
+                    "as 25). Damage is the same either way. Off (default): the game's own numbers."))) {
             s.true_attack = !s.true_attack;
             settings::save();
         }
@@ -1942,6 +1943,17 @@ void Menu::mods() {
                         "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
                         "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
                 s.key_quests = !s.key_quests;
+                settings::save();
+            }
+        }
+        if constexpr (kHubScaling) {
+            if (toggle_row("Scale Guild Hall Quests", s.hub_scaling,
+                    options_for("game.hub_scaling",
+                        "On: a large monster in a quest started from the offline Gathering Hall keeps 65% of its "
+                        "health, so one hunter can finish it in the village's time. Village quests and every "
+                        "online hall stay as they are. Off (default): the game's own health. "
+                        "MHFU_HUB_SCALING_HEALTH sets another percentage."))) {
+                s.hub_scaling = !s.hub_scaling;
                 settings::save();
             }
         }
