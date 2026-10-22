@@ -69,6 +69,7 @@ struct SyncView {
     sd::sync::Decision decision{sd::sync::Decision::NoLocal};
     std::string error;
     std::string note;
+    bool downloaded{}; // the last action brought the folder's save here: restart to load it
     bool ready{};
 };
 
@@ -194,6 +195,8 @@ std::string sync_folder_name() {
 // local staging folder first.
 void refresh_sync() {
     State &s = state();
+    const std::string note = s.sync_view.note; // an action's result survives the refresh
+    const bool downloaded = s.sync_view.downloaded;
     SyncView view;
     view.local = sd::sync::game_save_folder(sd::memory_stick());
     if (!view.local.empty()) {
@@ -223,6 +226,8 @@ void refresh_sync() {
         }
     }
     view.decision = sd::sync::decide(view.local_hash, view.remote_hash, settings::current().save_sync_hash);
+    view.note = note;
+    view.downloaded = downloaded;
     view.ready = true;
     s.sync_view = std::move(view);
 }
@@ -263,6 +268,7 @@ bool upload_sync() {
     settings::save();
     view.error.clear();
     view.note = "Uploaded this device's save.";
+    view.downloaded = false;
     s.sync_conflict = false;
     s.sync_refresh = true;
     std::cout << "[saves] sync uploaded " << utf8(view.local) << "\n";
@@ -295,6 +301,7 @@ bool download_sync() {
     view.error.clear();
     view.note = result.backup.empty() ? "Downloaded the folder's save."
                                       : "Downloaded the folder's save; the earlier one is backed up.";
+    view.downloaded = true;
     s.sync_conflict = false;
     s.sync_refresh = true;
     std::cout << "[saves] sync downloaded " << utf8(view.remote) << "\n";
@@ -946,7 +953,16 @@ void sync_screen(bool back) {
     paragraph(sd::sync::decision_text(view.decision), conflict ? colors::kDanger : colors::kTextDim);
     if (!view.note.empty()) paragraph(view.note, colors::kTextDim);
     if (!view.error.empty()) paragraph(view.error, colors::kDanger);
+    if (view.downloaded)
+        paragraph("The game reads its save at the title screen. Restart now to load the downloaded save; progress "
+                  "since your last save is lost. If you keep playing instead, do not save before you restart.");
     ImGui::Unindent(px(16.0f));
+    if (view.downloaded &&
+        button_row("Restart now", {false, {}, "Closes the game and starts it again at the title screen."},
+            colors::kAccentBright)) {
+        s.restart = true;
+        close();
+    }
     if (s.sync_conflict) {
         ImGui::Indent(px(16.0f));
         paragraph("Both copies changed since the last sync, so pick the one to keep. The other is kept as a "
@@ -1030,6 +1046,7 @@ void save_rows() {
                 "The folder is only for this game's save."})) {
         state().sync_refresh = true;
         state().sync_conflict = false;
+        state().sync_view = SyncView{};
         go(Stage::Sync);
     }
     if (!settings.save_sync_folder.empty()) info_row("Sync folder", sync_folder_name().c_str());
