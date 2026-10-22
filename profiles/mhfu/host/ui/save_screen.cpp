@@ -14,6 +14,7 @@
 #include "pokee_version.hpp"
 #if defined(MHFU_ANDROID_APP)
 #include "platform/android_documents.hpp"
+#include "platform/android_jni.hpp"
 #endif
 
 #include "imgui.h"
