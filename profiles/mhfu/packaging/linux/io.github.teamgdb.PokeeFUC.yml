@@ -40,11 +40,13 @@ finish-args:
   # Picking the disc image. The system file dialog (the file chooser portal)
   # needs no permission, but it is missing under Game Mode's gamescope, where
   # the built-in gamepad file browser is the only way; that browser can only
-  # show what the sandbox can read. Read-only: nothing outside the app's own
-  # data directory is ever written.
+  # show what the sandbox can read, and write what it can write. Home is
+  # writable because save sync writes the folder the player picks there (a
+  # Google Drive or Nextcloud folder), as Export save and Back up saves do
+  # in Downloads.
   #   Home: disc images live in many places there (Downloads, ~/Games,
-  #   emulation folders).
-  - --filesystem=home:ro
+  #   emulation folders), and sync folders are usually mounted there too.
+  - --filesystem=home
   #   SD cards and USB drives: /run/media on SteamOS and most desktops.
   - --filesystem=/run/media:ro
   #   Removable drives on Debian and Ubuntu.
