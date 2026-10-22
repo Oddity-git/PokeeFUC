@@ -10,6 +10,7 @@
 
 #include "overlays.hpp"
 #include "title.hpp"
+#include "adhoc/session.hpp"
 #include "game/body_trace.hpp"
 #include "game/damage_numbers.hpp"
 #include "game/gather_icon.hpp"
@@ -24,6 +25,7 @@
 #include "game/item_sets.hpp"
 #include "game/item_box.hpp"
 #include "game/key_quests.hpp"
+#include "game/hub_scaling.hpp"
 #include "game/layered_armor.hpp"
 #include "mods/mhfu_mods.hpp"
 #include "game/sharpness_gauge.hpp"
@@ -327,6 +329,8 @@ void present_frame(Runtime &rt) {
     if constexpr (kItemSets) game::item_sets::frame(rt);
     if constexpr (kHallMeal) game::hall_meal::frame(rt, &call_guest_with_result);
     if constexpr (kKeyQuests) game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
+    if constexpr (kHubScaling)
+        game::hub_scaling::frame(rt.memory(), settings::current().hub_scaling, !adhoc_session_active());
 #if defined(MHFU_HAS_RENDERER)
     if (!media().renderer || !media().renderer->available()) {
         perf::end_frame(kernel().now_us());

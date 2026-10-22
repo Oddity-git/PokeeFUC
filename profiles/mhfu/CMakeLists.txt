@@ -340,6 +340,7 @@ set(MHFU_HOST_SOURCES
     host/game/hall_equipment.cpp
     host/game/hall_meal.cpp
     host/game/key_quests.cpp
+    host/game/hub_scaling.cpp
     host/game/hooks.cpp
     host/game/guest_calls.cpp
     host/game/item_sets.cpp
@@ -650,6 +651,20 @@ target_link_libraries(mhfu_damage_numbers_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_damage_numbers_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_damage_numbers_tests COMMAND mhfu_damage_numbers_tests)
+endif()
+
+# Guild Hall scaling: the offline hall's stage, the flat health cut and the
+# restore. No game data.
+add_executable(mhfu_hub_scaling_tests
+    tests/hub_scaling_tests.cpp
+    host/game/hub_scaling.cpp
+    host/game/damage_numbers.cpp
+    host/game/hit_trace.cpp)
+target_include_directories(mhfu_hub_scaling_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_hub_scaling_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_hub_scaling_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_hub_scaling_tests COMMAND mhfu_hub_scaling_tests)
 endif()
 
 # Item sets: loading a set through the box, the sets file, the screens'
