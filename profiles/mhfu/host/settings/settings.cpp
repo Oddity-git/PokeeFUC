@@ -111,9 +111,9 @@ template <typename Enum> struct Names {
 const Names<PresentMode> kPresentModes{
     {{PresentMode::Fifo, "vsync"}, {PresentMode::Mailbox, "mailbox"}, {PresentMode::Immediate, "immediate"}}};
 const Names<Aspect> kAspects{{{Aspect::Original, "original"}, {Aspect::Stretch, "stretch"}, {Aspect::Fill, "fill"}}};
-const Names<PerfDisplay> kPerfDisplays{{{PerfDisplay::Off, "off"}, {PerfDisplay::Overlay, "overlay"},
-    {PerfDisplay::OverlayAndLog, "overlay+log"}, {PerfDisplay::Log, "log"}, {PerfDisplay::Compact, "compact"},
-    {PerfDisplay::CompactAndLog, "compact+log"}}};
+const Names<PerfDisplay> kPerfDisplays{
+    {{PerfDisplay::Off, "off"}, {PerfDisplay::Overlay, "overlay"}, {PerfDisplay::OverlayAndLog, "overlay+log"},
+        {PerfDisplay::Log, "log"}, {PerfDisplay::Compact, "compact"}, {PerfDisplay::CompactAndLog, "compact+log"}}};
 const Names<RightStick> kRightSticks{
     {{RightStick::Camera, "camera"}, {RightStick::DPad, "dpad"}, {RightStick::Off, "off"}}};
 const Names<LockOnStyle> kLockOnStyles{{{LockOnStyle::Follow, "follow"}, {LockOnStyle::Focus, "focus"}}};
@@ -515,8 +515,7 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return kNameEntries.parse(t, s.name_entry); },
             [](const Settings &s) { return kNameEntries.format(s.name_entry); },
             [](Settings &s, const char *t) {
-                if (!kNameEntries.parse(t, s.name_entry))
-                    std::cerr << "[settings] MHFU_OSK_MODE: keyboard or fixed\n";
+                if (!kNameEntries.parse(t, s.name_entry)) std::cerr << "[settings] MHFU_OSK_MODE: keyboard or fixed\n";
             }},
         {"input.name", "MHFU_OSK_TEXT",
             [](Settings &s, const std::string &t) {
@@ -599,6 +598,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.key_quests); },
             [](const Settings &s) { return std::string(s.key_quests ? "1" : "0"); },
             [](Settings &s, const char *t) { s.key_quests = variable_flag(t); }},
+        {"game.hub_scaling", "MHFU_HUB_SCALING",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.hub_scaling); },
+            [](const Settings &s) { return std::string(s.hub_scaling ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.hub_scaling = variable_flag(t); }},
         {"game.gather_icon_size", "MHFU_GATHER_ICON_SIZE",
             [](Settings &s, const std::string &t) {
                 return parse_uint(t, kMinGatherIconSize, kMaxGatherIconSize, s.gather_icon_size);
