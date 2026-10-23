@@ -542,7 +542,8 @@ void end_frame(std::uint64_t virtual_us, bool presented) {
 #else
     const bool slow_log = trace.enabled;
 #endif
-    const double slow_frame_ms = trace.enabled ? trace.slow_frame_ms : 40.0;
+    // 30 ms catches a late 60 fps present too, not only a 30 fps game frame.
+    const double slow_frame_ms = trace.enabled ? trace.slow_frame_ms : 30.0;
     if (slow_log && frame_ms > slow_frame_ms) {
         // The GPU time is the previous frame's: that is the work a fence wait
         // at the start of this frame was waiting for.
