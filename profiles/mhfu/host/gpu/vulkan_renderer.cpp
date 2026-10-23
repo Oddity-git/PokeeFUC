@@ -1473,6 +1473,7 @@ struct VulkanRenderer::Impl {
     // the guest's vertex bytes of transformed triangle draws and the vertex
     // shader decodes and skins them.
     bool gpu_decode_available{};
+    bool gpu_decode_requested{}; // menu: this run only
     bool check_gpu_decode{};    // MHFU_CHECK_GPU_DECODE
     std::uint32_t raw_offset{}; // the raw block most recently written this frame
     RawBlock last_raw{};
@@ -7443,21 +7444,34 @@ void VulkanRenderer::upload_frame(std::uint32_t display_address, const std::uint
 
 bool VulkanRenderer::gpu_decode() const {
     if (!impl_ || !impl_->ready || !impl_->gpu_decode_available) return false;
-    // Off unless MHFU_GPU_DECODE=1 asks for it: on the Steam Deck (radv)
-    // the raw vertex path hung the GPU (ring gfx timeout) at the character
-    // select screen, and the CPU decode did not. Also off for the paths and
-    // traces that need decoded vertices.
-    static const bool off = [] {
-        if (std::getenv("MHFU_CHECK_GPU_DECODE") != nullptr) return false;
+    // MHFU_GPU_DECODE=1 forces it on and any other value forces it off, as
+    // before. Without the variable the menu's this-run switch decides. On
+    // the Steam Deck (radv) the raw path hung the GPU at character select,
+    // so it is never on by default. Some paths and traces need decoded
+    // vertices and leave it off.
+    static const int env = [] {
+        if (std::getenv("MHFU_CHECK_GPU_DECODE") != nullptr) return 0;
         const char *text = std::getenv("MHFU_GPU_DECODE");
-        return text == nullptr || std::strcmp(text, "1") != 0;
+        if (text == nullptr) return -1;
+        return std::strcmp(text, "1") == 0 ? 1 : 0;
     }();
     static const bool needs_vertices = std::getenv("MHFU_NO_DIRECT_VERTICES") != nullptr ||
         std::getenv("MHFU_CHECK_DIRECT_VERTICES") != nullptr || std::getenv("MHFU_TRACE_GE") != nullptr ||
         std::getenv("MHFU_TRACE_3D") != nullptr || std::getenv("MHFU_TRACE_SPRITES") != nullptr ||
         std::getenv("MHFU_TRACE_LIGHTING") != nullptr || std::getenv("MHFU_TRACE_FB_TEXTURES") != nullptr;
-    return !off && !needs_vertices && !perf::alternate_off(perf::NewPath::Direct) &&
-        !perf::alternate_off(perf::NewPath::GpuDecode);
+    if (needs_vertices || perf::alternate_off(perf::NewPath::Direct) || perf::alternate_off(perf::NewPath::GpuDecode))
+        return false;
+    return env == 1 || (env < 0 && impl_->gpu_decode_requested);
+}
+
+bool VulkanRenderer::can_gpu_decode() const {
+    return impl_ && impl_->ready && impl_->gpu_decode_available;
+}
+
+void VulkanRenderer::set_gpu_decode(bool enabled) {
+    if (!impl_) return;
+    impl_->gpu_decode_requested = enabled && impl_->gpu_decode_available;
+    std::cout << "[render] GPU vertex decode " << (impl_->gpu_decode_requested ? "on" : "off") << " for this run\n";
 }
 
 std::string VulkanRenderer::gpu_problem() const {
