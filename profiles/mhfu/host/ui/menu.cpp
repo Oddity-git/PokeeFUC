@@ -650,6 +650,17 @@ void Menu::video() {
             settings::save();
         }
     }
+    {
+        const bool available = renderer().can_gpu_decode();
+        RowOptions o;
+        o.disabled = !available;
+        o.description = available
+            ? "Decodes and skins the game's vertices on the GPU instead of the CPU. Experimental: some drivers "
+              "hang with it, so it is for this run only; restarting returns to the CPU path."
+            : "This GPU or driver cannot use the GPU vertex path.";
+        if (toggle_row("GPU vertex decode (this run)", renderer().gpu_decode(), o))
+            renderer().set_gpu_decode(!renderer().gpu_decode());
+    }
     font_rows();
     ImGui::Dummy({0.0f, font_gap()});
     if (button_row(
