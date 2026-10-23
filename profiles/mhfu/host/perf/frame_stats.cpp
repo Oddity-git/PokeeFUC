@@ -273,6 +273,10 @@ Options options() {
         result.overlay = result.compact = result.log = true;
         break;
     }
+#if defined(MHFU_ALL_DIAGNOSTIC)
+    // The all-in-one diagnostic build logs even if Performance is Off.
+    result.log = true;
+#endif
     return result;
 }
 
@@ -617,6 +621,9 @@ void end_frame(std::uint64_t virtual_us, bool presented) {
     out.frame_rate = s.frame_rate;
     out.requested_rate = s.requested_rate;
     if (options().log) print(out);
+#if defined(__ANDROID__)
+    if (options().log) std::cout << "[cpu] " << android::state_line() << std::endl;
+#endif
     if (render_split_line())
         report_split(frames);
     else

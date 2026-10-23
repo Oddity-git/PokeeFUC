@@ -380,7 +380,7 @@ if(MHFU_ANDROID_APP)
     add_library(Pokee SHARED ${MHFU_PROGRAM_SOURCES} host/platform/android_app.cpp
         host/platform/android_jni.cpp host/platform/android_documents.cpp host/platform/android_performance.cpp
         host/platform/android_fatal.cpp host/platform/android_display.cpp)
-    target_compile_definitions(Pokee PRIVATE MHFU_ANDROID_APP=1)
+    target_compile_definitions(Pokee PRIVATE MHFU_ANDROID_APP=1 MHFU_ALL_DIAGNOSTIC=1)
     set_target_properties(Pokee PROPERTIES
         OUTPUT_NAME main
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

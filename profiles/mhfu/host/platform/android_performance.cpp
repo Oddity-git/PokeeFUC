@@ -9,7 +9,10 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <sstream>
 #include <string>
+#include <sys/resource.h>
 #include <vector>
 
 namespace mhfu::android {
@@ -100,6 +103,73 @@ void report_frame_work(std::int64_t work_ns) {
     if (!state.opened) open(state);
     if (state.session == nullptr || work_ns <= 0) return;
     state.report(state.session, work_ns);
+}
+
+namespace {
+
+std::string read_text(const std::string &path) {
+    std::ifstream in(path);
+    std::string text;
+    std::getline(in, text);
+    return text;
+}
+
+long read_number(const std::string &path) {
+    std::ifstream in(path);
+    long value = 0;
+    if (!(in >> value)) return std::numeric_limits<long>::min();
+    return value;
+}
+
+} // namespace
+
+std::string state_line() {
+    std::ostringstream out;
+    out << "core " << sched_getcpu();
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    if (sched_getaffinity(0, sizeof(set), &set) == 0) {
+        out << " affinity";
+        for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
+            if (CPU_ISSET(cpu, &set)) out << ' ' << cpu;
+    }
+    errno = 0;
+    const int nice = getpriority(PRIO_PROCESS, 0);
+    if (errno == 0) out << " nice " << nice;
+    bool any = false;
+    for (int policy = 0; policy < 16; ++policy) {
+        const long khz =
+            read_number("/sys/devices/system/cpu/cpufreq/policy" + std::to_string(policy) + "/scaling_cur_freq");
+        if (khz == std::numeric_limits<long>::min() || khz <= 0) continue;
+        out << (any ? ' ' : ' ') << 'p' << policy << '=' << khz / 1000;
+        any = true;
+    }
+    if (!any)
+        for (int cpu = 0; cpu < 16; ++cpu) {
+            const long khz =
+                read_number("/sys/devices/system/cpu/cpu" + std::to_string(cpu) + "/cpufreq/scaling_cur_freq");
+            if (khz == std::numeric_limits<long>::min() || khz <= 0) continue;
+            out << (any ? ' ' : ' ') << 'c' << cpu << '=' << khz / 1000;
+            any = true;
+        }
+    if (any) out << "MHz";
+    bool temp = false;
+    for (int zone = 0; zone < 24; ++zone) {
+        const std::string base = "/sys/class/thermal/thermal_zone" + std::to_string(zone);
+        const long millidegrees = read_number(base + "/temp");
+        if (millidegrees == std::numeric_limits<long>::min()) continue;
+        std::string type = read_text(base + "/type");
+        if (type.empty()) type = "zone" + std::to_string(zone);
+        out << (temp ? ' ' : ' ') << type << '=' << millidegrees / 1000;
+        temp = true;
+    }
+    const std::string status = read_text("/sys/class/power_supply/battery/status");
+    const long capacity = read_number("/sys/class/power_supply/battery/capacity");
+    const long battery_temp = read_number("/sys/class/power_supply/battery/temp");
+    if (!status.empty()) out << " battery " << status;
+    if (capacity != std::numeric_limits<long>::min()) out << ' ' << capacity << '%';
+    if (battery_temp != std::numeric_limits<long>::min()) out << ' ' << battery_temp / 10 << "C";
+    return out.str();
 }
 
 } // namespace mhfu::android

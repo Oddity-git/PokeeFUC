@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 // Android's performance hints (ADPF, APerformanceHint, Android 13 and later).
 // The game's thread works in a burst each frame and then sleeps until real
@@ -15,5 +16,10 @@ namespace mhfu::android {
 // Opens the session on the first call; does nothing where the system offers
 // no hints or MHFU_NO_PERFORMANCE_HINT is set.
 void report_frame_work(std::int64_t work_ns);
+
+// One diagnostic line: the core and affinity the game thread has, its nice
+// value, the CPU frequencies, thermal-zone temperatures and the battery.
+// Anything the kernel does not expose is left out.
+[[nodiscard]] std::string state_line();
 
 } // namespace mhfu::android
