@@ -271,15 +271,26 @@ void draws() {
     ge.set_raw_vertices(true);
     ge.set_view_hook([&](DrawCall &) { ++hooks; });
     auto words = setup();
+    // GPU decode is limited to perspective 3D: set the projection's m[11].
+    words.insert(words.begin(), {command(0x3e, 11), command(0x3f, f24(-1.0f))});
     words.push_back(command(4, (3u << 16) | 3));
     execute(ge, m, words);
     expect(calls == 1 && hooks == 1, "transformed raw draw invokes view hook");
+    ge.set_draw_sink([&](const DrawCall &d) {
+        ++calls;
+        expect(d.raw_count == 0u && d.vertices.size() == 3, "2D projection stays on the CPU path");
+    });
+    auto flat = setup();
+    flat.insert(flat.begin(), {command(0x3e, 11), command(0x3f, f24(0.0f))});
+    flat.push_back(command(4, (3u << 16) | 3));
+    execute(ge, m, flat);
     ge.set_draw_sink([&](const DrawCall &d) {
         ++calls;
         expect(d.vertices.size() == 3, "raw comparison decodes same vertices");
     });
     ge.set_raw_vertices(true, true);
     execute(ge, m, words);
+    calls = 0;
     ge.set_draw_sink([&](const DrawCall &) { ++calls; });
     auto bad = setup();
     bad.push_back(command(4, 0));
@@ -287,7 +298,7 @@ void draws() {
     bad.push_back(command(1, 0xffffff));
     bad.push_back(command(4, 3));
     execute(ge, m, bad);
-    expect(calls == 2, "empty/out-of-range draws are skipped");
+    expect(calls == 0, "empty/out-of-range draws are skipped");
 }
 void vertex_reuse_skips_decode() {
     psprecomp::GuestMemory m;
