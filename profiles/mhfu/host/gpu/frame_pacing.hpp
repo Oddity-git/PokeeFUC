@@ -143,6 +143,10 @@ class RateGovernor {
 public:
     // The rate the setting asks for; the governor starts there.
     void set_requested(double rate);
+    // The display's refresh, so the ladder only offers rates the display can
+    // show evenly: 60 and 30 on 60 Hz, 90/45/30 on 90 Hz, 120/60/30 on 120 Hz.
+    // Zero leaves every rate in the ladder.
+    void set_display_hz(double hz);
     // Off, the rate stays the one asked for whatever the game's speed
     // (Video > Lower the frame rate when the game falls behind); on again,
     // it starts from there.
@@ -173,6 +177,7 @@ private:
     void step_to(std::size_t index, const char *why);
 
     double requested_{30.0};
+    double display_hz_{}; // 0: unknown, keep every rate
     bool automatic_{true};
     std::vector<double> ladder_{30.0};
     std::size_t index_{};

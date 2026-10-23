@@ -654,6 +654,60 @@ void governor() {
     check(slow45.update(second_with(0.9, 0.0, 5.0, 0.3, 45.0)) && slow45.rate() == 30.0, "45 steps down to 30");
 }
 
+void display_ladder() {
+    // A 60 Hz panel: 45 fps is 1.5 refreshes a present, which alternates and
+    // reads as judder. Late presents on 60 must fall to 30, not 45.
+    RateGovernor sixty;
+    sixty.set_display_hz(60.0);
+    sixty.set_requested(60.0);
+    Second late60 = second_with(1.0, 15.0, 2.0, 0.3, 60.0);
+    late60.presents = 60u;
+    late60.skipped = 30u;
+    (void)sixty.update(late60);
+    check(sixty.update(late60) && sixty.rate() == 30.0, "60 Hz drops from 60 to 30, never 45");
+
+    // A 90 Hz panel: 45 is two refreshes a present and is the right step.
+    RateGovernor ninety;
+    ninety.set_display_hz(90.0);
+    ninety.set_requested(90.0);
+    Second late90 = second_with(1.0, 15.0, 2.0, 0.3, 90.0);
+    late90.presents = 90u;
+    late90.skipped = 45u;
+    (void)ninety.update(late90);
+    check(ninety.update(late90) && ninety.rate() == 45.0, "90 Hz drops from 90 to 45");
+
+    // A 120 Hz panel: 60 is two refreshes; 90 is 1.5 and is left out.
+    RateGovernor oneTwenty;
+    oneTwenty.set_display_hz(120.0);
+    oneTwenty.set_requested(120.0);
+    Second late120 = second_with(1.0, 15.0, 2.0, 0.3, 120.0);
+    late120.presents = 120u;
+    late120.skipped = 60u;
+    (void)oneTwenty.update(late120);
+    check(oneTwenty.update(late120) && oneTwenty.rate() == 60.0, "120 Hz drops from 120 to 60, never 90");
+
+    // A 144 Hz panel has none of the known rates on its grid; the old ladder
+    // stays so there is still a rate below the one asked for.
+    RateGovernor high;
+    high.set_display_hz(144.0);
+    high.set_requested(144.0);
+    Second late144 = second_with(1.0, 15.0, 2.0, 0.3, 144.0);
+    late144.presents = 144u;
+    late144.skipped = 72u;
+    (void)high.update(late144);
+    check(high.update(late144) && high.rate() == 120.0, "an unusual refresh keeps a way down");
+
+    // The display can change during play; the ladder follows it.
+    RateGovernor changed;
+    changed.set_requested(60.0);
+    changed.set_display_hz(60.0);
+    Second late = second_with(1.0, 15.0, 2.0, 0.3, 60.0);
+    late.presents = 60u;
+    late.skipped = 30u;
+    (void)changed.update(late);
+    check(changed.update(late) && changed.rate() == 30.0, "changing the display rebuilds the ladder");
+}
+
 } // namespace
 
 int main() {
@@ -665,6 +719,7 @@ int main() {
     rates();
     present_clock();
     governor();
+    display_ladder();
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILED");
     return failures == 0 ? 0 : 1;
 }
