@@ -643,8 +643,9 @@ void Menu::video() {
         RowOptions o;
         o.disabled = !available;
         o.description = available
-            ? "Decodes and skins the game's vertices on the GPU instead of the CPU. Experimental: some drivers "
-              "hang with it, so it is for this run only; restarting returns to the CPU path."
+            ? "Decodes the game's static 3D geometry on the GPU instead of the CPU. The HUD and skinned models "
+              "stay on the CPU. Experimental: some drivers hang with it, so it is for this run only; restarting "
+              "returns to the CPU path."
             : "This GPU or driver cannot use the GPU vertex path.";
         if (toggle_row("GPU vertex decode (this run)", renderer().gpu_decode(), o))
             renderer().set_gpu_decode(!renderer().gpu_decode());
