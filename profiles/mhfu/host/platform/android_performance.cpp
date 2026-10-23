@@ -1,19 +1,24 @@
 #include "platform/android_performance.hpp"
 
 #include <dlfcn.h>
+#include <sched.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <cerrno>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <string>
+#include <vector>
 
 namespace mhfu::android {
 namespace {
 
-// The time a game frame's work should take. The old 25 ms let the system
-// treat a frame near the 30 fps budget as on time. 10 ms asks for enough
-// clock to leave room for the 60 fps presents instead of boosting only after
-// the frame is already late.
-constexpr std::int64_t kTargetWorkNs = 10'000'000;
+// The time a game frame's work should take: three quarters of the PSP's
+// 29.97 frames a second, so the system raises the clock while a frame still
+// has room rather than once it is late.
+constexpr std::int64_t kTargetWorkNs = 25'000'000;
 
 // Resolved at run time: the functions exist from API 33, and the app runs on
 // Android 10 and later.
@@ -31,8 +36,42 @@ Hints &hints() {
     return value;
 }
 
+// Android's scheduler may leave this mostly-sleeping game thread on an
+// efficiency core. Pin it to the performance cores when their capacities are
+// readable; if the cpuset does not allow it, leave the scheduler alone.
+void pin_to_performance_cores() {
+    if (std::getenv("MHFU_NO_BIG_CORES") != nullptr) return;
+    struct Cpu {
+        int id;
+        long capacity;
+    };
+    std::vector<Cpu> cpus;
+    for (int id = 0; id < 64; ++id) {
+        std::ifstream in("/sys/devices/system/cpu/cpu" + std::to_string(id) + "/cpu_capacity");
+        long capacity = 0;
+        if (in >> capacity && capacity > 0) cpus.push_back({id, capacity});
+    }
+    if (cpus.size() < 2u) return;
+    long fastest = 0;
+    for (const Cpu &cpu : cpus) fastest = std::max(fastest, cpu.capacity);
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    std::string ids;
+    for (const Cpu &cpu : cpus)
+        if (cpu.capacity * 5 >= fastest * 3) {
+            CPU_SET(cpu.id, &set);
+            ids += (ids.empty() ? "" : ",") + std::to_string(cpu.id);
+        }
+    if (CPU_COUNT(&set) == 0 || CPU_COUNT(&set) == static_cast<int>(cpus.size())) return;
+    if (sched_setaffinity(0, sizeof(set), &set) == 0)
+        std::cout << "[perf] game thread pinned to performance CPUs " << ids << "\n";
+    else
+        std::cout << "[perf] cannot pin the game thread to CPUs " << ids << ": errno " << errno << "\n";
+}
+
 void open(Hints &hints) {
     hints.opened = true;
+    pin_to_performance_cores();
     if (std::getenv("MHFU_NO_PERFORMANCE_HINT") != nullptr) {
         std::cout << "[perf] performance hints off (MHFU_NO_PERFORMANCE_HINT)\n";
         return;

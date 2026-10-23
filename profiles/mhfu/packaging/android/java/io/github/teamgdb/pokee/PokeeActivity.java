@@ -59,9 +59,6 @@ public class PokeeActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Ask the platform to keep this long-running game's performance
-        // stable instead of treating it like a short foreground burst.
-        getWindow().setSustainedPerformanceMode(true);
         WindowManager.LayoutParams attributes = getWindow().getAttributes();
         attributes.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
             ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
