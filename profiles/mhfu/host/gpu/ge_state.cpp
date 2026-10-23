@@ -1,5 +1,7 @@
 #include "ge_state.hpp"
 
+#include <cmath>
+
 #include "perf/frame_stats.hpp"
 
 #include <algorithm>
@@ -1171,7 +1173,14 @@ void GeState::draw_primitive(const GuestMemory &memory, std::uint32_t data) {
         primitive == PrimitiveType::TriangleFan;
     const bool one_morph = ((vertex_type_ >> 18u) & 7u) == 0u;
     const bool positioned = ((vertex_type_ >> 7u) & 3u) != 0u;
-    if (raw_vertices_ && !call.through && triangles && one_morph && positioned && vertex_count != 0u) {
+    // GPU decode is safe for plain 3D meshes: perspective projection and no
+    // skin weights. The 2D HUD uses an orthographic projection (its m[11] is
+    // zero) and skinned characters/Felynes use the CPU skinning path; both
+    // were corrupted by the raw vertex shader. Keep those decoded here.
+    const bool perspective = std::fabs(projection_[11]) > 0.25f;
+    const bool skinned_type = ((vertex_type_ >> 9u) & 3u) != 0u;
+    if (raw_vertices_ && !call.through && triangles && one_morph && positioned && vertex_count != 0u && perspective &&
+        !skinned_type) {
         call.raw_vertices = memory.raw_pointer(first_address, static_cast<std::size_t>(probe) * vertex_count);
         if (call.raw_vertices != nullptr) {
             call.raw_count = vertex_count;
