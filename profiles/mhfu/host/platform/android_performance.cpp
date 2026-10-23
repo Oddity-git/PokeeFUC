@@ -9,10 +9,11 @@
 namespace mhfu::android {
 namespace {
 
-// The time a game frame's work should take: three quarters of the PSP's
-// 29.97 frames a second, so the system raises the clock while a frame still
-// has room rather than once it is late.
-constexpr std::int64_t kTargetWorkNs = 25'000'000;
+// The time a game frame's work should take. The old 25 ms let the system
+// treat a frame near the 30 fps budget as on time. 10 ms asks for enough
+// clock to leave room for the 60 fps presents instead of boosting only after
+// the frame is already late.
+constexpr std::int64_t kTargetWorkNs = 10'000'000;
 
 // Resolved at run time: the functions exist from API 33, and the app runs on
 // Android 10 and later.
