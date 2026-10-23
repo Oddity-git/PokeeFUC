@@ -47,6 +47,8 @@ Freedom Unite has one archive, so this port does not apply the manager's HD sele
 
 ## Profile code
 
+The Android display frame rate request (`profiles/mhfu/host/platform/android_display.*`, its test, and `pacing::requested_rate`) and the safer argument, password and licence handling in `packaging/android/build_apk.sh` were ported from Yakumo's Android app at commit `5bacba3`, under the same MIT licence and by the same contributors; names were changed to this profile's.
+
 A profile owns its generated AOT corpus, address-specific lowering, HLE behavior and native fast paths. Those files remain isolated under `profiles/<id>` so they do not become hidden dependencies of the generic framework.
 
 ## Analog camera

@@ -95,6 +95,10 @@ struct Settings {
         std::uint32_t names{100u};
     };
     InterfaceScale hud{};
+    // Under Fill on a screen wider than the PSP's, the quest interface's pieces
+    // at the screen's sides instead of in a PSP-shaped box in the middle
+    // (gpu/hud_scale.hpp, place_at_edges).
+    bool hud_edges{};
 
     // Text
     std::string font;              // the game's text font: path, "#face" for a collection; empty: the default
@@ -307,6 +311,7 @@ inline constexpr Platform kPlatform = Platform::Desktop;
 #endif
 // The defaults on `platform`: Desktop is Settings{} as declared above;
 // Android differs in video.aspect (fill: a phone is wider than the PSP),
+// video.hud_edges (on: the interface goes out to a phone's wide sides),
 // video.fullscreen (on: there is no window) and input.mouse (off: a phone
 // has no mouse to capture, and an emulator's pointer would turn the camera).
 [[nodiscard]] Settings defaults_for(Platform platform);

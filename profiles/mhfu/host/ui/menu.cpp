@@ -396,6 +396,18 @@ void Menu::video() {
             renderer().set_aspect(s.aspect);
             settings::save();
         }
+        RowOptions edges = options_for("video.hud_edges",
+            "On a screen wider than the PSP's, the quest interface goes out to the screen's sides: the clock, "
+            "the bars and the party list to the left, the map and the item bar to the right. Off keeps it in the "
+            "PSP's proportions in the middle. Menus stay where the game draws them.");
+        if (s.aspect != settings::Aspect::Fill) {
+            edges.disabled = true;
+            edges.note = "Fill only";
+        }
+        if (toggle_row("Interface at the edges", s.hud_edges, edges)) {
+            s.hud_edges = !s.hud_edges;
+            settings::save();
+        }
     }
     {
         int fov = static_cast<int>(std::lround(s.fov_scale * 100.0f));
@@ -662,6 +674,7 @@ void Menu::video() {
         restore("video.fullscreen", s.fullscreen, d.fullscreen);
         restore("video.window_scale", s.window_scale, d.window_scale);
         restore("video.aspect", s.aspect, d.aspect);
+        restore("video.hud_edges", s.hud_edges, d.hud_edges);
         restore("video.sharp_screen", s.sharp_screen, d.sharp_screen);
         restore("video.sharp_textures", s.sharp_textures, d.sharp_textures);
         restore("video.ui_textures", s.ui_textures, d.ui_textures);

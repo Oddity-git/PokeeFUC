@@ -379,7 +379,7 @@ set(MHFU_PROGRAM_SOURCES
 if(MHFU_ANDROID_APP)
     add_library(Pokee SHARED ${MHFU_PROGRAM_SOURCES} host/platform/android_app.cpp
         host/platform/android_jni.cpp host/platform/android_documents.cpp host/platform/android_performance.cpp
-        host/platform/android_fatal.cpp)
+        host/platform/android_fatal.cpp host/platform/android_display.cpp)
     target_compile_definitions(Pokee PRIVATE MHFU_ANDROID_APP=1)
     set_target_properties(Pokee PROPERTIES
         OUTPUT_NAME main
@@ -1171,6 +1171,27 @@ target_link_libraries(mhfu_render_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_render_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_render_tests COMMAND mhfu_render_tests)
+endif()
+
+# The Android app's display frame rate request (platform/android_display),
+# against a stand-in libandroid.so: it is looked up at run time, so the tests
+# need neither the NDK nor a device. One process per loader scenario, since
+# the lookup happens once per process.
+if(UNIX)
+    add_executable(mhfu_android_display_tests
+        tests/android_display_tests.cpp host/platform/android_display.cpp)
+    target_include_directories(mhfu_android_display_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+    target_compile_definitions(mhfu_android_display_tests PRIVATE
+        dlopen=pokee_test_dlopen dlsym=pokee_test_dlsym)
+    target_link_libraries(mhfu_android_display_tests PRIVATE ${CMAKE_DL_LIBS})
+    set_target_properties(mhfu_android_display_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    if(PSPRECOMP_BUILD_TESTS)
+        # Test names must be targets (psprecomp_test_binaries builds them).
+        foreach(scenario success missing_library missing_symbol rejected disabled)
+            add_custom_target(mhfu_android_display_${scenario} DEPENDS mhfu_android_display_tests)
+            add_test(NAME mhfu_android_display_${scenario} COMMAND mhfu_android_display_tests ${scenario})
+        endforeach()
+    endif()
 endif()
 
 # Frame interpolation checks: matching draws, cuts, blending, the present

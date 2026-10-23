@@ -326,12 +326,28 @@ cmake --build out/android-app -j 2
 
 The first configure needs an SDL3 built for Android to find; the release script builds the pinned one (`packaging/linux/sources.sh`) into `out/release-android/deps` and points the directory at it. The overlay libraries are reused as they are as long as `include/psprecomp/` has not changed since they were built; the script refuses them otherwise, and when any is missing.
 
+### PokeeFUC
+
+A build directory configured with `-DMHFU_TITLE=FUC` as well (the FUComplete build; see the [profile README](../profiles/mhfu/README.md#fucomplete-work-in-progress)) packs **PokeeFUC** instead: application id `io.github.teamgdb.pokeefuc`, *PokeeFUC* on the launcher, `pokeefuc-<version>-android-arm64.apk`. It is another app, not an update of Pokee, so both install on one phone and neither sees the other's data. The Java code is the same; `build_apk.sh` gives the APK its id with `aapt2 link --rename-manifest-package` and its name with a copy of the resources. The corpus (`generated_fuc/`) and the overlays it compiles (`overlays_fuc/`) are generated on a computer first; the FUComplete steps in the profile README make them.
+
+```sh
+cmake -S . -B out/android-fuc -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/28.2.13676358/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release \
+  -DPSPRECOMP_PROFILE=mhfu -DMHFU_TITLE=FUC -DMHFU_ANDROID_APP=ON \
+  -DSDL3_DIR=<SDL3 built for Android>/lib/cmake/SDL3 -DCMAKE_FIND_ROOT_PATH=<SDL3 built for Android>
+cmake --build out/android-fuc -j 2
+profiles/mhfu/scripts/release_android.sh out/android-fuc
+```
+
+The same key can sign both apps. The APK holds code recompiled from the game: the fork publishes PokeeFUC's Android test build on its GitHub releases, with the same terms as its Linux builds (no game data inside; players supply their own patched image). Keep the release key and its password private and backed up: Android installs an update only over the same key, and uninstalling deletes saves.
+
 ### What the script does
 
 1. Fetches the pinned SDL3 and the fallback font, checks their SHA-256 and builds SDL3 for Android 10 once.
 2. Reconfigures the build directory as a release (`MHFU_RELEASE`, no checkout paths, `android-29`) against that SDL3 and rebuilds `libmain.so` if that changed it.
 3. Checks that every overlay library is there and newer than the framework headers.
-4. Packs the APK with `packaging/android/build_apk.sh`: the native libraries, SDL's Java activity and the app's own, the font, and under `assets/licenses` the third-party notices, SDL's licence, FFmpeg's LGPL with where its source is, and the font's licence. The version name is `git describe`; the version code is the number of commits, so a later release installs as an update.
+4. Packs the APK with `packaging/android/build_apk.sh`: the native libraries, SDL's Java activity and the app's own, the font, and under `assets/licenses` Pokee's licence, the third-party notices, the licences of Dear ImGui, tiny-AES-c and xxHash, SDL's licence, FFmpeg's LGPL with where its source is, and the font's licence. The keystore password reaches `apksigner` through the environment, not its command line. The version name is `git describe`; the version code is the number of commits, so a later release installs as an update.
 5. Signs it with the release key, verifies the signature, refuses it if it holds any game file or if a library imports a function Android 10 lacks, and prints its size and SHA-256.
 
 ### The release key

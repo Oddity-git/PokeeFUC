@@ -234,6 +234,12 @@ struct InterfaceFit {
         px = kCentreX + (px - kCentreX) * x;
         py = kCentreY + (py - kCentreY) * y;
     }
+    // From where a vertex landed back to the game's pixels.
+    void unapply(float &px, float &py) const {
+        if (x <= 0.0f || y <= 0.0f) return;
+        px = kCentreX + (px - kCentreX) / x;
+        py = kCentreY + (py - kCentreY) / y;
+    }
     // From where the draw landed back to the game's pixels.
     [[nodiscard]] Rect to_game(Rect r) const {
         if (x <= 0.0f || y <= 0.0f) return r;
@@ -241,6 +247,80 @@ struct InterfaceFit {
             kCentreY + (r.y1 - kCentreY) / y};
     }
 };
+
+// Under Fill on a screen wider than the PSP's, the fit leaves the quest
+// interface in a PSP-shaped box in the middle. With video.hud_edges each
+// piece goes out to its own side of the screen instead, by the gap the fit
+// left there: the clock, the bars and the party list to the left, the map
+// and the item bar to the right. What sits in the middle, such as a notice
+// across the screen, stays. A piece is placed by the game's rectangle of
+// each quad, before any interface size, so a bar's end cap past the middle
+// stays with its bar.
+enum class EdgeSide { Centre, Left, Right };
+
+[[nodiscard]] inline EdgeSide edge_side(Rect game) {
+    const Rect r = normalized(game);
+    // The map, its marks and the window shown as a monster is found.
+    if (r.x0 >= kMapLeft - 48.0f && r.y0 >= kMapTop - 8.0f && r.y1 <= kMapBottom + 16.0f) return EdgeSide::Right;
+    // Health and stamina with their end caps, which reach past the middle.
+    if (r.x0 >= kVitalLeft - 4.0f && r.y1 <= kVitalBottom + 1.0f) return EdgeSide::Left;
+    // The item bar, its name, and a bowgun's ammo or a bow's coatings above it.
+    if (r.x0 >= kItemLeft - 16.0f && r.y0 >= kBowgunTop) return EdgeSide::Right;
+    const float centre = 0.5f * (r.x0 + r.x1);
+    if (centre < 176.0f) return EdgeSide::Left;
+    if (centre > 304.0f) return EdgeSide::Right;
+    return EdgeSide::Centre;
+}
+
+// How far a piece moves to its side, in the game's 480 pixels: the gap
+// between the fitted interface and the screen's edge. 0 when the screen is
+// not wider than the PSP's.
+[[nodiscard]] inline float edge_gap(InterfaceFit fit) {
+    return fit.x > 0.0f && fit.x < 1.0f ? InterfaceFit::kCentreX * (1.0f - fit.x) : 0.0f;
+}
+
+// What place_at_edges did: every quad of the draw moved by `dx`.
+struct EdgeMove {
+    bool moved{};
+    float dx{};
+};
+
+// Defined below, after the rectangles: whether a quad is one of the quest HUD
+// pieces the edges move, or a menu, a notice or another draw that stays.
+[[nodiscard]] inline Piece piece_of(Rect rect, std::uint32_t texture);
+[[nodiscard]] inline bool is_notice_piece(Rect rect, std::uint32_t texture);
+
+// Moves the draw `placed` (six vertices a quad) to its side, judged by each
+// quad of `unscaled`, the draw as the game made it before the interface
+// sizes, in fitted pixels. Only quest HUD pieces move, and only when every
+// quad goes the same way: a window, a notice or a line of text reaching over
+// the middle, such as a menu's help box or the item box, stays in one piece
+// where it is. A menu can be wholly on one side and still be a menu, so the
+// rectangles alone are not enough.
+template <typename Vertex>
+EdgeMove place_at_edges(std::vector<Vertex> &placed, const std::vector<Vertex> &unscaled, InterfaceFit fit,
+    std::uint32_t texture = 0) {
+    EdgeMove move;
+    const float gap = edge_gap(fit);
+    if (gap <= 0.0f || placed.size() != unscaled.size() || placed.size() < 6u) return move;
+    for (std::size_t first = 0; first + 6u <= unscaled.size(); first += 6u) {
+        const Rect game = fit.to_game(quad_bounds(unscaled, first));
+        const Piece piece = piece_of(game, texture);
+        // The map's own window and panels are not sized as map marks, but
+        // they belong in the map's slot and move with it. A notice drawn over
+        // that slot does not.
+        const bool map_panel = piece == Piece::None &&
+            contains({kMapLeft, kMapTop, kMapRight, kMapBottom}, game) && !is_notice_piece(game, texture);
+        if (piece == Piece::None && !map_panel) return EdgeMove{};
+        const EdgeSide side = edge_side(game);
+        const float dx = side == EdgeSide::Left ? -gap : side == EdgeSide::Right ? gap : 0.0f;
+        if (dx == 0.0f || (first > 0u && dx != move.dx)) return EdgeMove{};
+        move.dx = dx;
+    }
+    move.moved = true;
+    for (Vertex &vertex : placed) vertex.x += move.dx;
+    return move;
+}
 
 // The large area-map tile, (316, 32)-(468, 184). The small window is
 // travelling_map_window(); it counts only while the quest HUD is up and the
@@ -2305,6 +2385,28 @@ void scale_quads(std::vector<Vertex> &vertices, const Scales &scales, Frame &fra
         const bool moved = place.attach_x != place.origin_x || place.attach_y != place.origin_y;
         if (scale == 1.0f && !moved) continue;
         for (std::size_t i = 0; i < 6u; ++i) place_point(vertices[first + i].x, vertices[first + i].y, place, scale);
+    }
+}
+
+// scale_quads() for a draw already fitted under Fill. The pieces' rectangles
+// are the game's pixels, so the draw is sized where the game drew it, and
+// only the vertices that moved are fitted again; the rest keep their fitted
+// position exactly.
+template <typename Vertex>
+void scale_fitted_quads(std::vector<Vertex> &vertices, const Scales &scales, Frame &frame, InterfaceFit fit,
+    std::uint32_t texture = 0, hud::Owner owner = hud::Owner::Unknown, std::vector<Decision> *decisions = nullptr) {
+    if (!fit.any()) {
+        scale_quads(vertices, scales, frame, texture, owner, decisions);
+        return;
+    }
+    std::vector<Vertex> game = vertices;
+    for (Vertex &vertex : game) fit.unapply(vertex.x, vertex.y);
+    const std::vector<Vertex> drawn = game;
+    scale_quads(game, scales, frame, texture, owner, decisions);
+    for (std::size_t i = 0; i < game.size(); ++i) {
+        if (game[i].x == drawn[i].x && game[i].y == drawn[i].y) continue;
+        vertices[i] = game[i];
+        fit.apply(vertices[i].x, vertices[i].y);
     }
 }
 

@@ -38,6 +38,7 @@
 #include "settings/settings.hpp"
 
 #if defined(MHFU_ANDROID_APP)
+#include "platform/android_display.hpp"
 #include "platform/android_fatal.hpp"
 #include "platform/android_jni.hpp"
 #endif
@@ -1701,28 +1702,29 @@ struct VulkanRenderer::Impl {
         vertex_offset = at + size;
         return true;
     }
+    // Makes the CPU writes to [begin, end) visible when the vertex memory is
+    // cached but not coherent. Coherent memory needs nothing. The blended
+    // present's scratch area is written during replay too, after the game
+    // frame's own flush, so it is flushed on its own.
+    void flush_vertex_range(VkDeviceSize begin, VkDeviceSize end) {
+        if (vertex_coherent || vertex_memory == VK_NULL_HANDLE || vertex_mapped == nullptr || vertex_bytes == 0u) return;
+        if (begin >= vertex_bytes || end <= begin) return;
+        const VkDeviceSize atom = std::max<VkDeviceSize>(noncoherent_atom, 1u);
+        VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+        range.memory = vertex_memory;
+        range.offset = begin & ~(atom - 1u);
+        if (range.offset >= vertex_bytes) return;
+        VkDeviceSize stop = (end + atom - 1u) & ~(atom - 1u);
+        if (stop <= range.offset) stop = range.offset + atom;
+        range.size = stop >= vertex_bytes ? VK_WHOLE_SIZE : stop - range.offset;
+        vkFlushMappedMemoryRanges(device, 1u, &range);
+    }
     // Makes this frame's CPU writes visible when the vertex memory is cached
     // but not coherent. Coherent memory needs nothing.
     void flush_vertex_writes() {
         const VkDeviceSize atom = std::max<VkDeviceSize>(noncoherent_atom, 1u);
-        if (!vertex_coherent && vertex_memory != VK_NULL_HANDLE && vertex_mapped != nullptr && vertex_bytes != 0u) {
-            const VkDeviceSize region = static_cast<VkDeviceSize>(frame_region) * vertex_region_bytes;
-            if (vertex_offset > region) {
-                VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
-                range.memory = vertex_memory;
-                range.offset = region & ~(atom - 1u);
-                if (range.offset < vertex_bytes) {
-                    VkDeviceSize end = (vertex_offset + atom - 1u) & ~(atom - 1u);
-                    if (end <= range.offset) end = range.offset + atom;
-                    if (end >= vertex_bytes) {
-                        range.size = VK_WHOLE_SIZE;
-                    } else {
-                        range.size = end - range.offset;
-                    }
-                    vkFlushMappedMemoryRanges(device, 1u, &range);
-                }
-            }
-        }
+        const VkDeviceSize region = static_cast<VkDeviceSize>(frame_region) * vertex_region_bytes;
+        if (vertex_offset > region) flush_vertex_range(region, vertex_offset);
         if (hold_coherent || hold_memory == VK_NULL_HANDLE || hold_mapped == nullptr || hold_dirty == 0u) {
             if (hold_coherent) hold_dirty = 0u;
             return;
@@ -2632,6 +2634,7 @@ struct VulkanRenderer::Impl {
     bool create_overlay(std::string &error);
     void record_overlay(VkCommandBuffer commands, VkImage destination);
     void update_display_info();
+    void request_display_rate();
     // `overwritten`: bit 0, the pass's first draw writes every pixel's colour
     // and alpha; bit 1, every pixel's depth.
     void begin_pass(std::uint32_t address, std::uint32_t overwritten = 0u);
@@ -3676,6 +3679,22 @@ void VulkanRenderer::Impl::update_display_info() {
     display_hz = refresh;
     governor.set_display_hz(refresh);
     perf::set_display_info(present_mode_name(present_mode), swapchain_extent.width, swapchain_extent.height, refresh);
+    request_display_rate();
+}
+
+// Asks Android to run the display at the Frame rate setting's rate, so a
+// phone that can switch between 60, 90 and 120 Hz shows 90 or 120 presents a
+// second instead of holding at its default. A wish, not a mode change: the
+// system may keep another rate for power or heat. Android 10 has no way to
+// ask, and MHFU_NO_DISPLAY_RATE_REQUEST leaves the display as it was.
+void VulkanRenderer::Impl::request_display_rate() {
+#if defined(MHFU_ANDROID_APP)
+    auto *native_window = static_cast<ANativeWindow *>(
+        SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr));
+    const auto rate = static_cast<float>(pacing::requested_rate(frame_rate, static_cast<double>(display_hz)));
+    if (android::request_display_frame_rate(native_window, rate))
+        std::cout << "[render] requested Android surface frame rate " << rate << " Hz\n";
+#endif
 }
 
 VkPresentModeKHR VulkanRenderer::Impl::wanted_present_mode() const {
@@ -8548,7 +8567,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
                 return std::strcmp(value, "all") == 0 ? 2 : 1;
             }();
             std::vector<hud_scale::Decision> decisions;
-            hud_scale::scale_quads(corner_scaled, hud_scales, impl.hud_scale_frame, hud_texture, hud_owner,
+            hud_scale::scale_fitted_quads(corner_scaled, hud_scales, impl.hud_scale_frame, fit, hud_texture, hud_owner,
                 trace_hud_scale != 0 || trace_map_marks_mode != 0 ? &decisions : nullptr);
             map_bounds = hud_scale::moved_map_bounds(unscaled, corner_scaled, hud_texture);
             // MHFU_TRACE_MAP_MARKS: every quad near the map, every frame, with
@@ -8716,6 +8735,27 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
                                 (game::sharpness::glow_alpha(colour_word >> 24) << 24);
                         }
                 }
+            }
+        }
+    }
+    // video.hud_edges: under Fill on a wide screen, each quest HUD piece goes
+    // out to its side of the screen (hud_scale::place_at_edges), after its
+    // size and the sharpness cut. Only game_task's own draws move, and only a
+    // draw wholly on one side: a name over a hunter, or a window over the
+    // middle, stays.
+    hud_scale::EdgeMove edge_move;
+    if (fit.any() && through_quads && !named.is_name && framebuffer_source.target == nullptr &&
+        impl.shows(call.target.color_address) && settings::current().hud_edges) {
+        const hud::Owner edge_owner =
+            hud_owner != hud::Owner::Unknown ? hud_owner : hud::owner_of(call.command_address, call.call_return);
+        if (edge_owner == hud::Owner::QuestHud) {
+            const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;
+            std::vector<GpuVertex> edged = scale_corners ? corner_scaled : unscaled;
+            const std::uint32_t edge_texture = call.texture.enabled ? call.texture.address : 0u;
+            edge_move = hud_scale::place_at_edges(edged, unscaled, fit, edge_texture);
+            if (edge_move.moved) {
+                corner_scaled = std::move(edged);
+                scale_corners = true;
             }
         }
     }
@@ -9107,6 +9147,15 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
         static_cast<float>(sx1), static_cast<float>(sy1), static_cast<float>(sx2 + 1u), static_cast<float>(sy2 + 1u)};
     fit.apply(edges[0], edges[1]);
     fit.apply(edges[2], edges[3]);
+    // A draw moved to one side takes its scissor and its map with it.
+    if (edge_move.moved) {
+        edges[0] += edge_move.dx;
+        edges[2] += edge_move.dx;
+        if (map_bounds) {
+            map_bounds->x0 += edge_move.dx;
+            map_bounds->x1 += edge_move.dx;
+        }
+    }
     if (map_bounds) hud_scale::include_in_scissor(edges[0], edges[1], edges[2], edges[3], *map_bounds);
     if (name_bounds) hud_scale::include_in_scissor(edges[0], edges[1], edges[2], edges[3], *name_bounds);
     const auto to_pixels = [](float edge, float scale, std::uint32_t size) {
@@ -9435,27 +9484,7 @@ std::int64_t to_us(std::chrono::steady_clock::time_point time) {
 } // namespace
 
 double VulkanRenderer::Impl::wanted_rate() const {
-    double rate = 30.0;
-    switch (frame_rate) {
-    case settings::FrameRate::Fps30:
-        rate = 30.0;
-        break;
-    case settings::FrameRate::Fps45:
-        rate = 45.0;
-        break;
-    case settings::FrameRate::Fps60:
-        rate = 60.0;
-        break;
-    case settings::FrameRate::Fps90:
-        rate = 90.0;
-        break;
-    case settings::FrameRate::Fps120:
-        rate = 120.0;
-        break;
-    case settings::FrameRate::Display:
-        rate = display_hz >= 1.0f ? static_cast<double>(display_hz) : 60.0;
-        break;
-    }
+    double rate = pacing::requested_rate(frame_rate, static_cast<double>(display_hz));
     // With vsync the display takes no more than its own rate: more presents
     // would wait for it with the game's time.
     if (present_mode == VK_PRESENT_MODE_FIFO_KHR && display_hz >= 1.0f)
@@ -9843,9 +9872,10 @@ void VulkanRenderer::Impl::replay(VkCommandBuffer commands, std::uint32_t slot, 
     vkCmdClearAttachments(commands, static_cast<std::uint32_t>(clears.size()), clears.data(), 1u, &whole);
 
     // The slot's scratch area: blended vertices and object blocks.
-    VkDeviceSize scratch_at =
+    const VkDeviceSize scratch_base =
         static_cast<VkDeviceSize>(kFrameRegions) * vertex_region_bytes + slot * kPresentScratchBytes;
-    const VkDeviceSize scratch_end = scratch_at + kPresentScratchBytes;
+    VkDeviceSize scratch_at = scratch_base;
+    const VkDeviceSize scratch_end = scratch_base + kPresentScratchBytes;
     auto *mapped = static_cast<std::uint8_t *>(vertex_mapped);
 
     // What the command buffer has, so that unchanged state is not set again.
@@ -10099,6 +10129,20 @@ void VulkanRenderer::Impl::replay(VkCommandBuffer commands, std::uint32_t slot, 
         ++replayed;
     }
     vkCmdEndRenderPass(commands);
+    // The blended vertices and blocks just written are in host memory too.
+    // On a cached, non-coherent type the game frame's own flush has already
+    // run by now, so this present's writes need a flush of their own before
+    // it is submitted.
+    if (scratch_at > scratch_base) {
+        flush_vertex_range(scratch_base, scratch_at);
+        if (!vertex_coherent) {
+            static const bool logged = [] {
+                std::cout << "[render] blended vertices are flushed from non-coherent vertex memory\n";
+                return true;
+            }();
+            (void)logged;
+        }
+    }
     interpolation_stats.groups += replayed;
     interpolation_stats.flipbook_steps += flipbook_steps;
     interpolation_stats.followed += followed;
@@ -10525,6 +10569,7 @@ void VulkanRenderer::set_frame_rate(settings::FrameRate rate) {
     if (impl.frame_rate == rate) return;
     impl.frame_rate = rate;
     impl.governor.set_requested(rate == settings::FrameRate::Fps30 ? 30.0 : impl.wanted_rate());
+    impl.request_display_rate();
     impl.reset_interpolation();
     perf::set_frame_rate_info(rate == settings::FrameRate::Fps30 ? 0.0 : impl.governor.rate(),
         rate == settings::FrameRate::Fps30 ? 0.0 : impl.governor.requested());

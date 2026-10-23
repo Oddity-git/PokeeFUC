@@ -62,6 +62,7 @@ test: build
 
 python-test:
 	$(PYTHON) profiles/mhfu/tests/tool_security_tests.py
+	$(PYTHON) profiles/mhfu/tests/android_packaging_tests.py
 	$(PYTHON) -m unittest discover -s scripts/ci -p 'test_*.py'
 
 java-test:
