@@ -533,7 +533,17 @@ void end_frame(std::uint64_t virtual_us, bool presented) {
     const StallTrace &trace = stall_trace();
     RenderSplit &split = render_split();
     if (split_enabled()) calibrate(split);
-    if (trace.enabled && frame_ms > trace.slow_frame_ms) {
+    // Android has no environment to set MHFU_TRACE_STALLS in. Performance: Log
+    // there asks for the per-frame slow frames too, including the stalls and
+    // render split, so a random load or area hitch can be identified from a
+    // log the player saves afterwards without reproducing it live.
+#if defined(__ANDROID__)
+    const bool slow_log = trace.enabled || options().log;
+#else
+    const bool slow_log = trace.enabled;
+#endif
+    const double slow_frame_ms = trace.enabled ? trace.slow_frame_ms : 40.0;
+    if (slow_log && frame_ms > slow_frame_ms) {
         // The GPU time is the previous frame's: that is the work a fence wait
         // at the start of this frame was waiting for.
         const double render_ms = std::max(0.0, to_ms(s.render) - to_ms(s.wait));
