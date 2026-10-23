@@ -3676,6 +3676,7 @@ void VulkanRenderer::Impl::update_display_info() {
             refresh = mode->refresh_rate;
     }
     display_hz = refresh;
+    governor.set_display_hz(refresh);
     perf::set_display_info(present_mode_name(present_mode), swapchain_extent.width, swapchain_extent.height, refresh);
     request_display_rate();
 }
