@@ -2,6 +2,12 @@
 
 PokeeFUC runs **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) patched with [FUComplete](https://github.com/FUComplete/Patch) natively on Linux, by recompiling the game's PSP code to C++. An Android arm64 build is published as a test build. It is the FUComplete build of [Pokee](https://github.com/LocalBBQ/Pokee), which runs *Monster Hunter Freedom Unite* (USA); the base project and its build are described [below](#the-base-project).
 
+> **Project status: discontinued (24 October 2026).**
+>
+> I am stepping away from PokeeFUC. Other people are already working on the same idea, and I could not get the Android build to the point I wanted. There will be no further updates, fixes or support from me. The repository and its releases remain available as they are.
+>
+> Anyone is welcome to use, fork, continue or republish my original PokeeFUC work — its code, documentation, release artifacts and findings — under this repository's MIT license, subject to the licenses of the bundled third-party components. Credit is appreciated but not required. This permission does not grant any rights to Monster Hunter, FUComplete or any other third-party material, which remain under their own terms.
+
 > **This project does not include the game.** You need your own legally obtained copy of Monster Hunter Portable 2nd G, and you must patch it with FUComplete yourself.
 
 ## What you need
@@ -65,9 +71,11 @@ Do not uninstall an earlier PokeeFUC APK to update it: uninstalling deletes its 
 
 ## Status
 
+Development has stopped; this is the final published state. No further work is planned.
+
 Working on Linux: FUComplete's loader, menus, character creation, the village, the Guild Hall, quests and saves; FUComplete's own options in the Game tab; the analog camera and tilt, lock-on, hold to gather, the aspect ratio's Fill, HUD hiding, UI scaling, the gather icon, the sharpness gauge, the empty item slot, Give Any Rarity, damage numbers and layered armor; Eat in the Guild Hall, Item Sets and Change Equipment; the `[Key]` marks on quests; a live field of view scale; HD texture packs in KTX2.
 
-Still open: the in-game effect of each `CONFIG.BIN` option; Change Equipment's sync to other hunters, and Give Any Rarity with a second player; the bow and bowgun aim extras while `game_task` runs interpreted; Windows, macOS and Android. The detailed state is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
+Left unfinished: the in-game effect of each `CONFIG.BIN` option; Change Equipment's sync to other hunters, and Give Any Rarity with a second player; the bow and bowgun aim extras while `game_task` runs interpreted; Windows, macOS and Android. The detailed state is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md#fucomplete-build-mhfu_titlefuc).
 
 Content mods (models, textures, audio, quest data) go through FUComplete's **File Replacer**; Pokee's own Mods page is off in this build. The [modding handoff](docs/MODDING_HANDOFF.md) covers that and the other path, features added to PokeeFUC itself in C++.
 
@@ -98,6 +106,8 @@ PokeeFUC is built from [Pokee](https://github.com/LocalBBQ/Pokee), the native po
 The FUComplete build is this fork's work: the second title, its loader, saves across Save Region changes, the ported extras and the options in its menu. [The port handoff](docs/FUCOMPLETE_HANDOFF.md) and [the port notes](docs/FUCOMPLETE_PORT.md) describe how that was done and what is left.
 
 ## Roadmap
+
+No longer pursued. These were the remaining items when development stopped:
 
 - The in-game effect of FUComplete's `CONFIG.BIN` options
 - Overlay libraries built from the loader's dumps, so the aim extras can turn on
