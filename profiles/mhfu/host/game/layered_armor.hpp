@@ -35,6 +35,8 @@
 // the game's next load (below). Off from the start, nothing is registered and
 // the game runs as built.
 
+#include "title.hpp"
+
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -51,8 +53,13 @@ class Ram;
 
 namespace layered {
 
+// FUComplete's executable and overlays have the same lookup, records, load
+// and lobby calls at their own addresses; the data objects below are read
+// at FUComplete's from its own instructions (title.hpp).
+inline constexpr bool kFreedomUniteArmor = kTitle == Title::FreedomUnite;
+
 // The pointer to the block that holds the hunter records.
-inline constexpr std::uint32_t kGameBlockPointer = 0x089CC558u;
+inline constexpr std::uint32_t kGameBlockPointer = kFreedomUniteArmor ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kHunterRecords = 0x30u;
 inline constexpr std::uint32_t kHunterRecordBytes = 140u;
 inline constexpr std::uint32_t kHunters = 4u;
@@ -71,24 +78,24 @@ inline constexpr std::uint32_t kEquipmentBoxOffset = 0x548u;
 inline constexpr std::uint32_t kEquipmentBoxSlots = 1000u;
 inline constexpr std::uint8_t kEquipmentSlotUsed = 1u;
 // The game's model lookup that layered armor stands in for.
-inline constexpr std::uint32_t kModelOfPart = 0x0885187Cu;
+inline constexpr std::uint32_t kModelOfPart = kFreedomUniteArmor ? 0x0885187Cu : 0x088517A8u;
 // The same model, asked by sex and part (0x088516A4). a1 is the sex, a2 the
 // part and a3 the armor id. Parts 0, 3, 4 and 5 return that id's model and do
 // not read t0. Part 2 returns the model when t0 is 1 and the id otherwise.
 // Part 1 returns the id. The equipment change in lobby_task (the call that
 // returns to 0x09A7E360) passes the result to 0x088DB4C8 as the model to
 // read, and it sets t0 from a halfword that is 0 for an ordinary change.
-inline constexpr std::uint32_t kModelBySex = 0x088516A4u;
+inline constexpr std::uint32_t kModelBySex = kFreedomUniteArmor ? 0x088516A4u : 0x088515D0u;
 // Whether a part has armor (0x08851C3C). The file load adds the model to the
 // armor files only when this is 1; otherwise a head model is added to the hair.
-inline constexpr std::uint32_t kHasArmor = 0x08851C3Cu;
+inline constexpr std::uint32_t kHasArmor = kFreedomUniteArmor ? 0x08851C3Cu : 0x08851B68u;
 // The equipment change resolves the file here (0x088D6388). a1 is the part
 // and a2 the model; a nonzero model is returned as the model to read.
 // lobby_task calls it with the newly worn piece's model (return 0x09A7E4AC).
 // The hunter's own file load also calls it, from 0x08866E10, and that call
 // already carries the model from 0x0885187C. Replacing that one loads a model
 // the file is not ready for and faults on the way into a quest select.
-inline constexpr std::uint32_t kResolveModel = 0x088D6388u;
+inline constexpr std::uint32_t kResolveModel = kFreedomUniteArmor ? 0x088D6388u : 0x088D8CD0u;
 // True when this return address is a lobby_task call of kResolveModel, the
 // equipment change among them.
 [[nodiscard]] bool equipment_resolve(std::uint32_t return_address);
@@ -247,31 +254,31 @@ struct Offer {
 // Calling the load from the display flip replaces the model root. +0x998
 // starts at 0, each step adds one, and the step reports done only on the
 // call that reaches 5.
-inline constexpr std::uint32_t kHunterTask = 0x088BC7F0u;
-inline constexpr std::uint32_t kLoadStep = 0x088C0E58u;
+inline constexpr std::uint32_t kHunterTask = kFreedomUniteArmor ? 0x088BC7F0u : 0x088BF3F8u;
+inline constexpr std::uint32_t kLoadStep = kFreedomUniteArmor ? 0x088C0E58u : 0x088C37ACu;
 inline constexpr std::uint32_t kLoadState = 0x998u;
 inline constexpr std::uint32_t kLoadCleared = 0x99Cu;  // cleared with the state
 inline constexpr std::uint32_t kLoadDone = 5u;
 // The hunter task cont_task passes to 0x088BC7F0: load32(0x09A40000 + 19872).
-inline constexpr std::uint32_t kHunterObjectPointer = 0x09A44DA0u;
+inline constexpr std::uint32_t kHunterObjectPointer = kFreedomUniteArmor ? 0x09A44DA0u : 0x09A4099Cu;
 inline constexpr std::uint32_t kTaskState = 12u;  // index into the table at 0x08932378
 inline constexpr std::uint32_t kTaskLoadModels = 2u;  // 0x088BCBFC, the model load
 // The file load's object, stored by 0x088DAF18: lui 0x09A5; sw at -0xDFC.
 // A part's progress is the word at +0x24 + part * 4. At 8 the file load
 // returns without reading. Six parts, the walk in 0x088DBE80. +0x3C is the
 // index 0x088DBEE0 steps; at 4 or more that pump returns without reading.
-inline constexpr std::uint32_t kFileObjectPointer = 0x09A4F204u;
+inline constexpr std::uint32_t kFileObjectPointer = kFreedomUniteArmor ? 0x09A4F204u : 0x09A4AE04u;
 inline constexpr std::uint32_t kFilePartState = 0x24u;
 inline constexpr std::uint32_t kFileParts = 6u;
 inline constexpr std::uint32_t kFilePump = 0x3Cu;
 // The model object 0x088C0E58 and the quest pass to 0x088DDF10: lui 0x09A5,
 // lw at -0xDF0. Bit 2 of the halfword at +0x54 makes the quest skip the pump.
-inline constexpr std::uint32_t kModelObjectPointer = 0x09A4F210u;
+inline constexpr std::uint32_t kModelObjectPointer = kFreedomUniteArmor ? 0x09A4F210u : 0x09A4AE1Cu;
 inline constexpr std::uint32_t kModelLoaded = 0x54u;
 inline constexpr std::uint16_t kModelLoadedBit = 2u;
 // lobby_task reads load32(0x08A62D7C) and, when the byte at +0x800A4 is 0,
 // calls the same pump. Nonzero leaves the meshes it already has.
-inline constexpr std::uint32_t kArchivePointer = 0x08A62D7Cu;
+inline constexpr std::uint32_t kArchivePointer = kFreedomUniteArmor ? 0x08A62D7Cu : 0x08A5DD2Cu;
 inline constexpr std::uint32_t kArchiveNeedLoad = 0x800A4u;
 
 // Whether `object` is the hunter load this step runs for. The step is called

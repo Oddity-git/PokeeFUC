@@ -13,6 +13,7 @@
 #include "install/game_identity.hpp"
 
 #include "psprecomp/common.hpp"
+#include "psprecomp/elf32.hpp"
 #include "psprecomp/sha256.hpp"
 
 #include "tiny_aes/aes.h"
@@ -165,6 +166,15 @@ Block unwrap_older_payload_key(std::span<const std::uint8_t> header) {
 
 std::vector<std::uint8_t> prepare_executable(
     std::span<const std::uint8_t> eboot_bin, const std::function<void(std::uint64_t, std::uint64_t)> &progress) {
+    for (const SupportedRelease &plain : kSupportedReleases) {
+        if (!plain.plain_executable || !looks_like_elf(eboot_bin.data(), eboot_bin.size())) continue;
+        std::vector<std::uint8_t> executable(eboot_bin.begin(), eboot_bin.end());
+        // Throws when the ELF is not one the loader can use.
+        const psprecomp::Elf32Image elf = psprecomp::Elf32Image::from_bytes(executable, "EBOOT.BIN");
+        if (elf.segments().empty()) throw psprecomp::Error("EBOOT.BIN has no program segments to load");
+        if (progress) progress(executable.size(), executable.size());
+        return executable;
+    }
     const SupportedRelease *release = find_release_by_encrypted_hash(psprecomp::sha256_bytes(eboot_bin));
     if (release == nullptr)
         throw psprecomp::Error("EBOOT.BIN is not a supported executable. Pokee accepts the executables of " +

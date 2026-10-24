@@ -45,6 +45,7 @@
 // MHFU_DAMAGE_NUMBERS_HEALTH_WATCH=0 turns that reading off, for comparing.
 
 #include "game/guest_layout.hpp"
+#include "title.hpp"
 #include "psprecomp/guest_memory.hpp"
 
 #include <array>
@@ -55,8 +56,8 @@
 
 namespace mhfu::game {
 
-inline constexpr std::uint32_t kHitAdjust = 0x09AC7A08u;
-inline constexpr std::uint32_t kStatusTick = 0x09AD2698u;
+inline constexpr std::uint32_t kHitAdjust = kTitle == Title::FreedomUnite ? 0x09AC7A08u : 0x09AC2BD8u;
+inline constexpr std::uint32_t kStatusTick = kTitle == Title::FreedomUnite ? 0x09AD2698u : 0x09ACD860u;
 // An entity's health and world position (game/guest_layout.hpp).
 inline constexpr std::uint32_t kMonsterHealth = layout::kHealth;
 inline constexpr std::uint32_t kMonsterPosition = layout::kPosition;

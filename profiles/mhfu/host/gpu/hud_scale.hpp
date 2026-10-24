@@ -316,11 +316,11 @@ struct InterfaceFit {
 // the message box under a list. Traced with MHFU_TRACE_HUD_SCALE=all in an
 // ad hoc quest: the banner's 16 by 16 left side sits in the party list's
 // band, the size of a status icon, and was pulled toward the clock.
-inline constexpr std::uint32_t kFrameTopTexture = 0x09163C20u;
-inline constexpr std::uint32_t kFrameBodyTexture = 0x09164420u;
-inline constexpr std::uint32_t kFrameBottomTexture = 0x09164C20u;
-inline constexpr std::uint32_t kFrameLeftTexture = 0x091643A0u;
-inline constexpr std::uint32_t kFrameRightTexture = 0x091644A0u;
+inline constexpr std::uint32_t kFrameTopTexture = game::layout::kFreedomUniteLayout ? 0x09163C20u : 0x0915F820u;
+inline constexpr std::uint32_t kFrameBodyTexture = game::layout::kFreedomUniteLayout ? 0x09164420u : 0x09160020u;
+inline constexpr std::uint32_t kFrameBottomTexture = game::layout::kFreedomUniteLayout ? 0x09164C20u : 0x09160820u;
+inline constexpr std::uint32_t kFrameLeftTexture = game::layout::kFreedomUniteLayout ? 0x091643A0u : 0x0915FFA0u;
+inline constexpr std::uint32_t kFrameRightTexture = game::layout::kFreedomUniteLayout ? 0x091644A0u : 0x091600A0u;
 
 [[nodiscard]] inline bool is_window_frame_texture(std::uint32_t texture) {
     return texture == kFrameTopTexture || texture == kFrameBodyTexture || texture == kFrameBottomTexture ||
@@ -549,7 +549,9 @@ inline constexpr int kNamePlates = 4;
 // its letters from y 72 over the plate's width, with its face below them.
 inline constexpr float kNameLetterLeft = 26.0f;
 inline constexpr float kNameLetterAdvance = 8.0f;
-inline constexpr float kPlateEndLeft = 96.0f;
+// FUComplete's plate is 8 shorter, (8, 56)-(96, 72), so its end is at x 88
+// (MHFU_TRACE_CAPTURE in a FUComplete quest).
+inline constexpr float kPlateEndLeft = game::layout::kFreedomUniteLayout ? 96.0f : 88.0f;
 
 [[nodiscard]] inline bool on_party_row(Rect rect) {
     const Rect r = normalized(rect);

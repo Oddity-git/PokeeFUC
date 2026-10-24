@@ -1,5 +1,7 @@
 #include "texture_pack.hpp"
 
+#include "ktx2_image.hpp"
+
 #include "platform/utf8_path.hpp"
 
 #include <algorithm>
@@ -54,7 +56,11 @@ bool texture_pack_trace() {
 
 namespace {
 
+// Also drops a UTF-8 byte order mark: packs saved by Windows editors start
+// textures.ini with one, and PPSSPP reads them.
 std::string trim(std::string_view text) {
+    constexpr std::string_view kByteOrderMark = "\xEF\xBB\xBF";
+    if (text.substr(0, kByteOrderMark.size()) == kByteOrderMark) text.remove_prefix(kByteOrderMark.size());
     std::size_t begin = 0u;
     std::size_t end = text.size();
     while (begin < end && std::isspace(static_cast<unsigned char>(text[begin])) != 0) ++begin;
@@ -560,7 +566,8 @@ void TexturePack::scan_hash_named_files() {
     for (const auto &entry : std::filesystem::directory_iterator(directory_, ec)) {
         if (!entry.is_regular_file(ec)) continue;
         const std::filesystem::path &path = entry.path();
-        if (lower(path_to_utf8(path.extension())) != ".png") continue;
+        const std::string extension = lower(path_to_utf8(path.extension()));
+        if (extension != ".png" && extension != ".ktx2") continue;
         const std::string stem = path_to_utf8(path.stem());
         if (!is_hex_name(stem)) continue;
         TexturePackKey key;
@@ -773,16 +780,31 @@ void TexturePack::decode(Replacement &replacement) {
         if (!folded.empty()) bytes = read_file(folded);
     }
     int width = 0, height = 0, channels = 0;
-    stbi_uc *image = bytes.empty()
-        ? nullptr
-        : stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+    // A KTX2 image (Basis Universal, as PPSSPP packs ship them) is decoded on
+    // its own; anything else is left to stb_image, which reads PNG.
+    Ktx2Image ktx2;
+    std::string ktx2_error;
+    const bool is_ktx2_image = is_ktx2(bytes.data(), bytes.size());
+    const std::uint8_t *image = nullptr;
+    stbi_uc *png = nullptr;
+    if (is_ktx2_image) {
+        if (decode_ktx2(bytes.data(), bytes.size(), kMaxImageSide, ktx2, ktx2_error)) {
+            width = static_cast<int>(ktx2.width);
+            height = static_cast<int>(ktx2.height);
+            image = ktx2.pixels.data();
+        }
+    } else if (!bytes.empty()) {
+        png = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+        image = png;
+    }
     if (image == nullptr || width <= 0 || height <= 0 || width > kMaxImageSide || height > kMaxImageSide) {
         std::cerr << "[texpack] cannot use " << replacement.name << ": "
                   << (bytes.empty()             ? "missing or unreadable"
+                             : is_ktx2_image    ? ktx2_error.c_str()
                              : image == nullptr ? stbi_failure_reason()
                                                 : "too large")
                   << "\n";
-        if (image != nullptr) stbi_image_free(image);
+        if (png != nullptr) stbi_image_free(png);
         replacement.state.store(Replacement::State::Failed, std::memory_order_release);
         return;
     }
@@ -801,7 +823,7 @@ void TexturePack::decode(Replacement &replacement) {
         std::memcpy(pixels.data() + static_cast<std::size_t>(row) * full_width * 4u,
             image + static_cast<std::size_t>(row) * static_cast<std::size_t>(width) * 4u,
             static_cast<std::size_t>(std::min<std::uint32_t>(static_cast<std::uint32_t>(width), full_width)) * 4u);
-    stbi_image_free(image);
+    if (png != nullptr) stbi_image_free(png);
 
     replacement.width = full_width;
     replacement.height = full_height;

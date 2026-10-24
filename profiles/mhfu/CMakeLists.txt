@@ -1,12 +1,34 @@
 set(MHFU_PROFILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# The game this build runs (host/title.hpp). FU is USA Freedom Unite; FUC is
+# FUComplete, a patched Monster Hunter Portable 2nd G with an executable of
+# its own. Each title keeps its generated corpus and recompiled overlays in
+# its own directories, so one checkout can hold both, in two build
+# directories.
+set(MHFU_TITLE "FU" CACHE STRING "Game this build runs: FU (USA Freedom Unite) or FUC (FUComplete)")
+set_property(CACHE MHFU_TITLE PROPERTY STRINGS FU FUC)
+string(TOUPPER "${MHFU_TITLE}" MHFU_TITLE_UPPER)
+if(MHFU_TITLE_UPPER STREQUAL "FU")
+    set(MHFU_GENERATED_DIR "${MHFU_PROFILE_DIR}/generated")
+    set(MHFU_OVERLAY_SOURCE_DIR "${MHFU_PROFILE_DIR}/overlays")
+    set(MHFU_GAME_SOURCE_DIR "${MHFU_PROFILE_DIR}/game")
+elseif(MHFU_TITLE_UPPER STREQUAL "FUC")
+    set(MHFU_GENERATED_DIR "${MHFU_PROFILE_DIR}/generated_fuc")
+    set(MHFU_OVERLAY_SOURCE_DIR "${MHFU_PROFILE_DIR}/overlays_fuc")
+    set(MHFU_GAME_SOURCE_DIR "${MHFU_PROFILE_DIR}/game_fuc")
+    add_compile_definitions(MHFU_TITLE_FUC=1)
+else()
+    message(FATAL_ERROR "MHFU_TITLE must be FU or FUC, not ${MHFU_TITLE}")
+endif()
+message(STATUS "mhfu: title ${MHFU_TITLE_UPPER}, corpus in ${MHFU_GENERATED_DIR}")
+
 # The AOT corpus is derived from the user's executable and is not committed.
 # Until scripts/generate.sh has produced it, link an empty registry instead.
 if(PSPRECOMP_COVERAGE)
     # Public coverage never compiles the user's game-derived corpus.
     set(MHFU_GENERATED)
 else()
-    file(GLOB MHFU_GENERATED CONFIGURE_DEPENDS "${MHFU_PROFILE_DIR}/generated/*.cpp")
+    file(GLOB MHFU_GENERATED CONFIGURE_DEPENDS "${MHFU_GENERATED_DIR}/*.cpp")
 endif()
 if(MHFU_GENERATED)
     list(LENGTH MHFU_GENERATED MHFU_GENERATED_COUNT)
@@ -21,15 +43,22 @@ if(MHFU_GENERATED)
         set(MHFU_GENERATED_OPTIONS "-O${PSPRECOMP_GENERATED_OPT_LEVEL};-g0")
     endif()
     set_source_files_properties(${MHFU_GENERATED} PROPERTIES COMPILE_OPTIONS "${MHFU_GENERATED_OPTIONS}")
-
-    # The analog camera wraps the camera update, and main.cpp has to hand it
-    # the generated unit that update was compiled into. Which unit that is
-    # depends on how the generator partitions the code, so read it from the
-    # corpus instead of naming it: a new partition then finds its own unit,
-    # and a corpus without the update leaves analog camera off.
-    set(MHFU_CAMERA_HELPER_UNIT "")
+endif()
+# The analog camera wraps the camera update, and main.cpp has to hand it the
+# generated unit that update was compiled into. Which unit that is depends on
+# how the generator partitions the code, so read it from the corpus instead of
+# naming it: a new partition then finds its own unit, and a corpus without the
+# update leaves analog camera off. The update is at 0x08886E50 in Freedom
+# Unite and 0x08886B54 in FUComplete (kCameraUpdate in camera/game_camera.hpp).
+set(MHFU_CAMERA_HELPER_UNIT "")
+if(MHFU_GENERATED)
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(camera_update "08886E50")
+    else()
+        set(camera_update "08886B54")
+    endif()
     foreach(unit IN LISTS MHFU_GENERATED)
-        file(STRINGS "${unit}" hit REGEX "register_function\\(0x08886E50u, &recomp_unit_[0-9]+," LIMIT_COUNT 1)
+        file(STRINGS "${unit}" hit REGEX "register_function\\(0x${camera_update}u, &recomp_unit_[0-9]+," LIMIT_COUNT 1)
         if(hit)
             string(REGEX MATCH "recomp_unit_[0-9]+" MHFU_CAMERA_HELPER_UNIT "${hit}")
             break()
@@ -40,11 +69,18 @@ if(MHFU_GENERATED)
     else()
         message(STATUS "mhfu: corpus has no camera update; analog camera stays off")
     endif()
-
+endif()
+if(MHFU_GENERATED)
     # Hiding the HUD (host/gpu/game_hud.cpp) wraps the game's 2D functions the
     # same way, so their units are read from the corpus too, in one pass.
-    set(MHFU_HUD_FUNCTIONS
-        088596C8 088952A4 08891474 088915B0 08891700 0889183C 0889198C)
+    # Their addresses in Freedom Unite, and in FUComplete (host/gpu/game_hud.cpp).
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(MHFU_HUD_FUNCTIONS
+            088596C8 088952A4 08891474 088915B0 08891700 0889183C 0889198C)
+    else()
+        set(MHFU_HUD_FUNCTIONS
+            088595E8 08894D88 08890F34 08891070 088911C0 088912FC 0889144C)
+    endif()
     list(JOIN MHFU_HUD_FUNCTIONS "|" hud_pattern)
     set(hud_lines "")
     foreach(unit IN LISTS MHFU_GENERATED)
@@ -57,12 +93,20 @@ if(MHFU_GENERATED)
     endforeach()
     set(MHFU_HUD_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_hooks/hud_functions.inc")
     file(CONFIGURE OUTPUT "${MHFU_HUD_INC}" CONTENT "${hud_lines}" @ONLY)
+endif()
+if(MHFU_GENERATED)
+
 
     # Layered armor (host/game/layered_armor_hook.cpp) stands in for the game's
     # lookup of an armor part's model, the cont_task hunter task, and the load
     # step. The task list is not wrapped: stepping a finished load from it
     # cleared a pointer the quest reads, and embarking then stopped.
-    set(MHFU_LAYERED_FUNCTIONS 088516A4 0885187C 08851C3C 088BC7F0 088C0E58 088D6388)
+    # Their addresses in Freedom Unite, and in FUComplete (layered_armor.hpp).
+    if(MHFU_TITLE_UPPER STREQUAL "FU")
+        set(MHFU_LAYERED_FUNCTIONS 088516A4 0885187C 08851C3C 088BC7F0 088C0E58 088D6388)
+    else()
+        set(MHFU_LAYERED_FUNCTIONS 088515D0 088517A8 08851B68 088BF3F8 088C37AC 088D8CD0)
+    endif()
     list(JOIN MHFU_LAYERED_FUNCTIONS "|" layered_pattern)
     set(layered_lines "")
     foreach(unit IN LISTS MHFU_GENERATED)
@@ -75,6 +119,8 @@ if(MHFU_GENERATED)
     endforeach()
     set(MHFU_LAYERED_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_hooks/layered_armor_functions.inc")
     file(CONFIGURE OUTPUT "${MHFU_LAYERED_INC}" CONTENT "${layered_lines}" @ONLY)
+endif()
+if(MHFU_GENERATED)
     # A regenerated corpus with the same file names must be read again.
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${MHFU_GENERATED})
 else()
@@ -182,6 +228,21 @@ add_custom_target(mhfu_version
 # the project (see cmake/FFmpeg.cmake).
 include("${MHFU_PROFILE_DIR}/cmake/FFmpeg.cmake")
 
+# Basis Universal's transcoder, and the zstd decompressor it uses, read the
+# KTX2 images of texture packs made for PPSSPP (host/gpu/ktx2_image.cpp). Both
+# are unmodified copies in third_party/basis_universal; zstd is C.
+enable_language(C)
+add_library(mhfu_basisu STATIC
+    third_party/basis_universal/transcoder/basisu_transcoder.cpp
+    third_party/basis_universal/zstd/zstddeclib.c)
+target_compile_definitions(mhfu_basisu PUBLIC BASISD_SUPPORT_KTX2=1 BASISD_SUPPORT_KTX2_ZSTD=1)
+target_include_directories(mhfu_basisu PUBLIC "${MHFU_PROFILE_DIR}/third_party")
+if(NOT MSVC)
+    # Third-party code: its warnings are not this project's to fix.
+    target_compile_options(mhfu_basisu PRIVATE -w)
+endif()
+set_target_properties(mhfu_basisu PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # GE parsing, texture decoding and the audio mixer are backend independent and
 # always built; only the device the sink opens depends on SDL.
 set(MHFU_HOST_SOURCES
@@ -192,6 +253,8 @@ set(MHFU_HOST_SOURCES
     host/audio/audio_sink.cpp
     host/audio/sas_core.cpp
     host/camera_probe.cpp
+    host/fuc_code_patches.cpp
+    host/fuc_config.cpp
     host/camera/camera_input.cpp
     host/camera/game_aspect.cpp
     host/camera/game_camera.cpp
@@ -206,6 +269,7 @@ set(MHFU_HOST_SOURCES
     host/input/gamepad_mapping.cpp
     host/input/touch_action.cpp
     host/input/touch_controls.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/gpu/screenshot.cpp
@@ -244,6 +308,7 @@ set(MHFU_HOST_SOURCES
     host/save_data/savedata_crypto.cpp
     host/save_data/savedata_store.cpp
     host/save_data/save_transfer.cpp
+    host/save_data/save_sync.cpp
     host/install/executable_preparation.cpp
     host/install/front_end.cpp
     host/install/installer.cpp
@@ -277,6 +342,7 @@ set(MHFU_HOST_SOURCES
     host/game/hall_equipment.cpp
     host/game/hall_meal.cpp
     host/game/key_quests.cpp
+    host/game/hub_scaling.cpp
     host/game/hooks.cpp
     host/game/guest_calls.cpp
     host/game/item_sets.cpp
@@ -295,7 +361,7 @@ set_source_files_properties(third_party/tiny_aes/aes.c PROPERTIES LANGUAGE CXX)
 add_library(mhfu_generated OBJECT ${MHFU_GENERATED})
 target_include_directories(mhfu_generated PRIVATE
     "${PROJECT_SOURCE_DIR}/include"
-    "${MHFU_PROFILE_DIR}/generated")
+    "${MHFU_GENERATED_DIR}")
 set_target_properties(mhfu_generated PROPERTIES JOB_POOL_COMPILE psprecomp_generated)
 
 # An Android app is a shared library, libmain.so, that SDL's Java activity
@@ -342,10 +408,10 @@ target_include_directories(Pokee PRIVATE
     # generated/ is first. main.cpp includes <corpus_identity.hpp> so this
     # directory wins over host/corpus_identity.hpp, which sits beside main.cpp
     # and would otherwise be found by a quoted include.
-    "${MHFU_PROFILE_DIR}/generated"
+    "${MHFU_GENERATED_DIR}"
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(Pokee PRIVATE psprecomp_core ${CMAKE_DL_LIBS})
+target_link_libraries(Pokee PRIVATE psprecomp_core ${CMAKE_DL_LIBS} mhfu_basisu)
 if(WIN32)
     # The ad hoc client's and server's sockets, and the list of interfaces;
     # CommandLineToArgvW for the arguments as UTF-8.
@@ -395,7 +461,7 @@ if(NOT MHFU_RELEASE)
     # on every generated unit's command line, so moving the checkout would
     # rebuild all of them and no other checkout could reuse their cache entries.
     set_property(SOURCE host/main.cpp APPEND PROPERTY COMPILE_DEFINITIONS
-        MHFU_DEFAULT_GAME_DIR="${MHFU_PROFILE_DIR}/game")
+        MHFU_DEFAULT_GAME_DIR="${MHFU_GAME_SOURCE_DIR}")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set_target_properties(Pokee PROPERTIES
         BUILD_WITH_INSTALL_RPATH TRUE
@@ -431,6 +497,19 @@ if(PSPRECOMP_BUILD_TESTS)
 endif()
 
 # Camera dispatch, ownership and integration checks without game data.
+# Save sync: hashing a save folder, copying it to a sync folder, and the
+# decision between the two copies.
+add_executable(mhfu_save_sync_tests
+    tests/save_sync_tests.cpp
+    host/save_data/save_sync.cpp
+    host/save_data/param_sfo.cpp)
+target_include_directories(mhfu_save_sync_tests PRIVATE "${MHFU_PROFILE_DIR}/host" "${MHFU_PROFILE_DIR}/third_party")
+target_link_libraries(mhfu_save_sync_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_save_sync_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_save_sync_tests COMMAND mhfu_save_sync_tests)
+endif()
+
 add_executable(mhfu_camera_tests
     tests/analog_camera_tests.cpp
     host/camera/camera_input.cpp
@@ -587,6 +666,20 @@ target_link_libraries(mhfu_damage_numbers_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_damage_numbers_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_damage_numbers_tests COMMAND mhfu_damage_numbers_tests)
+endif()
+
+# Guild Hall scaling: the offline hall's stage, the flat health cut and the
+# restore. No game data.
+add_executable(mhfu_hub_scaling_tests
+    tests/hub_scaling_tests.cpp
+    host/game/hub_scaling.cpp
+    host/game/damage_numbers.cpp
+    host/game/hit_trace.cpp)
+target_include_directories(mhfu_hub_scaling_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_hub_scaling_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_hub_scaling_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_hub_scaling_tests COMMAND mhfu_hub_scaling_tests)
 endif()
 
 # Item sets: loading a set through the box, the sets file, the screens'
@@ -832,6 +925,29 @@ if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_overlay_slot_tests COMMAND mhfu_overlay_slot_tests)
 endif()
 
+# FUComplete's CONFIG.BIN as the menu reads and writes it. No game data.
+add_executable(mhfu_fuc_config_tests
+    tests/fuc_config_tests.cpp
+    host/fuc_config.cpp)
+target_include_directories(mhfu_fuc_config_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+set_target_properties(mhfu_fuc_config_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_fuc_config_tests COMMAND mhfu_fuc_config_tests)
+endif()
+
+# FUComplete's loader changing the executable's code, and the executable
+# written with those changes. No game data.
+add_executable(mhfu_fuc_code_patches_tests
+    tests/fuc_code_patches_tests.cpp
+    host/fuc_code_patches.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_fuc_code_patches_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_fuc_code_patches_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_fuc_code_patches_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_fuc_code_patches_tests COMMAND mhfu_fuc_code_patches_tests)
+endif()
+
 # Where the data directory is (portable or per-user) and the copy of an
 # installed copy's data into a portable folder. No game data.
 add_executable(mhfu_data_directory_tests
@@ -900,6 +1016,7 @@ endif()
 add_executable(mhfu_texture_pack_tests
     tests/texture_pack_tests.cpp
     host/gpu/texture_decode.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/platform/utf8_path.cpp)
@@ -907,7 +1024,7 @@ target_include_directories(mhfu_texture_pack_tests PRIVATE
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/host/gpu"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(mhfu_texture_pack_tests PRIVATE psprecomp_core Threads::Threads)
+target_link_libraries(mhfu_texture_pack_tests PRIVATE psprecomp_core Threads::Threads mhfu_basisu)
 set_target_properties(mhfu_texture_pack_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_texture_pack_tests COMMAND mhfu_texture_pack_tests)
@@ -1095,6 +1212,7 @@ add_executable(mhfu_path_tests
     host/app_paths.cpp
     host/fonts/game_font.cpp
     host/gpu/screenshot.cpp
+    host/gpu/ktx2_image.cpp
     host/gpu/texture_pack.cpp
     host/gpu/texture_pack_import.cpp
     host/input/bindings.cpp
@@ -1116,7 +1234,7 @@ target_include_directories(mhfu_path_tests PRIVATE
     "${MHFU_PROFILE_DIR}/host"
     "${MHFU_PROFILE_DIR}/host/gpu"
     "${MHFU_PROFILE_DIR}/third_party")
-target_link_libraries(mhfu_path_tests PRIVATE psprecomp_core Threads::Threads)
+target_link_libraries(mhfu_path_tests PRIVATE psprecomp_core Threads::Threads mhfu_basisu)
 if(WIN32)
     target_link_libraries(mhfu_path_tests PRIVATE shell32)
 endif()
@@ -1227,7 +1345,7 @@ function(mhfu_add_overlay meta_path)
     endif()
 endfunction()
 
-file(GLOB MHFU_OVERLAY_METADATA CONFIGURE_DEPENDS "${MHFU_PROFILE_DIR}/overlays/*/meta.txt")
+file(GLOB MHFU_OVERLAY_METADATA CONFIGURE_DEPENDS "${MHFU_OVERLAY_SOURCE_DIR}/*/meta.txt")
 foreach(meta IN LISTS MHFU_OVERLAY_METADATA)
     mhfu_add_overlay("${meta}")
 endforeach()
@@ -1290,7 +1408,7 @@ add_library(mhfu_test_host STATIC ${MHFU_HOST_SOURCES} host/generated_stub.cpp "
 target_include_directories(mhfu_test_host PUBLIC
     "${MHFU_PROFILE_DIR}/host" "${MHFU_PROFILE_DIR}/third_party"
     "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
-target_link_libraries(mhfu_test_host PUBLIC psprecomp_core Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(mhfu_test_host PUBLIC psprecomp_core Threads::Threads ${CMAKE_DL_LIBS} mhfu_basisu)
 mhfu_use_ffmpeg(mhfu_test_host)
 if(WIN32)
     target_link_libraries(mhfu_test_host PUBLIC ws2_32 iphlpapi shell32)
@@ -1301,6 +1419,14 @@ target_link_libraries(mhfu_frame_stats_tests PRIVATE mhfu_test_host)
 set_target_properties(mhfu_frame_stats_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_frame_stats_tests COMMAND mhfu_frame_stats_tests)
+endif()
+# The installer's disc checks and their messages, on small synthetic ISO images.
+add_executable(mhfu_installer_inspect_tests tests/installer_inspect_tests.cpp)
+target_include_directories(mhfu_installer_inspect_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_installer_inspect_tests PRIVATE mhfu_test_host)
+set_target_properties(mhfu_installer_inspect_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_installer_inspect_tests COMMAND mhfu_installer_inspect_tests)
 endif()
 add_executable(mhfu_kernel_hle_tests tests/kernel_hle_tests.cpp)
 target_compile_definitions(mhfu_kernel_hle_tests PRIVATE PSPRECOMP_TEST_NIDS_CSV="${PROJECT_SOURCE_DIR}/configs/nids.csv")
@@ -1322,6 +1448,14 @@ if(NOT WIN32)
             PREFIX ""
             LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_FIXTURE_DIR}"
             OUTPUT_NAME "fixture_${mark}")
+        if(APPLE)
+            # ld64 refuses undefined symbols in a bundle unless told to leave
+            # them to the loader, as ELF linkers do by default.
+            target_link_options(${fixture_target} PRIVATE "LINKER:-undefined,dynamic_lookup")
+        elseif(ANDROID)
+            # The NDK links with --no-undefined; the overlay modules opt out the same way.
+            target_link_options(${fixture_target} PRIVATE "LINKER:-z,undefs")
+        endif()
     endforeach()
     add_executable(mhfu_overlay_swap_tests tests/overlay_swap_tests.cpp)
     target_compile_definitions(mhfu_overlay_swap_tests PRIVATE
@@ -1389,7 +1523,7 @@ if(MHFU_RENDERER_TESTS)
         "${CMAKE_CURRENT_BINARY_DIR}/generated_shaders"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_version"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
-    target_link_libraries(mhfu_renderer_ui_tests PRIVATE psprecomp_core SDL3::SDL3 Vulkan::Vulkan Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(mhfu_renderer_ui_tests PRIVATE psprecomp_core SDL3::SDL3 Vulkan::Vulkan Threads::Threads ${CMAKE_DL_LIBS} mhfu_basisu)
     mhfu_use_ffmpeg(mhfu_renderer_ui_tests)
     if(WIN32)
         target_link_libraries(mhfu_renderer_ui_tests PRIVATE ws2_32 iphlpapi shell32)

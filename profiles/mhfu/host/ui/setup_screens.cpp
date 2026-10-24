@@ -4,6 +4,7 @@
 // installer's own logic decides the order.
 
 #include "ui/ui.hpp"
+#include "title.hpp"
 
 #include "ui/file_browser.hpp"
 #include "ui/layer.hpp"
@@ -103,22 +104,30 @@ bool SetupScreens::introduce(const fs::path &data_dir) {
                 answer = 2;
                 return false;
             }
-            begin_panel("##welcome", "Welcome to Pokee", kSubtitle, false);
+            begin_panel("##welcome", "Welcome to " MHFU_APP_NAME, kSubtitle, false);
             begin_content();
             ImGui::Dummy({0.0f, font() * 0.3f});
-            paragraph("Pokee plays Monster Hunter Freedom Unite from your own copy of the game. It needs an unmodified "
-                      ".iso of " +
-                install::supported_release_list() + ".");
+            if constexpr (kTitle == Title::FUComplete)
+                paragraph(MHFU_APP_NAME
+                    " plays FUComplete from your own copy of the game. It needs an .iso of Monster Hunter "
+                    "Portable 2nd G (ULJM-05500) patched with FUComplete's FUCTool.");
+            else
+                paragraph(MHFU_APP_NAME
+                    " plays Monster Hunter Freedom Unite from your own copy of the game. It needs an "
+                    "unmodified .iso of " +
+                    install::supported_release_list() + ".");
             ImGui::Dummy({0.0f, font() * 0.4f});
 #if defined(MHFU_ANDROID_APP)
-            paragraph("Choose the image next, in Android's file picker. Pokee copies it into its own storage (an "
+            paragraph("Choose the image next, in Android's file picker. " MHFU_APP_NAME
+                      " copies it into its own storage (an "
                       "app cannot keep reading a file elsewhere), checks that it is a supported release and prepares "
                       "the game from it. The copy needs about 0.9 GB, "
                       "besides the 0.8 GB the app takes; once it is made, the original can be deleted. Nothing is "
                       "downloaded.",
                 colors::kTextDim);
 #else
-            paragraph("Choose the image next. Pokee checks that it is the right release, prepares the game from it "
+            paragraph("Choose the image next. " MHFU_APP_NAME
+                      " checks that it is the right release, prepares the game from it "
                       "and, unless you choose otherwise, copies it into its data folder so the game keeps working if "
                       "the original is moved or deleted. Nothing is downloaded.",
                 colors::kTextDim);
@@ -252,22 +261,23 @@ std::optional<install::ImageStorage> SetupScreens::choose_storage(
                     human_size(*space) + " is free in the data folder.";
             RowOptions copy_options{!room, {}, {}};
             if (first && room) focus_next_row();
-            if (button_row("Copy it into Pokee's data folder", copy_options)) choice = install::ImageStorage::Copy;
+            if (button_row("Copy it into " MHFU_APP_NAME "'s data folder", copy_options))
+                choice = install::ImageStorage::Copy;
             ImGui::Indent(std::round(16.0f * layer.scale()));
             paragraph(copy_note, room ? colors::kTextDim : colors::kDanger);
             ImGui::Unindent(std::round(16.0f * layer.scale()));
             ImGui::Dummy({0.0f, font() * 0.4f});
             const std::string place_note = "Saves " + human_size(info.size_bytes) +
-                ". The image must then stay where it is; if it moves, "
-                "Pokee asks you to set up again.";
+                ". The image must then stay where it is; if it moves, " MHFU_APP_NAME " asks you to set up again.";
             if (first && !room) focus_next_row();
             if (button_row("Use it where it is")) choice = install::ImageStorage::InPlace;
             ImGui::Indent(std::round(16.0f * layer.scale()));
             paragraph(place_note, colors::kTextDim);
             ImGui::Unindent(std::round(16.0f * layer.scale()));
             first = false;
-            layer.set_description("Either way, the game's executable is prepared from the image into Pokee's data "
-                                  "folder.");
+            layer.set_description(
+                "Either way, the game's executable is prepared from the image into " MHFU_APP_NAME "'s data "
+                "folder.");
             begin_footer();
             hints({{Control::Confirm, "Continue"}, {Control::Back, "Choose another file"}});
             end_panel();
@@ -392,7 +402,7 @@ bool SetupScreens::offer_retry(const std::string &message) {
             ImGui::Dummy({0.0f, font() * 0.8f});
             answer = button_pair("Choose another file", "Quit", first);
             first = false;
-            layer.set_description("Pokee supports " + install::supported_release_list() +
+            layer.set_description(MHFU_APP_NAME " supports " + install::supported_release_list() +
                 ", as an unmodified, uncompressed .iso image.");
             begin_footer();
             hints({{Control::Confirm, "Select"}, {Control::Back, "Quit"}});
@@ -415,11 +425,13 @@ void SetupScreens::finished(const fs::path &data_dir) {
             ImGui::Dummy({0.0f, font() * 0.3f});
 #if defined(MHFU_ANDROID_APP)
             paragraph("In the game, Back, the menu button at the top of the touch controls, or L3+R3 on a gamepad "
-                      "(both sticks pressed) opens Pokee's menu, with the settings and the way back to this setup. "
+                      "(both sticks pressed) opens " MHFU_APP_NAME
+                      "'s menu, with the settings and the way back to this setup. "
                       "Touch the screen to show the touch controls.",
                 colors::kTextDim);
 #else
-            paragraph("In the game, Esc or L3+R3 (both sticks pressed) opens Pokee's menu, with the settings and the "
+            paragraph("In the game, Esc or L3+R3 (both sticks pressed) opens " MHFU_APP_NAME
+                      "'s menu, with the settings and the "
                       "way back to this setup.",
                 colors::kTextDim);
 #endif

@@ -8,6 +8,8 @@ if(PSPRECOMP_COVERAGE)
     if(PSPRECOMP_SANITIZERS)
         message(FATAL_ERROR "Use separate build directories for coverage and sanitizers")
     endif()
-    add_compile_options(-fprofile-instr-generate -fcoverage-mapping -O0 -g)
+    # C++ only: the C compiler, used for vendored C such as zstd, may not be
+    # Clang, and coverage measures first-party code anyway.
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fprofile-instr-generate;-fcoverage-mapping;-O0;-g>")
     add_link_options(-fprofile-instr-generate)
 endif()

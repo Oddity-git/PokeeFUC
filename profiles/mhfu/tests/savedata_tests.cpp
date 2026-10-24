@@ -147,8 +147,10 @@ void test_store() {
     // A changed data file must be reported as broken.
     {
         std::fstream data(folder / "DATA.BIN", std::ios::binary | std::ios::in | std::ios::out);
+        data.seekg(100);
+        const int byte = data.get();
         data.seekp(100);
-        data.put('\x7f');
+        data.put(static_cast<char>(byte ^ 0xFF));
     }
     check(load_save(root, files).status == LoadStatus::Broken, "a modified data file is rejected");
     SaveFiles missing = files;
@@ -179,6 +181,65 @@ void make_save(const std::filesystem::path &memory_stick, const std::string &gam
     if (!write_save(memory_stick, files, contents, error)) std::printf("cannot write a test save: %s\n", error.c_str());
 }
 
+// FUComplete's Save Region option changes the game's key in code, so a
+// save written before it took effect has the earlier key. The keys the game
+// has passed are kept, and a save that does not match the current key's hash
+// loads with an earlier one.
+void test_earlier_keys() {
+    const auto data = std::filesystem::temp_directory_path() / "mhfu_savedata_key_tests";
+    std::filesystem::remove_all(data);
+    const auto memory_stick = data / "ms0";
+    std::filesystem::create_directories(memory_stick);
+    const Block old_key = block("0102030405060708090a0b0c0d0e0f10");
+    const Block new_key = block("a1a2a3a4a5a6a7a8a9aaabacadaeafb0");
+    const Block other_game = block("ffeeddccbbaa99887766554433221100");
+    make_save(memory_stick, "ULUS10391", "", old_key, 0x5Au);
+    SaveFiles files;
+    files.game_name = "ULUS10391";
+    files.file_name = "MHP2NDG.BIN";
+    files.key = new_key;
+
+    const LoadResult plain = load_save(memory_stick, files);
+    check(plain.status == LoadStatus::Broken && plain.hash_mismatch, "the new key does not match the old save");
+    bool earlier = true;
+    LoadResult loaded = load_save_with_earlier_key(memory_stick, files, earlier);
+    check(loaded.status == LoadStatus::Broken && !earlier, "with no key noted there is nothing earlier to try");
+
+    note_game_key(memory_stick, "ULUS10391", old_key);
+    note_game_key(memory_stick, "ULUS10391", old_key);
+    note_game_key(memory_stick, "ULJM05500", other_game);
+    note_game_key(memory_stick, "ULUS10391", new_key);
+    check(std::filesystem::exists(data / "savedata_keys.txt"), "the keys are kept beside the memory stick");
+    const std::vector<Block> keys = earlier_game_keys(memory_stick, "ULUS10391", new_key);
+    check(keys.size() == 1u && keys[0] == old_key, "the earlier key, once, and not another game's or the current one");
+
+    loaded = load_save_with_earlier_key(memory_stick, files, earlier);
+    check(loaded.status == LoadStatus::Ok && earlier, "the save loads with the earlier key");
+    check(loaded.contents.data == std::vector<std::uint8_t>(2048u, 0x5Au), "and holds its data");
+
+    std::string error;
+    check(write_save(memory_stick, files, loaded.contents, error), "the game saves it again");
+    loaded = load_save_with_earlier_key(memory_stick, files, earlier);
+    check(loaded.status == LoadStatus::Ok && !earlier, "now with the current key");
+
+    {
+        std::fstream file(memory_stick / "PSP" / "SAVEDATA" / "ULUS10391" / "MHP2NDG.BIN",
+            std::ios::binary | std::ios::in | std::ios::out);
+        // The data is encrypted with a random IV, so flip the byte rather than
+        // write a fixed value it may already hold.
+        file.seekg(100);
+        const int byte = file.get();
+        file.seekp(100);
+        file.put(static_cast<char>(byte ^ 0xFF));
+    }
+    loaded = load_save_with_earlier_key(memory_stick, files, earlier);
+    check(loaded.status == LoadStatus::Broken && !earlier, "a damaged save matches no key and stays broken");
+
+    std::ofstream(data / "savedata_keys.txt", std::ios::app) << "garbage line\nULUS10391 zz\n";
+    check(earlier_game_keys(memory_stick, "ULUS10391", new_key).size() == 1u, "lines that are not keys are skipped");
+    std::filesystem::remove_all(data);
+}
+
 void test_transfer() {
     namespace fs = std::filesystem;
     const auto root = fs::temp_directory_path() / "mhfu_save_transfer_tests";
@@ -207,8 +268,10 @@ void test_transfer() {
         fs::copy_file(entry.path(), damaged / entry.path().filename());
     {
         std::fstream data(damaged / "MHP2NDG.BIN", std::ios::binary | std::ios::in | std::ios::out);
+        data.seekg(200);
+        const int byte = data.get();
         data.seekp(200);
-        data.put('\x7f');
+        data.put(static_cast<char>(byte ^ 0xFF));
     }
     check(!check_save_folder(damaged, key).ok(), "a damaged data file is refused");
     // A damaged PARAM.SFO: the title changed, which its hashes cover.
@@ -388,6 +451,7 @@ int main(int argc, char **argv) {
     test_param_sfo();
     test_encryption();
     test_store();
+    test_earlier_keys();
     test_transfer();
     test_release_of();
     std::printf("%d failure(s)\n", failures);

@@ -55,13 +55,8 @@ bool copy_document_to_file(const std::string &uri, const fs::path &target, std::
     return ok;
 }
 
-bool copy_file_to_document(const fs::path &source, const std::string &folder_uri, std::string &error) {
-    const std::optional<std::string> created = create(folder_uri, source.filename().string(), false);
-    if (!created) {
-        error = "cannot create " + source.filename().string() + " in the chosen folder";
-        return false;
-    }
-    const int fd = open_document(*created, "w");
+bool write_file_to_document(const fs::path &source, const std::string &document_uri, std::string &error) {
+    const int fd = open_document(document_uri, "w");
     if (fd < 0) {
         error = "cannot write " + source.filename().string();
         return false;
@@ -87,6 +82,15 @@ bool copy_file_to_document(const fs::path &source, const std::string &folder_uri
     ok = ::close(fd) == 0 && ok;
     if (!ok) error = "cannot write " + source.filename().string();
     return ok;
+}
+
+bool copy_file_to_document(const fs::path &source, const std::string &folder_uri, std::string &error) {
+    const std::optional<std::string> created = create(folder_uri, source.filename().string(), false);
+    if (!created) {
+        error = "cannot create " + source.filename().string() + " in the chosen folder";
+        return false;
+    }
+    return write_file_to_document(source, *created, error);
 }
 
 // Copies the files of a folder document (not its subfolders) into `target`.
@@ -184,6 +188,50 @@ std::optional<PickedExport> pick_folder_and_copy(const fs::path &local) {
     std::string error;
     if (!copy_tree(local, tree_root(*tree), error)) result.error = error;
     return result;
+}
+
+std::string describe_tree_uri(const std::string &tree_uri) {
+    return describe_tree(tree_uri);
+}
+
+bool read_sync_folder(const std::string &tree_uri, const fs::path &staging, std::string &error) {
+    std::error_code ec;
+    fs::remove_all(staging, ec);
+    fs::create_directories(staging, ec);
+    return copy_save_folder(tree_root(tree_uri), staging, error);
+}
+
+bool write_sync_folder(const fs::path &local, const std::string &tree_uri, std::string &error) {
+    const std::string root = tree_root(tree_uri);
+    const std::optional<std::vector<Entry>> entries = list_folder(root);
+    if (!entries) {
+        error = "cannot read the chosen folder";
+        return false;
+    }
+    std::error_code ec;
+    for (const fs::directory_entry &item : fs::directory_iterator(local, ec)) {
+        if (!item.is_regular_file(ec)) continue;
+        std::string target;
+        for (const Entry &entry : *entries)
+            if (!entry.directory && entry.name == item.path().filename().string()) {
+                target = entry.uri;
+                break;
+            }
+        if (target.empty()) {
+            const std::optional<std::string> created = create(root, item.path().filename().string(), false);
+            if (!created) {
+                error = "cannot create " + item.path().filename().string() + " in the chosen folder";
+                return false;
+            }
+            target = *created;
+        }
+        if (!write_file_to_document(item.path(), target, error)) return false;
+    }
+    if (ec) {
+        error = "cannot read the save folder";
+        return false;
+    }
+    return true;
 }
 
 } // namespace mhfu::android

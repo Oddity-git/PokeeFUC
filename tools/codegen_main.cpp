@@ -1175,17 +1175,20 @@ void emit_target(std::ostringstream &body, std::uint32_t target, const std::set<
     const char *indent, std::uint32_t executable_base = 0u, std::uint32_t unit_span_bytes = 0u,
     const std::map<std::uint32_t, std::uint16_t> *direct_entry_ids = nullptr,
     const std::set<std::uint32_t> *import_stubs = nullptr, const std::set<std::uint32_t> *unit_indices = nullptr) {
-    if (labels.contains(target)) {
-        body << indent << "goto L_" << psprecomp::hex32(target).substr(2) << ";\n";
-        return;
-    }
-
     // A fixed J/JAL to a PSP import must return to the outer dispatcher.
     // Trying the generated-unit chain first is guaranteed to fail because import
     // registration deliberately poisons/replaces that exact PC, and these stubs
     // are frequently hot in real titles. Emit the minimal correct handoff directly.
+    // This comes before the local label: a plain executable keeps its stubs as
+    // `jr ra; nop` beside the code that calls them, and jumping to that label
+    // would return without making the call.
     if (import_stubs != nullptr && import_stubs->contains(target)) {
         body << indent << "ctx.pc = " << psprecomp::hex32(target) << "u; return;\n";
+        return;
+    }
+
+    if (labels.contains(target)) {
+        body << indent << "goto L_" << psprecomp::hex32(target).substr(2) << ";\n";
         return;
     }
 
@@ -1370,6 +1373,14 @@ std::string emit_function_source(
                         emit_target(body, target, function.entry_labels, "    ", function.executable_base,
                             function.unit_span_bytes, function.direct_entry_ids, function.import_stubs,
                             function.unit_indices);
+                    } else if (function.import_stubs != nullptr && function.import_stubs->contains(target)) {
+                        // PSP import stubs are deliberate outer-dispatcher
+                        // boundaries, also when the stub sits in this unit: do
+                        // not pay a guaranteed-failing generated-unit chain
+                        // attempt, or run the stub's `jr ra` in place of the call.
+                        body << "    ctx.pc = " << psprecomp::hex32(target) << "u;\n"
+                             << "    return;\n";
+                        break;
                     } else if (function.entry_labels.contains(target)) {
                         // Fixed same-unit JAL: the destination is already a C++
                         // label. Going through ctx.pc + LOCAL_DISPATCH needlessly
@@ -1377,18 +1388,9 @@ std::string emit_function_source(
                         // counter. The delay slot and $ra write have already run.
                         body << "    goto L_" << psprecomp::hex32(target).substr(2) << ";\n";
                     } else {
-                        // Cross-unit call. PSP import stubs are deliberate outer-
-                        // dispatcher boundaries; do not pay a guaranteed-failing
-                        // generated-unit chain attempt before reaching them.
+                        // Cross-unit call.
                         const std::uint32_t return_pc = pc + 8u;
-                        const bool target_is_import =
-                            function.import_stubs != nullptr && function.import_stubs->contains(target);
-                        if (target_is_import) {
-                            body << "    ctx.pc = " << psprecomp::hex32(target) << "u;\n"
-                                 << "    return;\n";
-                            break;
-                        }
-                        // Otherwise run the callee inline and resume locally only
+                        // Run the callee inline and resume locally only
                         // if it came back to our return address.
                         const bool direct_unit = function.unit_span_bytes != 0u && target >= function.executable_base &&
                             (function.unit_indices == nullptr ||

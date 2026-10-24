@@ -111,9 +111,9 @@ template <typename Enum> struct Names {
 const Names<PresentMode> kPresentModes{
     {{PresentMode::Fifo, "vsync"}, {PresentMode::Mailbox, "mailbox"}, {PresentMode::Immediate, "immediate"}}};
 const Names<Aspect> kAspects{{{Aspect::Original, "original"}, {Aspect::Stretch, "stretch"}, {Aspect::Fill, "fill"}}};
-const Names<PerfDisplay> kPerfDisplays{{{PerfDisplay::Off, "off"}, {PerfDisplay::Overlay, "overlay"},
-    {PerfDisplay::OverlayAndLog, "overlay+log"}, {PerfDisplay::Log, "log"}, {PerfDisplay::Compact, "compact"},
-    {PerfDisplay::CompactAndLog, "compact+log"}}};
+const Names<PerfDisplay> kPerfDisplays{
+    {{PerfDisplay::Off, "off"}, {PerfDisplay::Overlay, "overlay"}, {PerfDisplay::OverlayAndLog, "overlay+log"},
+        {PerfDisplay::Log, "log"}, {PerfDisplay::Compact, "compact"}, {PerfDisplay::CompactAndLog, "compact+log"}}};
 const Names<RightStick> kRightSticks{
     {{RightStick::Camera, "camera"}, {RightStick::DPad, "dpad"}, {RightStick::Off, "off"}}};
 const Names<LockOnStyle> kLockOnStyles{{{LockOnStyle::Follow, "follow"}, {LockOnStyle::Focus, "focus"}}};
@@ -227,6 +227,10 @@ const std::vector<Field> &fields() {
             [](const Settings &s) { return std::string(s.aspect == Aspect::Stretch ? "0" : "1"); }, nullptr},
         {"video.aspect", nullptr, [](Settings &s, const std::string &t) { return kAspects.parse(t, s.aspect); },
             [](const Settings &s) { return kAspects.format(s.aspect); }, nullptr},
+        {"video.fov_scale", "MHFU_FOV_SCALE",
+            [](Settings &s, const std::string &t) { return parse_float(t, 0.5f, 2.0f, s.fov_scale); },
+            [](const Settings &s) { return format_float(s.fov_scale); },
+            [](Settings &s, const char *t) { s.fov_scale = variable_float(t, 1.0f, 0.5f, 2.0f); }},
         BOOL_FIELD("video.sharp_screen", sharp_screen),
         BOOL_FIELD("video.sharp_textures", sharp_textures),
         {"video.texture_pack", "MHFU_TEXTURE_PACK",
@@ -309,8 +313,7 @@ const std::vector<Field> &fields() {
                 return true;
             },
             [](const Settings &s) { return s.font; }, [](Settings &s, const char *t) { s.font = t; }},
-        {"text.crisp", "MHFU_CRISP_TEXT",
-            [](Settings &s, const std::string &t) { return parse_bool(t, s.crisp_text); },
+        {"text.crisp", "MHFU_CRISP_TEXT", [](Settings &s, const std::string &t) { return parse_bool(t, s.crisp_text); },
             [](const Settings &s) { return std::string(s.crisp_text ? "1" : "0"); },
             [](Settings &s, const char *t) { s.crisp_text = variable_flag(t); }},
         {"video.ui_textures", "MHFU_UI_TEXTURES",
@@ -320,7 +323,9 @@ const std::vector<Field> &fields() {
                 if (!kUiTextures.parse(t, s.ui_textures)) s.ui_textures = UiTextures::Off;
             }},
         {"video.hud.map", "MHFU_HUD_MAP",
-            [](Settings &s, const std::string &t) { return parse_uint(t, kMinMapItemScale, kMaxMapItemScale, s.hud.map); },
+            [](Settings &s, const std::string &t) {
+                return parse_uint(t, kMinMapItemScale, kMaxMapItemScale, s.hud.map);
+            },
             [](const Settings &s) { return std::to_string(s.hud.map); },
             [](Settings &s, const char *t) {
                 std::uint32_t value = s.hud.map;
@@ -510,8 +515,7 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return kNameEntries.parse(t, s.name_entry); },
             [](const Settings &s) { return kNameEntries.format(s.name_entry); },
             [](Settings &s, const char *t) {
-                if (!kNameEntries.parse(t, s.name_entry))
-                    std::cerr << "[settings] MHFU_OSK_MODE: keyboard or fixed\n";
+                if (!kNameEntries.parse(t, s.name_entry)) std::cerr << "[settings] MHFU_OSK_MODE: keyboard or fixed\n";
             }},
         {"input.name", "MHFU_OSK_TEXT",
             [](Settings &s, const std::string &t) {
@@ -594,6 +598,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.key_quests); },
             [](const Settings &s) { return std::string(s.key_quests ? "1" : "0"); },
             [](Settings &s, const char *t) { s.key_quests = variable_flag(t); }},
+        {"game.hub_scaling", "MHFU_HUB_SCALING",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.hub_scaling); },
+            [](const Settings &s) { return std::string(s.hub_scaling ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.hub_scaling = variable_flag(t); }},
         {"game.gather_icon_size", "MHFU_GATHER_ICON_SIZE",
             [](Settings &s, const std::string &t) {
                 return parse_uint(t, kMinGatherIconSize, kMaxGatherIconSize, s.gather_icon_size);
@@ -664,6 +672,25 @@ const std::vector<Field> &fields() {
                 return true;
             },
             [](const Settings &s) { return s.backup_reminded; }, nullptr},
+        {"saves.sync_folder", "MHFU_SYNC_FOLDER",
+            [](Settings &s, const std::string &t) {
+                s.save_sync_folder = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_folder; },
+            [](Settings &s, const char *t) { s.save_sync_folder = t == nullptr ? "" : t; }},
+        {"saves.sync_hash", nullptr,
+            [](Settings &s, const std::string &t) {
+                s.save_sync_hash = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_hash; }, nullptr},
+        {"saves.sync_time", nullptr,
+            [](Settings &s, const std::string &t) {
+                s.save_sync_time = t;
+                return true;
+            },
+            [](const Settings &s) { return s.save_sync_time; }, nullptr},
         {"ui.last_folder", nullptr,
             [](Settings &s, const std::string &t) {
                 s.last_folder = t;

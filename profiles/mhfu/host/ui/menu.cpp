@@ -3,6 +3,7 @@
 // pauses the game, or, as the settings say, stays over the running game.
 
 #include "ui/ui.hpp"
+#include "title.hpp"
 
 #include "camera/hunt_icon.hpp"
 
@@ -35,6 +36,7 @@
 #include "input/bindings.hpp"
 #include "install/game_identity.hpp"
 #include "install/installer.hpp"
+#include "fuc_config.hpp"
 #include "install/user_data.hpp"
 #include "kernel/fast_forward.hpp"
 #include "kernel/fast_loading.hpp"
@@ -221,7 +223,7 @@ bool Menu::frame() {
         return true;
     }
 
-    begin_panel("##menu", "Pokee", paused_ ? "Paused" : "Running", true);
+    begin_panel("##menu", MHFU_APP_NAME, paused_ ? "Paused" : "Running", true);
     // A page that is not there this run gives way to the first.
     if (tab_ >= kTabCount) tab_ = 0;
     static int dropdown_tab = -1;
@@ -380,7 +382,8 @@ void Menu::video() {
         }
     }
 #endif
-    {
+    // Each row below is shown only where its feature runs for this build's game (title.hpp).
+    if constexpr (kGameAspect) {
         static const char *const kAspects[] = {"Original", "Stretch", "Fill"};
         const int current = static_cast<int>(s.aspect);
         if (const int delta = choice_row("Aspect ratio", kAspects[current],
@@ -394,6 +397,17 @@ void Menu::video() {
             settings::save();
         }
     }
+    {
+        int fov = static_cast<int>(std::lround(s.fov_scale * 100.0f));
+        if (slider_row("Field of view", fov, 50, 150, 5, "%d%% of the game's",
+                options_for("video.fov_scale",
+                    "Widens or narrows the camera's field of view as a share of the game's own. "
+                    "It follows whatever the game sets, in the village and in quests, and the "
+                    "change applies while the game runs."))) {
+            s.fov_scale = static_cast<float>(fov) / 100.0f;
+            settings::save();
+        }
+    }
     if (choice_row("Scaling filter", s.sharp_screen ? "Sharp" : "Smooth",
             options_for("video.sharp_screen",
                 "How the finished picture is scaled to the window: smooth "
@@ -402,7 +416,7 @@ void Menu::video() {
         renderer().set_sharp_screen(s.sharp_screen);
         settings::save();
     }
-    {
+    if constexpr (kUiScaling) {
         struct Element {
             const char *name;
             const char *key;
@@ -455,7 +469,7 @@ void Menu::video() {
             ImGui::Unindent(ImGui::GetFontSize() * 0.75f);
         }
     }
-    {
+    if constexpr (kHideHud) {
         const std::string key = input::format(s.controls.keys[static_cast<std::size_t>(input::Action::HideHud)]);
         RowOptions o;
         o.description = "Hides the game's HUD for pictures and videos: health, stamina, sharpness, the clock, the "
@@ -491,8 +505,8 @@ void Menu::video() {
     }
     {
         RowOptions o = options_for("video.texture_pack",
-            "Draws an HD texture pack in PPSSPP's format from textures/ULUS10391 in the data "
-            "folder instead of the game's textures.");
+            std::string("Draws an HD texture pack in PPSSPP's format from textures/") + install::kDiscId +
+                " in the data folder instead of the game's textures.");
         // The footer shows the note under the description: what is loaded,
         // or where the pack was looked for.
         if (o.note.empty()) {
@@ -615,7 +629,8 @@ void Menu::video() {
         RowOptions o = options_for("video.gpu_compat",
             "Leaves out what some older phone GPU drivers may get wrong: specialized shaders, robust buffer "
             "access, the pipeline cache and a second frame in flight. It costs speed, so Auto turns it on only "
-            "when the start-up test picture comes out wrong or the driver refuses a shader. Applies when Pokee "
+            "when the start-up test picture comes out wrong or the driver refuses a shader. Applies when " MHFU_APP_NAME
+            " "
             "starts next. Now: " +
                 renderer().gpu_compat_status() + ".");
         if (const int delta = choice_row("GPU compatibility", kCompat[current], o)) {
@@ -623,9 +638,22 @@ void Menu::video() {
             settings::save();
         }
     }
+    {
+        const bool available = renderer().can_gpu_decode();
+        RowOptions o;
+        o.disabled = !available;
+        o.description = available
+            ? "Decodes the game's static 3D geometry on the GPU instead of the CPU. The HUD and skinned models "
+              "stay on the CPU. Experimental: some drivers hang with it, so it is for this run only; restarting "
+              "returns to the CPU path."
+            : "This GPU or driver cannot use the GPU vertex path.";
+        if (toggle_row("GPU vertex decode (this run)", renderer().gpu_decode(), o))
+            renderer().set_gpu_decode(!renderer().gpu_decode());
+    }
     font_rows();
     ImGui::Dummy({0.0f, font_gap()});
-    if (button_row("Restore video defaults", {false, {}, "Every setting on this page back to how Pokee ships."})) {
+    if (button_row(
+            "Restore video defaults", {false, {}, "Every setting on this page back to how " MHFU_APP_NAME " ships."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
             if (settings::overridden_by(key) == nullptr) value = fallback;
@@ -1102,8 +1130,8 @@ void Menu::controls() {
     ImGui::Dummy({0.0f, font_gap()});
     if (button_row("Restore control defaults",
             {false, {},
-                "Every gamepad, keyboard, mouse and touch setting back to how "
-                "Pokee ships, with the Default preset. Your own presets and the Action layout's "
+                "Every gamepad, keyboard, mouse and touch setting back to how " MHFU_APP_NAME
+                " ships, with the Default preset. Your own presets and the Action layout's "
                 "arrangement are kept."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
@@ -1218,6 +1246,42 @@ void Menu::controls() {
     }
 }
 
+// FUComplete's own options (fuc_config.hpp), read from and written to its
+// CONFIG.BIN. Its loader reads the file when the game starts, so a changed
+// option says so until the next start.
+void fucomplete_rows() {
+    namespace fc = fuc_config;
+    std::filesystem::path stick = savedata::memory_stick();
+    if (stick.empty()) stick = install::user_data_directory() / "ms0";
+    const std::filesystem::path path = fc::config_path(stick);
+    static std::optional<std::vector<std::uint8_t>> at_start = fc::read(path);
+    static std::optional<std::vector<std::uint8_t>> bytes = at_start;
+    section("FUComplete");
+    if (!bytes) {
+        info_row("CONFIG.BIN", "Not found yet: FUComplete writes it the first time the game starts");
+        return;
+    }
+    for (const fc::Option &option : fc::options()) {
+        const int current = fc::choice(*bytes, option);
+        const std::string value = current >= 0 ? option.choices[static_cast<std::size_t>(current)].label : "Other";
+        RowOptions o;
+        o.description = option.description;
+        if (option.locked) {
+            o.disabled = true;
+            o.note = "Kept for your save";
+        } else if (at_start && fc::value(*at_start, option) != fc::value(*bytes, option)) {
+            o.note = "Applies when " MHFU_APP_NAME " starts again";
+        }
+        const int delta = choice_row(option.label, value, o);
+        if (delta == 0 || option.locked) continue;
+        const int count = static_cast<int>(option.choices.size());
+        const int next = current < 0 ? 0 : cycle(current, delta, count);
+        std::vector<std::uint8_t> changed = *bytes;
+        fc::set(changed, option, static_cast<std::size_t>(next));
+        if (fc::write(path, changed)) bytes = std::move(changed);
+    }
+}
+
 void Menu::game() {
     settings::Settings &s = settings::current();
     section("Hunting");
@@ -1231,156 +1295,168 @@ void Menu::game() {
         s.gather_hold = !s.gather_hold;
         settings::save();
     }
-    if (toggle_row("Empty item slot", s.empty_item_slot,
-            options_for("game.empty_item_slot",
-                "On: the item bar has an empty slot, Nothing Selected, before the first item, and each quest "
-                "starts on it. With it selected, □ with the weapon sheathed uses nothing. A pouch with all 24 "
-                "slots filled has no room for it. Off: the game's own bar, which starts on the first item and "
-                "wraps from the last item to the first."))) {
-        s.empty_item_slot = !s.empty_item_slot;
-        settings::save();
-    }
-    if (toggle_row("True Attack Value", s.true_attack,
-            options_for("game.true_attack",
-                "On: the equipment screens show a weapon's attack, element and status as the game counts "
-                "them, as FUComplete's True Raw/Ele/Status does: attack without the class factor (a great "
-                "sword's 672 shows as 140) and element and status without the trailing zero (fire 250 shows "
-                "as 25). Damage is the same either way. Off (default): the game's own numbers."))) {
-        s.true_attack = !s.true_attack;
-        settings::save();
-    }
-    section("Lock-on");
-    {
-        const auto slot = static_cast<std::size_t>(input::Action::LockOn);
-        std::string bind = input::format(s.controls.keys[slot]);
-        const std::string pad = input::format(s.controls.pad[slot]);
-        if (!pad.empty()) bind += (bind.empty() ? "" : " / ") + pad;
-        const std::string help = "A tap of Lock on" +
-            (bind.empty() ? std::string(" (unbound: set it in Controls)") : " (" + bind + ")") +
-            " selects the nearest large monster. Tap again for the next one in the area; after the last one, a tap "
-            "lets go. Lock-on style says whether the camera stays on it. Off, the bind does nothing and the hunt "
-            "icon is hidden.";
-        if (toggle_row("Lock-on", s.lock_on, options_for("input.lock_on", help.c_str()))) {
-            s.lock_on = !s.lock_on;
-            settings::save();
-        }
-        const char *const styles[] = {"Follow", "Focus"};
-        const int style = s.lock_on_style == settings::LockOnStyle::Focus ? 1 : 0;
-        const auto focus = static_cast<std::size_t>(input::Action::FocusCamera);
-        std::string focus_bind = input::format(s.controls.keys[focus]);
-        const std::string focus_pad = input::format(s.controls.pad[focus]);
-        if (!focus_pad.empty()) focus_bind += (focus_bind.empty() ? "" : " / ") + focus_pad;
-        const std::string focus_button = focus_bind.empty() ? std::string("L") : focus_bind;
-        const std::string style_help = "Follow keeps the camera on the selected monster. " +
-            (focus_bind.empty() ? std::string("Focus/Follow Camera, once bound,") : focus_button) +
-            " turns that tracking off and on again; the selection stays. "
-            "Turning it by hand, the D-pad, or L lets go, and L "
-            "recenters behind the hunter. Focus keeps the selection, and a tap of " +
-            focus_button +
-            " centers the camera on that monster, even when it is already on screen, and L's own camera move stays "
-            "off for that tap. A second tap within a third of a second recenters behind the hunter; the selection stays. A "
-            "later tap centers again. With nothing selected, L recenters behind the hunter. Focus/Follow Camera in Controls "
-            "chooses that tap; with nothing bound, it is L.";
-        RowOptions o = options_for("input.lock_on_style", std::move(style_help));
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (const int delta = choice_row("Lock-on style", styles[style], o)) {
-            // Either way, or confirm, moves to the other style, as the other choice rows wrap.
-            const int next = cycle(style, delta, 2);
-            s.lock_on_style = next == 0 ? settings::LockOnStyle::Follow : settings::LockOnStyle::Focus;
-            settings::save();
-        }
-        o = options_for("input.lock_on_marker",
-            "A red ring, a cross through it, and four ticks, over the monster the camera is locked onto. "
-            "Follow keeps it up while the camera is tracking. The right stick or Focus/Follow Camera turns it off "
-            "with that tracking; the selection stays, and the same button turns both back on. In Focus, selecting "
-            "leaves it off. The focus button shows it for a third of a second.");
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (toggle_row("Lock-on marker", s.lock_on_marker, o)) {
-            s.lock_on_marker = !s.lock_on_marker;
-            settings::save();
-        }
-        int portrait = static_cast<int>(s.hunt_portrait_size);
-        o = options_for("video.hunt_portrait",
-            "The monster icon at the bottom left, as a percent of its usual size. "
-            "A loading screen shows none. Off with Lock-on.");
-        if (!s.lock_on && !o.disabled) {
-            o.disabled = true;
-            o.note = "Lock-on is off";
-        }
-        if (slider_row("Monster Icon", portrait, static_cast<int>(settings::kMinHuntPortraitSize),
-                static_cast<int>(settings::kMaxHuntPortraitSize), 10, "%d%%", o)) {
-            s.hunt_portrait_size = static_cast<std::uint32_t>(portrait);
+    if constexpr (kEmptyItemSlot) {
+        if (toggle_row("Empty item slot", s.empty_item_slot,
+                options_for("game.empty_item_slot",
+                    "On: the item bar has an empty slot, Nothing Selected, before the first item, and each quest "
+                    "starts on it. With it selected, □ with the weapon sheathed uses nothing. A pouch with all 24 "
+                    "slots filled has no room for it. Off: the game's own bar, which starts on the first item and "
+                    "wraps from the last item to the first."))) {
+            s.empty_item_slot = !s.empty_item_slot;
             settings::save();
         }
     }
-    section("Overlays");
-    if (toggle_row("Damage numbers", s.damage_numbers,
-            options_for("game.damage_numbers",
-                "On: a number shows how much health a hit takes off a monster, drawn on the monster. A weak point "
-                "(hitzone 45 or more, after sharpness for a blade) is orange and any other part "
-                "is gray. The number stays white until that part is known, and a critical hit "
-                "keeps its own mark. Off: nothing is added."))) {
-        s.damage_numbers = !s.damage_numbers;
-        settings::save();
-    }
-    {
-        RowOptions o = options_for("game.damage_number_size",
-            "How large damage numbers are drawn, in percent of the interface text. They still shrink when "
-            "the camera is close to the monster.");
-        o.disabled = o.disabled || !s.damage_numbers;
-        int size = static_cast<int>(s.damage_number_size);
-        if (slider_row("Damage number size", size, static_cast<int>(settings::kMinDamageNumberSize),
-                static_cast<int>(settings::kMaxDamageNumberSize), 10, "%d%%", o)) {
-            s.damage_number_size = static_cast<std::uint32_t>(size);
+    if constexpr (kTrueAttack) {
+        if (toggle_row("True Attack Value", s.true_attack,
+                options_for("game.true_attack",
+                    "On: the equipment screens show a weapon's attack, element and status as the game counts "
+                    "them, as FUComplete's True Raw/Ele/Status does: attack without the class factor (a great "
+                    "sword's 672 shows as 140) and element and status without the trailing zero (fire 250 shows "
+                    "as 25). Damage is the same either way. Off (default): the game's own numbers."))) {
+            s.true_attack = !s.true_attack;
             settings::save();
         }
     }
-    {
-        RowOptions o = options_for("game.damage_number_thickness",
-            "How bold damage numbers are: 1 is the font's own strokes with a thin dark outline, and each "
-            "step thickens both the digits and the outline. 3 is the thickest that stays readable.");
-        o.disabled = o.disabled || !s.damage_numbers;
-        int thickness = static_cast<int>(s.damage_number_thickness);
-        if (slider_row("Damage number thickness", thickness, 1, static_cast<int>(settings::kMaxDamageNumberThickness),
-                1, "%d", o)) {
-            s.damage_number_thickness = static_cast<std::uint32_t>(thickness);
+    if constexpr (kLockOn) {
+        section("Lock-on");
+        {
+            const auto slot = static_cast<std::size_t>(input::Action::LockOn);
+            std::string bind = input::format(s.controls.keys[slot]);
+            const std::string pad = input::format(s.controls.pad[slot]);
+            if (!pad.empty()) bind += (bind.empty() ? "" : " / ") + pad;
+            const std::string help = "A tap of Lock on" +
+                (bind.empty() ? std::string(" (unbound: set it in Controls)") : " (" + bind + ")") +
+                " selects the nearest large monster. Tap again for the next one in the area; after the last one, a tap "
+                "lets go. Lock-on style says whether the camera stays on it. Off, the bind does nothing and the hunt "
+                "icon is hidden.";
+            if (toggle_row("Lock-on", s.lock_on, options_for("input.lock_on", help.c_str()))) {
+                s.lock_on = !s.lock_on;
+                settings::save();
+            }
+            const char *const styles[] = {"Follow", "Focus"};
+            const int style = s.lock_on_style == settings::LockOnStyle::Focus ? 1 : 0;
+            const auto focus = static_cast<std::size_t>(input::Action::FocusCamera);
+            std::string focus_bind = input::format(s.controls.keys[focus]);
+            const std::string focus_pad = input::format(s.controls.pad[focus]);
+            if (!focus_pad.empty()) focus_bind += (focus_bind.empty() ? "" : " / ") + focus_pad;
+            const std::string focus_button = focus_bind.empty() ? std::string("L") : focus_bind;
+            const std::string style_help = "Follow keeps the camera on the selected monster. " +
+                (focus_bind.empty() ? std::string("Focus/Follow Camera, once bound,") : focus_button) +
+                " turns that tracking off and on again; the selection stays. "
+                "Turning it by hand, the D-pad, or L lets go, and L "
+                "recenters behind the hunter. Focus keeps the selection, and a tap of " +
+                focus_button +
+                " centers the camera on that monster, even when it is already on screen, and L's own camera move stays "
+                "off for that tap. A second tap within a third of a second recenters behind the hunter; the selection stays. A "
+                "later tap centers again. With nothing selected, L recenters behind the hunter. Focus/Follow Camera in Controls "
+                "chooses that tap; with nothing bound, it is L.";
+            RowOptions o = options_for("input.lock_on_style", std::move(style_help));
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (const int delta = choice_row("Lock-on style", styles[style], o)) {
+                // Either way, or confirm, moves to the other style, as the other choice rows wrap.
+                const int next = cycle(style, delta, 2);
+                s.lock_on_style = next == 0 ? settings::LockOnStyle::Follow : settings::LockOnStyle::Focus;
+                settings::save();
+            }
+            o = options_for("input.lock_on_marker",
+                "A red ring, a cross through it, and four ticks, over the monster the camera is locked onto. "
+                "Follow keeps it up while the camera is tracking. The right stick or Focus/Follow Camera turns it off "
+                "with that tracking; the selection stays, and the same button turns both back on. In Focus, selecting "
+                "leaves it off. The focus button shows it for a third of a second.");
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (toggle_row("Lock-on marker", s.lock_on_marker, o)) {
+                s.lock_on_marker = !s.lock_on_marker;
+                settings::save();
+            }
+            int portrait = static_cast<int>(s.hunt_portrait_size);
+            o = options_for("video.hunt_portrait",
+                "The monster icon at the bottom left, as a percent of its usual size. "
+                "A loading screen shows none. Off with Lock-on.");
+            if (!s.lock_on && !o.disabled) {
+                o.disabled = true;
+                o.note = "Lock-on is off";
+            }
+            if (slider_row("Monster Icon", portrait, static_cast<int>(settings::kMinHuntPortraitSize),
+                    static_cast<int>(settings::kMaxHuntPortraitSize), 10, "%d%%", o)) {
+                s.hunt_portrait_size = static_cast<std::uint32_t>(portrait);
+                settings::save();
+            }
+        }
+    }
+    if constexpr (kDamageNumbers || kSharpnessGauge || kGatherIcon) section("Overlays");
+    if constexpr (kDamageNumbers) {
+        if (toggle_row("Damage numbers", s.damage_numbers,
+                options_for("game.damage_numbers",
+                    "On: a number shows how much health a hit takes off a monster, drawn on the monster. A weak point "
+                    "(hitzone 45 or more, after sharpness for a blade) is orange and any other part "
+                    "is gray. The number stays white until that part is known, and a critical hit "
+                    "keeps its own mark. Off: nothing is added."))) {
+            s.damage_numbers = !s.damage_numbers;
+            settings::save();
+        }
+        {
+            RowOptions o = options_for("game.damage_number_size",
+                "How large damage numbers are drawn, in percent of the interface text. They still shrink when "
+                "the camera is close to the monster.");
+            o.disabled = o.disabled || !s.damage_numbers;
+            int size = static_cast<int>(s.damage_number_size);
+            if (slider_row("Damage number size", size, static_cast<int>(settings::kMinDamageNumberSize),
+                    static_cast<int>(settings::kMaxDamageNumberSize), 10, "%d%%", o)) {
+                s.damage_number_size = static_cast<std::uint32_t>(size);
+                settings::save();
+            }
+        }
+        {
+            RowOptions o = options_for("game.damage_number_thickness",
+                "How bold damage numbers are: 1 is the font's own strokes with a thin dark outline, and each "
+                "step thickens both the digits and the outline. 3 is the thickest that stays readable.");
+            o.disabled = o.disabled || !s.damage_numbers;
+            int thickness = static_cast<int>(s.damage_number_thickness);
+            if (slider_row("Damage number thickness", thickness, 1,
+                    static_cast<int>(settings::kMaxDamageNumberThickness), 1, "%d", o)) {
+                s.damage_number_thickness = static_cast<std::uint32_t>(thickness);
+                settings::save();
+            }
+        }
+    }
+    if constexpr (kSharpnessGauge) {
+        if (toggle_row("Modern sharpness gauge", s.sharpness_gauge,
+                options_for("game.sharpness_gauge",
+                    "On: the colour the game paints on the blade shortens as that colour is spent, from "
+                    "the tip back to the handle. It stays solid and glows, and orange and yellow get a "
+                    "colour like the others. The bar under a long sword ends at the sharpness that is left. "
+                    "A weapon that loses less per hit, a guard and Handicraft are all included. "
+                    "Off: the game's own drawing."))) {
+            s.sharpness_gauge = !s.sharpness_gauge;
             settings::save();
         }
     }
-    if (toggle_row("Modern sharpness gauge", s.sharpness_gauge,
-            options_for("game.sharpness_gauge",
-                "On: the colour the game paints on the blade shortens as that colour is spent, from "
-                "the tip back to the handle. It stays solid and glows, and orange and yellow get a "
-                "colour like the others. The bar under a long sword ends at the sharpness that is left. "
-                "A weapon that loses less per hit, a guard and Handicraft are all included. "
-                "Off: the game's own drawing."))) {
-        s.sharpness_gauge = !s.sharpness_gauge;
-        settings::save();
-    }
-    if (toggle_row("Gather icon", s.gather_icon,
-            options_for("game.gather_icon",
-                "On: a mark floats above a gather point while you are close enough to gather it, with the "
-                "picture of what it gives, and above a monster you can carve, with its icon. "
-                "Off: no mark, and the gather list is not read."))) {
-        s.gather_icon = !s.gather_icon;
-        settings::save();
-    }
-    {
-        RowOptions o = options_for("game.gather_icon_size",
-            "How large the gather mark is, in percent of its usual size. The disc and its picture grow together, "
-            "and the ring grows with them.");
-        o.disabled = o.disabled || !s.gather_icon;
-        int size = static_cast<int>(s.gather_icon_size);
-        if (slider_row("Gather icon size", size, static_cast<int>(settings::kMinGatherIconSize),
-                static_cast<int>(settings::kMaxGatherIconSize), 10, "%d%%", o)) {
-            s.gather_icon_size = static_cast<std::uint32_t>(size);
+    if constexpr (kGatherIcon) {
+        if (toggle_row("Gather icon", s.gather_icon,
+                options_for("game.gather_icon",
+                    "On: a mark floats above a gather point while you are close enough to gather it, with the "
+                    "picture of what it gives, and above a monster you can carve, with its icon. "
+                    "Off: no mark, and the gather list is not read."))) {
+            s.gather_icon = !s.gather_icon;
             settings::save();
+        }
+        {
+            RowOptions o = options_for("game.gather_icon_size",
+                "How large the gather mark is, in percent of its usual size. The disc and its picture grow together, "
+                "and the ring grows with them.");
+            o.disabled = o.disabled || !s.gather_icon;
+            int size = static_cast<int>(s.gather_icon_size);
+            if (slider_row("Gather icon size", size, static_cast<int>(settings::kMinGatherIconSize),
+                    static_cast<int>(settings::kMaxGatherIconSize), 10, "%d%%", o)) {
+                s.gather_icon_size = static_cast<std::uint32_t>(size);
+                settings::save();
+            }
         }
     }
     section("Speed");
@@ -1484,7 +1560,9 @@ void Menu::game() {
         settings::save();
 
     ImGui::Dummy({0.0f, font_gap()});
-    if (button_row("Restore game defaults", {false, {}, "Every setting on this page back to how Pokee ships."})) {
+    if constexpr (kTitle == Title::FUComplete) fucomplete_rows();
+    if (button_row(
+            "Restore game defaults", {false, {}, "Every setting on this page back to how " MHFU_APP_NAME " ships."})) {
         const settings::Settings &d = settings::defaults();
         const auto restore = [&](const char *key, auto &value, const auto &fallback) {
             if (settings::overridden_by(key) == nullptr) value = fallback;
@@ -1816,46 +1894,67 @@ void Menu::network() {
 void Menu::mods() {
     if (layered_armor_screen(back_)) return;
     if (!mods_screen_open()) {
-        layered_armor_row();
-        settings::Settings &s = settings::current();
-        section("Gameplay");
-        if (toggle_row("Give Any Rarity Item", s.give_any_rarity,
-                options_for("game.give_any_rarity",
-                    "On: in the Guild Hall, Start > Item > Give hands an item of any rarity to another hunter. "
-                    "Off (default): the game's own limit, Rare 1 to 3 only."))) {
-            s.give_any_rarity = !s.give_any_rarity;
-            settings::save();
+        if constexpr (kLayeredArmor) layered_armor_row();
+        [[maybe_unused]] settings::Settings &s = settings::current();
+        if constexpr (kGiveRarity) {
+            section("Gameplay");
+            if (toggle_row("Give Any Rarity Item", s.give_any_rarity,
+                    options_for("game.give_any_rarity",
+                        "On: in the Guild Hall, Start > Item > Give hands an item of any rarity to another hunter. "
+                        "Off (default): the game's own limit, Rare 1 to 3 only."))) {
+                s.give_any_rarity = !s.give_any_rarity;
+                settings::save();
+            }
         }
-        if (toggle_row("Change Equipment in the Guild Hall", s.hall_equipment,
-                options_for("game.hall_equipment",
-                    "On (default): the item box in the Guild Hall, online or not, offers Change Equipment, as "
-                    "the box at home does, and sends the new equipment to the hall when the equipment screen "
-                    "closes, so the other hunters see it, in a full hall too. Refused while readied for a "
-                    "quest. Off: greyed out, as in the game."))) {
-            s.hall_equipment = !s.hall_equipment;
-            settings::save();
+        if constexpr (kHallEquipment) {
+            if (toggle_row("Change Equipment in the Guild Hall", s.hall_equipment,
+                    options_for("game.hall_equipment",
+                        "On (default): the item box in the Guild Hall, online or not, offers Change Equipment, as "
+                        "the box at home does, and sends the new equipment to the hall when the equipment screen "
+                        "closes, so the other hunters see it, in a full hall too. Refused while readied for a "
+                        "quest. Off: greyed out, as in the game."))) {
+                s.hall_equipment = !s.hall_equipment;
+                settings::save();
+            }
         }
-        if (toggle_row("Item Sets", s.item_sets,
-                options_for("game.item_sets",
-                    "On: the item box menu has Item Sets, to register the pouch as a set and load it again "
-                    "from the box, in the game's own windows. Off: the game's own six entries."))) {
-            s.item_sets = !s.item_sets;
-            settings::save();
+        if constexpr (kItemSets) {
+            if (toggle_row("Item Sets", s.item_sets,
+                    options_for("game.item_sets",
+                        "On: the item box menu has Item Sets, to register the pouch as a set and load it again "
+                        "from the box, in the game's own windows. Off: the game's own six entries."))) {
+                s.item_sets = !s.item_sets;
+                settings::save();
+            }
         }
-        if (toggle_row("Eat in the Guild Hall", s.hall_meal,
-                options_for("game.hall_meal",
-                    "On (default): seated at a table in the Guild Hall, △ orders from your home kitchen's "
-                    "menu, with its chefs, prices and skills, as Order Food in the house does. Off: △ does "
-                    "nothing there, as in the game."))) {
-            s.hall_meal = !s.hall_meal;
-            settings::save();
+        if constexpr (kHallMeal) {
+            if (toggle_row("Eat in the Guild Hall", s.hall_meal,
+                    options_for("game.hall_meal",
+                        "On (default): seated at a table in the Guild Hall, △ orders from your home kitchen's "
+                        "menu, with its chefs, prices and skills, as Order Food in the house does. Off: △ does "
+                        "nothing there, as in the game."))) {
+                s.hall_meal = !s.hall_meal;
+                settings::save();
+            }
         }
-        if (toggle_row("Show Key Quests", s.key_quests,
-                options_for("game.key_quests",
-                    "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
-                    "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
-            s.key_quests = !s.key_quests;
-            settings::save();
+        if constexpr (kKeyQuests) {
+            if (toggle_row("Show Key Quests", s.key_quests,
+                    options_for("game.key_quests",
+                        "On: the quests that count towards the next Urgent Quest are named [Key] in the quest "
+                        "lists and wherever else the game shows their name. Off (default): the game's own names."))) {
+                s.key_quests = !s.key_quests;
+                settings::save();
+            }
+        }
+        if constexpr (kHubScaling) {
+            if (toggle_row("Scale Guild Hall Quests", s.hub_scaling,
+                    options_for("game.hub_scaling",
+                        "On: a large monster in a quest started from the offline Gathering Hall keeps 65% of its "
+                        "health, so one hunter can finish it in the village's time. Village quests and every "
+                        "online hall stay as they are. Off (default): the game's own health. "
+                        "MHFU_HUB_SCALING_HEALTH sets another percentage."))) {
+                s.hub_scaling = !s.hub_scaling;
+                settings::save();
+            }
         }
     }
     mods_page(back_);
@@ -1911,16 +2010,16 @@ void Menu::system() {
     (void)data_dir;
     if (button_row("Save the log…",
             {false, {},
-                "Copies Pokee's logs (this run's, the previous run's, the last "
+                "Copies " MHFU_APP_NAME "'s logs (this run's, the previous run's, the last "
                 "error's and the logs folder) to a folder you pick, to send with a "
                 "problem report."})) {
         const auto saved = android::save_logs(install::user_data_directory(),
-            "Pokee log " + savedata::timestamp_for_path(std::chrono::system_clock::now()));
+            MHFU_APP_NAME " log " + savedata::timestamp_for_path(std::chrono::system_clock::now()));
         if (saved) saved_log_path() = saved->error.empty() ? saved->where : "Not saved: " + saved->error;
     }
     if (!saved_log_path().empty()) info_row("Log", saved_log_path());
 #else
-    if (button_row("Open the data folder", {false, {}, "Show Pokee's data folder in the file manager."})) {
+    if (button_row("Open the data folder", {false, {}, "Show " MHFU_APP_NAME "'s data folder in the file manager."})) {
         if (!SDL_OpenURL(folder_url(path_from_utf8(data_dir)).c_str()))
             std::cout << "[menu] cannot open " << data_dir << ": " << SDL_GetError() << "\n";
     }
@@ -1928,14 +2027,15 @@ void Menu::system() {
     if (button_row("Set up game data again…",
             {false, {}, "Choose the disc image again, for example after moving it. The game closes first."}))
         confirm_ = Confirm::Setup;
-    if (button_row("Quit game", {false, {}, "Close Pokee. Progress since your last save is lost."}, colors::kDanger))
+    if (button_row("Quit game", {false, {}, "Close " MHFU_APP_NAME ". Progress since your last save is lost."},
+            colors::kDanger))
         confirm_ = Confirm::Quit;
 
     section("Saves");
     save_rows();
 
     section("About");
-    info_row("Pokee", std::string(kPokeeVersion));
+    info_row(MHFU_APP_NAME, std::string(kPokeeVersion));
     info_row("Game", std::string(install::kGameTitle) + " (" + install::kDiscIdDisplay + ")");
     {
         std::string where = data_dir;
@@ -1997,8 +2097,8 @@ bool Menu::confirm_dialog() {
         const bool quit = confirm_ == Confirm::Quit;
         heading(quit ? "Quit the game?" : "Set up game data again?");
         paragraph(quit ? "Progress since your last save is lost."
-                       : "Pokee closes the game and opens the setup, where you choose the disc image again. "
-                         "Progress since your last save is lost.",
+                       : MHFU_APP_NAME " closes the game and opens the setup, where you choose the disc image again. "
+                                       "Progress since your last save is lost.",
             colors::kTextDim);
         ImGui::Dummy({0.0f, font * 0.6f});
         const float gap = font * 0.6f;

@@ -1,5 +1,7 @@
 #include "camera/hunt_icon.hpp"
 
+#include "game/guest_layout.hpp"
+
 #include "gpu/texture_decode.hpp"
 
 #include <vector>
@@ -11,8 +13,9 @@ namespace {
 // 0x100 and size word 0x0908 (256 wide, 512 tall), swizzled CLUT8. The palette
 // is 8888 at 0x091AE510, mask 0xFF (format word 0x00FF03). The address is the
 // buffer that draw points at, not an immediate in the resident image.
-constexpr std::uint32_t kSheetAddress = 0x0919BD00u;
-constexpr std::uint32_t kClutAddress = 0x091AE510u;
+// FUComplete's HUD textures sit 0x4400 lower (game::layout::kItemAtlas).
+constexpr std::uint32_t kSheetAddress = game::layout::kFreedomUniteLayout ? 0x0919BD00u : 0x09197900u;
+constexpr std::uint32_t kClutAddress = game::layout::kFreedomUniteLayout ? 0x091AE510u : 0x091AA110u;
 constexpr std::uint32_t kSheetWidth = 256u;
 constexpr std::uint32_t kSheetHeight = 512u;
 

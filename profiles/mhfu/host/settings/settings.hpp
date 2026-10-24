@@ -66,6 +66,7 @@ struct Settings {
     bool fullscreen{};
     PresentMode present_mode{PresentMode::Fifo};
     Aspect aspect{Aspect::Original};
+    float fov_scale{1.0f};           // the camera's field of view as a share of the game's own
     bool sharp_screen{};             // nearest instead of linear scaling to the window
     bool sharp_textures{};           // nearest instead of linear texture sampling
     bool texture_pack{true};         // draw an installed HD texture pack's images instead of the game's
@@ -232,6 +233,10 @@ struct Settings {
     // it, the quest lists first (game/key_quests.hpp). Off by default: the
     // game's own names.
     bool key_quests{};
+    // An offline Guild Hall quest's large monsters keep this share of their
+    // health, so a hunter alone meets the village's pace (game/hub_scaling.hpp).
+    // Off by default; online play never changes.
+    bool hub_scaling{};
     // The mark's size, in percent of the usual disc (kMinGatherIconSize to
     // kMaxGatherIconSize). A larger mark keeps the same proportions.
     std::uint32_t gather_icon_size{100};
@@ -249,6 +254,11 @@ struct Settings {
     bool backup_timestamp{true}; // a backup made from the menu goes to a new folder named by its time
     bool backup_reminder{true};  // remind to back up the saves the first time a new release starts
     std::string backup_reminded; // the release that last showed the reminder (savedata::release_of)
+    // The folder both installations can reach (a path, or a content:// tree
+    // in the Android app), and the save it held at the last sync.
+    std::string save_sync_folder;
+    std::string save_sync_hash;
+    std::string save_sync_time; // for people: "2026-10-22 14:05"
 
     // Layered armor (game/layered_armor.hpp): the hunter drawn in other armor
     // than it wears. Off, nothing of the game is touched. On, each armor part

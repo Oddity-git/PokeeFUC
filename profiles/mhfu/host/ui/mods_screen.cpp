@@ -1,4 +1,5 @@
 #include "ui/mods_screen.hpp"
+#include "title.hpp"
 
 #include "ui/file_browser.hpp"
 #include "ui/layer.hpp"
@@ -267,7 +268,8 @@ void browse(bool back) {
 #if defined(MHFU_ANDROID_APP)
     indented("Open the folder of a mod you downloaded and unpacked (the one with its mod.ini), or a folder that "
              "holds several.");
-    indented("On Android this lists only folders Pokee can read by itself, which leaves out Downloads and SD "
+    indented("On Android this lists only folders " MHFU_APP_NAME
+             " can read by itself, which leaves out Downloads and SD "
              "cards. Importing through Android's file picker is not supported yet.",
         colors::kTextDim);
 #else
@@ -469,7 +471,7 @@ void list(ModSession &session) {
     if (button_row("Import mod…",
             {false, {},
                 "Copy a mod you downloaded into the mods folder: choose its unpacked folder, the one with its "
-                "mod.ini. Pokee does not download mods; unpack .zip, .rar or .7z archives first."}))
+                "mod.ini. " MHFU_APP_NAME " does not download mods; unpack .zip, .rar or .7z archives first."}))
         open_browser();
     if (button_row("Open the mods folder",
             {false, {},
@@ -523,6 +525,16 @@ void mods_page(bool back) {
     ModSession *session = mods::session();
     if (session == nullptr) {
         section("Mods");
+        // FUComplete replaces files itself (mods/mhfu_mods.cpp), so the
+        // list of Freedom Unite mods is off in its build, not missing.
+        if constexpr (kTitle == Title::FUComplete) {
+            indented("FUComplete replaces game files with its own file replacer, so " MHFU_APP_NAME
+                     " leaves this list of Freedom Unite mods off: they are made for Freedom Unite's files.");
+            indented("FUComplete's replacements are files named by their file id in its NATIVEPSP folder, in "
+                     "ms0/PSP/SAVEDATA/FUCDAT inside the data folder. FUCTool's Configuration chooses where it "
+                     "reads them (File Replacer Path) and builds that folder from a mods folder.");
+            return;
+        }
         indented("Mods need the game's disc image, which is not open.");
         return;
     }

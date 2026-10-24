@@ -17,6 +17,7 @@
 // sprites), and nothing was aiming; the replay leaves both out.
 
 #include "gpu/hud_scale.hpp"
+#include "title.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -277,8 +278,18 @@ int main(int argc, char **argv) {
         for (const std::string &line : replay_file(argv[1]).lines) std::cout << line << "\n";
         return 0;
     }
+    // The fixtures are captures of Freedom Unite's HUD, with its texture
+    // addresses; another title's build has its own.
+    if constexpr (mhfu::kTitle != mhfu::Title::FreedomUnite) {
+        std::cout << "skipped: the fixtures are Freedom Unite captures\n";
+        return 0;
+    }
     test_parse_and_owner();
-    const std::filesystem::path dir = MHFU_HUD_SCALE_FIXTURE_DIR;
+    // A runner that copies the fixtures elsewhere, such as onto an Android
+    // device, names their new place in MHFU_HUD_SCALE_FIXTURE_DIR.
+    const char *fixture_dir = std::getenv("MHFU_HUD_SCALE_FIXTURE_DIR");
+    const std::filesystem::path dir =
+        fixture_dir != nullptr && *fixture_dir != '\0' ? fixture_dir : MHFU_HUD_SCALE_FIXTURE_DIR;
     const bool update = [] {
         const char *value = std::getenv("MHFU_UPDATE_HUD_SCALE_FIXTURES");
         return value != nullptr && *value == '1';

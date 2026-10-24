@@ -5,10 +5,12 @@
 #include "game/item_sets.hpp"
 
 #include "game/guest_calls.hpp"
+#include "game/guest_layout.hpp"
 #include "game/guest_ram.hpp"
 #include "game/item_sets_menu.hpp"
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <cstdint>
@@ -42,6 +44,10 @@ void set_environment(const char *name, const std::string &value) {
 }
 
 constexpr std::uint32_t kSys = 0x09000000u;
+// The box menu record's rows as the game has them: 6 of 20 pixels in Freedom
+// Unite, of 18 in FUComplete.
+constexpr std::uint32_t kGameRecordRows = mhfu::kTitle == mhfu::Title::FreedomUnite ? 0x00060014u : 0x00060012u;
+constexpr std::uint32_t kSevenRecordRows = kGameRecordRows + 0x00010000u;
 constexpr std::uint16_t kPotion = 7u;    // carries 10
 constexpr std::uint16_t kPaintball = 64u; // carries 99
 constexpr std::uint16_t kTicket = 96u;   // byte 3 is 255: stacks of 255
@@ -260,14 +266,14 @@ void write_words(psprecomp::GuestMemory &memory, std::span<const CodeWord> words
 }
 
 void install_lobby(psprecomp::GuestMemory &memory) {
-    constexpr std::uint32_t kSlot = 0x09A5F300u;
+    constexpr std::uint32_t kSlot = mhfu::game::layout::kTaskSlot;
     memory.store32(kSlot, 0x336F574Du);
     memory.store32(kSlot + 8u, kSlot);
     const char name[] = "lobby_task.ovl";
     for (std::uint32_t i = 0; i < sizeof name; ++i) memory.store8(kSlot + 32u + i, static_cast<std::uint8_t>(name[i]));
     write_words(memory, overlay_signature());
     memory.store32(kMenuRecord, 0x00180010u);
-    memory.store32(kMenuRecord + 8u, 0x00060014u);
+    memory.store32(kMenuRecord + 8u, kGameRecordRows);
     memory.store32(kMenuRecord + 12u, kBoxList);
     const std::uint32_t box[] = {0x01270126u, 0x01290128u, 0x012B012Au, 0u};
     const std::uint32_t small[] = {0x012D012Cu, 0x012F012Eu, 0x01310130u, 0u};
@@ -317,7 +323,7 @@ void test_hooks() {
     runtime.register_function(kText, &game_text, "game_text");
     runtime.register_function(kBoxFrame, &game_update, "game_box_frame");
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00070014u, "the menu has seven rows");
+    check(memory.load32(kMenuRecord + 8u) == kSevenRecordRows, "the menu has seven rows");
     check(memory.load32(kMenuRecord) == 0x000C0010u, "and is raised clear of the hints");
     check(memory.load16(kBoxList + 4u) == 296u && memory.load16(kBoxList + 6u) == kTextId &&
               memory.load16(kBoxList + 8u) == 297u && memory.load16(kBoxList + 12u) == 299u &&
@@ -329,7 +335,7 @@ void test_hooks() {
     check(runtime.function_at(kText) != &game_text && runtime.function_at(kBoxFrame) != &game_update,
         "the text and the box's frame are wrapped");
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00070014u, "doing it again changes nothing");
+    check(memory.load32(kMenuRecord + 8u) == kSevenRecordRows, "doing it again changes nothing");
 
     // The text: Item Sets is answered, everything else is the game's.
     text_calls = 0;
@@ -360,7 +366,7 @@ void test_hooks() {
     // Off: the game's six rows, and the cursor keeps them.
     mhfu::settings::current().item_sets = false;
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00060014u && memory.load32(kMenuRecord) == 0x00180010u,
+    check(memory.load32(kMenuRecord + 8u) == kGameRecordRows && memory.load32(kMenuRecord) == 0x00180010u,
         "off puts the six rows back");
     check(memory.load16(kBoxList + 6u) == 297u && memory.load32(kBoxList + 12u) == 0u &&
               memory.load16(kSmallBoxList + 6u) == 303u && memory.load32(kSmallBoxList + 12u) == 0u,
@@ -370,10 +376,10 @@ void test_hooks() {
     mhfu::settings::current().item_sets = true;
 
     // Another overlay in the slot: nothing is changed.
-    memory.store8(0x09A5F300u + 32u, 'g');
-    memory.store32(kMenuRecord + 8u, 0x00060014u);
+    memory.store8(mhfu::game::layout::kTaskSlot + 32u, 'g');
+    memory.store32(kMenuRecord + 8u, kGameRecordRows);
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00060014u, "another overlay is left alone");
+    check(memory.load32(kMenuRecord + 8u) == kGameRecordRows, "another overlay is left alone");
 }
 
 // Change Equipment in the Guild Hall gives the hall's Change Equipment the
@@ -390,15 +396,15 @@ void test_hall_equipment_label() {
     // The hall's mod ran first: entry 3 has the house's text.
     memory.store16(kSmallBoxList + 6u, 0x129u);
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00070014u, "with the hall's label changed, the menu has seven rows");
+    check(memory.load32(kMenuRecord + 8u) == kSevenRecordRows, "with the hall's label changed, the menu has seven rows");
     check(memory.load16(kSmallBoxList + 6u) == kTextId && memory.load16(kSmallBoxList + 8u) == 0x129u,
         "and Change Equipment keeps the house's text below Item Sets");
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00070014u && memory.load16(kSmallBoxList + 8u) == 0x129u,
+    check(memory.load32(kMenuRecord + 8u) == kSevenRecordRows && memory.load16(kSmallBoxList + 8u) == 0x129u,
         "a later frame keeps both");
     mhfu::settings::current().item_sets = false;
     frame(runtime);
-    check(memory.load32(kMenuRecord + 8u) == 0x00060014u && memory.load16(kSmallBoxList + 6u) == 0x129u &&
+    check(memory.load32(kMenuRecord + 8u) == kGameRecordRows && memory.load16(kSmallBoxList + 6u) == 0x129u &&
               memory.load32(kSmallBoxList + 12u) == 0u,
         "off, the six rows come back with the house's text where it was");
     mhfu::settings::current().item_sets = true;

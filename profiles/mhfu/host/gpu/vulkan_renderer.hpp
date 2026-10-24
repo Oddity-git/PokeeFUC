@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ge_state.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <chrono>
@@ -70,7 +71,7 @@ struct CameraReading {
 };
 
 struct RendererConfig {
-    std::string title{"Pokee"};
+    std::string title{MHFU_APP_NAME};
 };
 
 // Vulkan backend for the GE. Draw calls are rendered into an offscreen target
@@ -130,6 +131,13 @@ public:
     // (GeState::set_raw_vertices), and whether it should also decode them
     // for MHFU_CHECK_GPU_DECODE.
     [[nodiscard]] bool gpu_decode() const;
+    // Whether the GPU can decode vertices on this device. The feature is
+    // experimental; on some drivers it hung the GPU, so it stays off unless
+    // the player turns it on for this run.
+    [[nodiscard]] bool can_gpu_decode() const;
+    // Try GPU vertex decode for the rest of this run. Nothing is saved, so a
+    // restart returns to the CPU path.
+    void set_gpu_decode(bool enabled);
     [[nodiscard]] bool check_gpu_decode() const;
     void submit(const DrawCall &call, const GuestMemory &memory);
     // True when this draw's vertices were decoded on an earlier frame and have

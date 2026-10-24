@@ -1,6 +1,7 @@
 // Give at any rarity: the item lookup, the code check, and the wrapper
 // around a stand-in for the game's check. No game data.
 #include "game/give_rarity.hpp"
+#include "title.hpp"
 
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
@@ -23,11 +24,16 @@ void check(bool condition, const char *message) {
     }
 }
 
+// An empty value removes the variable, as _putenv_s does on Windows: set but
+// empty, a switch such as MHFU_GIVE_ANY_RARITY would read as on.
 void set_environment(const char *name, const std::string &value) {
 #if defined(_WIN32)
     _putenv_s(name, value.c_str());
 #else
-    setenv(name, value.c_str(), 1);
+    if (value.empty())
+        unsetenv(name);
+    else
+        setenv(name, value.c_str(), 1);
 #endif
 }
 
@@ -140,6 +146,11 @@ void test_other_code() {
 } // namespace
 
 int main() {
+    // Give Any Rarity Item is Freedom Unite's; another title's build leaves it off.
+    if constexpr (!mhfu::kGiveRarity) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
     const std::filesystem::path data = std::filesystem::temp_directory_path() / "pokee_give_rarity_tests";
     std::filesystem::create_directories(data);
     set_environment("MHFU_DATA_DIR", data.string());

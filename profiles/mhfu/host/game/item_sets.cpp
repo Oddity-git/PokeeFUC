@@ -22,7 +22,7 @@
 namespace mhfu::game::item_sets {
 namespace {
 
-constexpr std::array<CodeWord, 13> kCodeSignature = {{
+constexpr std::array<CodeWord, 13> kCodeSignatureFreedomUnite = {{
     {kCursor, 0x27BDFFE0u},      // addiu sp, sp, -32
     {0x0881C2ECu, 0x90A40000u},  // lbu a0, 0(a1): the row
     {0x0882F880u, 0x0E69EE24u},  // jal 0x09A7B890: a row's text
@@ -37,10 +37,28 @@ constexpr std::array<CodeWord, 13> kCodeSignature = {{
     {kSound, 0x27BDFFC0u},       // addiu sp, sp, -64
     {kPrintFormat, 0x00007325u}, // "%s"
 }};
+// FUComplete: the same words where its executable and lobby_task have them.
+constexpr std::array<CodeWord, 13> kCodeSignatureFUComplete = {{
+    {kCursor, 0x27BDFFE0u}, // addiu sp, sp, -32
+    {0x0881CE40u, 0x90A40000u}, // lbu a0, 0(a1): the row
+    {0x0882FAC4u, 0x0E69DA72u}, // jal 0x09A769C8: a row's text
+    {kWindowBuild, 0x7C081E20u}, // seh v1, t0
+    {kWindowDraw, 0x27BDFFC0u}, // addiu sp, sp, -64
+    {kPager, 0x27BDFFC0u}, // addiu sp, sp, -64
+    {kFontSize, 0xA085012Cu}, // sb a1, 300(a0)
+    {kFontColour + 4u, 0xA085012Eu}, // sb a1, 302(a0)
+    {kItemWindow, 0x27BDFF80u}, // addiu sp, sp, -128
+    {kMessageDraw, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {kPrint, 0x27BDFCA0u}, // addiu sp, sp, -864
+    {kSound, 0x27BDFFC0u}, // addiu sp, sp, -64
+    {kPrintFormat, 0x00007325u}, // "%s"
+}};
+constexpr const std::array<CodeWord, 13> &kCodeSignature =
+    kFreedomUniteCode ? kCodeSignatureFreedomUnite : kCodeSignatureFUComplete;
 
 // lobby_task's code. The menu's data words are checked apart, since the
 // hooks change them.
-constexpr std::array<CodeWord, 26> kOverlaySignature = {{
+constexpr std::array<CodeWord, 26> kOverlaySignatureFreedomUnite = {{
     {kText, 0x00A03021u},       // addu a2, a1, zero
     {0x09A7B894u, 0x0A69EE08u}, // j 0x09A7B820
     {0x09A7B898u, 0x00002821u}, // addu a1, zero, zero: the first table
@@ -68,11 +86,43 @@ constexpr std::array<CodeWord, 26> kOverlaySignature = {{
     {kMessageRecord, 0x00C800D8u},      // Put In Item's message window: x 216, y 200
     {kMessageRecord + 4u, 0x00400100u}, // 256 by 64
 }};
+// FUComplete: the same words where its executable and lobby_task have them.
+constexpr std::array<CodeWord, 26> kOverlaySignatureFUComplete = {{
+    {kText, 0x00A03021u}, // addu a2, a1, zero
+    {0x09A769CCu, 0x0A69DA56u}, // j 0x09A76958
+    {0x09A769D0u, 0x00002821u}, // addu a1, zero, zero: the first table
+    {0x09AD7CA0u, 0x26450036u}, // addiu a1, s2, 54: the row
+    {0x09AD7CA4u, 0x0E20738Eu}, // jal 0x0881CE38
+    {0x09AD7CA8u, 0x24070006u}, // addiu a3, zero, 6: the rows
+    {0x09AD7D4Cu, 0xA2440038u}, // sb a0, 56(s2): the phase
+    {0x09AD7DFCu, 0x92420036u}, // lbu v0, 54(s2)
+    {0x09AD7E00u, 0x2C410006u}, // sltiu at, v0, 6: rows 0 to 5 start
+    {kUpdate, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {kBoxFrame, 0x27BDFFD0u}, // addiu sp, sp, -48
+    {0x09AD7EA0u, 0x30424000u}, // andi v0, v0, 0x4000: back, for every row
+    {0x09AD7F80u, 0x0E6B79E4u}, // jal 0x09ADE790: the update
+    {0x09AD7F98u, 0x24020001u}, // addiu v0, zero, 1
+    {0x09ADE888u, 0x92040038u}, // lbu a0, 56(s0): the phase
+    {0x09ADE8B8u, 0x2C610006u}, // sltiu at, v1, 6: rows 0 to 5 run
+    {0x09AE1458u, 0x24A55C78u}, // addiu a1, a1, 0x5C78: the menu record
+    {0x09AE1494u, 0x2442FDA8u}, // addiu v0, v0, -0x258: the Small Item Box's rows
+    {kBoxMenu, 0x27BDFFC0u}, // addiu sp, sp, -64
+    {0x09AE14A0u, 0x92070036u}, // lbu a3, 54(s0): the row to highlight
+    {0x09AE14B4u, 0x0E20BDF1u}, // jal 0x0882F7C4, returning to kMenuDrawReturn
+    {0x09ADE7F0u, 0x8CC305E8u}, // lw v1, 1512(a2): the update's message flag
+    {0x09AD7CACu, 0x32022000u}, // andi v0, s0, 0x2000: the menu's choose
+    {0x09AD7DF4u, 0x34420004u}, // ori v0, v0, 4: set once a row is chosen
+    {kMessageRecord, 0x00C800D8u}, // Put In Item's message window: x 216, y 200
+    {kMessageRecord + 4u, 0x00400100u}, // 256 by 64
+}};
+constexpr const std::array<CodeWord, 26> &kOverlaySignature =
+    kFreedomUniteCode ? kOverlaySignatureFreedomUnite : kOverlaySignatureFUComplete;
 
 // The menu record's row count and list, and the two lists, as the game has
 // them and as the hooks leave them.
-constexpr std::uint32_t kRecordRows = 0x00060014u; // u16 14 (row height), u16 6
-constexpr std::uint32_t kPatchedRows = 0x00070014u;
+// FUComplete's rows are 18 high, Freedom Unite's 20.
+constexpr std::uint32_t kRecordRows = kFreedomUniteCode ? 0x00060014u : 0x00060012u; // u16 row height, u16 6
+constexpr std::uint32_t kPatchedRows = kFreedomUniteCode ? 0x00070014u : 0x00070012u;
 // Each list is eight halfwords: six ids and two of padding, the first ending
 // it. Item Sets goes after Combine Items and the rest move down into the
 // padding.

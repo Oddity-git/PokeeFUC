@@ -4,6 +4,7 @@
 #include "frame_pacing.hpp"
 #include "game/damage_numbers.hpp"
 #include "game/gather_icon.hpp"
+#include "title.hpp"
 #include "game/item_atlas.hpp"
 #include "game/sharpness_gauge.hpp"
 #include "game_hud.hpp"
@@ -1472,6 +1473,7 @@ struct VulkanRenderer::Impl {
     // the guest's vertex bytes of transformed triangle draws and the vertex
     // shader decodes and skins them.
     bool gpu_decode_available{};
+    bool gpu_decode_requested{}; // menu: this run only
     bool check_gpu_decode{};    // MHFU_CHECK_GPU_DECODE
     std::uint32_t raw_offset{}; // the raw block most recently written this frame
     RawBlock last_raw{};
@@ -2813,6 +2815,8 @@ bool VulkanRenderer::initialize(const RendererConfig &config, std::string &error
     if (const char *async = std::getenv("MHFU_MOLTENVK_ASYNC_SUBMITS"); async != nullptr && *async == '1')
         setenv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "0", 0);
 #endif
+    // The desktop matches the window to its .desktop entry and icon by this id.
+    SDL_SetAppMetadata(MHFU_APP_NAME, nullptr, MHFU_APP_ID);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         error = std::string("SDL_Init failed: ") + SDL_GetError();
         return false;
@@ -3670,6 +3674,7 @@ void VulkanRenderer::Impl::update_display_info() {
             refresh = mode->refresh_rate;
     }
     display_hz = refresh;
+    governor.set_display_hz(refresh);
     perf::set_display_info(present_mode_name(present_mode), swapchain_extent.width, swapchain_extent.height, refresh);
 }
 
@@ -7439,21 +7444,34 @@ void VulkanRenderer::upload_frame(std::uint32_t display_address, const std::uint
 
 bool VulkanRenderer::gpu_decode() const {
     if (!impl_ || !impl_->ready || !impl_->gpu_decode_available) return false;
-    // Off unless MHFU_GPU_DECODE=1 asks for it: on the Steam Deck (radv)
-    // the raw vertex path hung the GPU (ring gfx timeout) at the character
-    // select screen, and the CPU decode did not. Also off for the paths and
-    // traces that need decoded vertices.
-    static const bool off = [] {
-        if (std::getenv("MHFU_CHECK_GPU_DECODE") != nullptr) return false;
+    // MHFU_GPU_DECODE=1 forces it on and any other value forces it off, as
+    // before. Without the variable the menu's this-run switch decides. On
+    // the Steam Deck (radv) the raw path hung the GPU at character select,
+    // so it is never on by default. Some paths and traces need decoded
+    // vertices and leave it off.
+    static const int env = [] {
+        if (std::getenv("MHFU_CHECK_GPU_DECODE") != nullptr) return 0;
         const char *text = std::getenv("MHFU_GPU_DECODE");
-        return text == nullptr || std::strcmp(text, "1") != 0;
+        if (text == nullptr) return -1;
+        return std::strcmp(text, "1") == 0 ? 1 : 0;
     }();
     static const bool needs_vertices = std::getenv("MHFU_NO_DIRECT_VERTICES") != nullptr ||
         std::getenv("MHFU_CHECK_DIRECT_VERTICES") != nullptr || std::getenv("MHFU_TRACE_GE") != nullptr ||
         std::getenv("MHFU_TRACE_3D") != nullptr || std::getenv("MHFU_TRACE_SPRITES") != nullptr ||
         std::getenv("MHFU_TRACE_LIGHTING") != nullptr || std::getenv("MHFU_TRACE_FB_TEXTURES") != nullptr;
-    return !off && !needs_vertices && !perf::alternate_off(perf::NewPath::Direct) &&
-        !perf::alternate_off(perf::NewPath::GpuDecode);
+    if (needs_vertices || perf::alternate_off(perf::NewPath::Direct) || perf::alternate_off(perf::NewPath::GpuDecode))
+        return false;
+    return env == 1 || (env < 0 && impl_->gpu_decode_requested);
+}
+
+bool VulkanRenderer::can_gpu_decode() const {
+    return impl_ && impl_->ready && impl_->gpu_decode_available;
+}
+
+void VulkanRenderer::set_gpu_decode(bool enabled) {
+    if (!impl_) return;
+    impl_->gpu_decode_requested = enabled && impl_->gpu_decode_available;
+    std::cout << "[render] GPU vertex decode " << (impl_->gpu_decode_requested ? "on" : "off") << " for this run\n";
 }
 
 std::string VulkanRenderer::gpu_problem() const {
@@ -7783,8 +7801,8 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     if (!impl.ready) return;
     // Damage numbers and the lock-on marker sit on the monster. The perspective
     // draw with the most vertices is the world camera, follow or aim; the HUD
-    // is orthographic and is ignored.
-    if (!call.through && !call.clear_mode &&
+    // is orthographic and is ignored. All three read Freedom Unite (title.hpp).
+    if ((mhfu::kDamageNumbers || mhfu::kGatherIcon || mhfu::kLockOn) && !call.through && !call.clear_mode &&
         (mhfu::game::damage_numbers_watching() || settings::current().gather_icon ||
             (settings::current().lock_on_marker && mhfu::camera::lock_on_marker_wanted()))) {
         const std::uint32_t vertices = call.vertices_reused
@@ -7804,7 +7822,8 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     }
     // The gather mark draws item icons from the game's own atlas, decoded
     // with the palette the HUD last drew it with.
-    if (call.through && call.texture.address == mhfu::game::kItemAtlasAddress && settings::current().gather_icon)
+    if (mhfu::kGatherIcon && call.through && call.texture.address == mhfu::game::kItemAtlasAddress &&
+        settings::current().gather_icon)
         mhfu::game::note_item_atlas(call.texture);
     const perf::SplitScope split(perf::Split::Draw);
     if (!impl.recording) begin_frame();
@@ -8600,7 +8619,7 @@ void VulkanRenderer::submit(const DrawCall &call, const GuestMemory &memory) {
     // 0x08841400 turns a frame counter into 64 + 64*sin(...), so a full pulse
     // is alpha 128. AABBGGRR as the GE colour word packs it. The gauge moves
     // the pulse above that (game::sharpness::glow_alpha).
-    const bool glow_colour = settings::current().sharpness_gauge;
+    const bool glow_colour = mhfu::kSharpnessGauge && settings::current().sharpness_gauge;
     if ((cut_bar || cut_colour || glow_colour) && through_quads && !named.is_name &&
         framebuffer_source.target == nullptr && impl.shows(call.target.color_address)) {
         const std::vector<GpuVertex> &unscaled = reused_expanded ? *reused : impl.scratch;

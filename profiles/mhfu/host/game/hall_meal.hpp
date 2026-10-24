@@ -75,6 +75,7 @@
 // the game's thread, each returning to the bar.
 
 #include "psprecomp/guest_memory.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <cstdint>
@@ -87,8 +88,13 @@ struct AllegrexContext;
 
 namespace mhfu::game::hall_meal {
 
+// The addresses below are Freedom Unite's, and FUComplete's after them: the
+// same code in its executable, its lobby_task (loaded at 0x09A5A580, as
+// FUComplete's loader patches it) and its game_sub (at 0x09C14280).
+inline constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+
 // The seated frame and the hunter's fields it reads.
-inline constexpr std::uint32_t kSeatedUpdate = 0x09AAC0A8u;
+inline constexpr std::uint32_t kSeatedUpdate = kFreedomUniteCode ? 0x09AAC0A8u : 0x09AA6F40u;
 inline constexpr std::uint32_t kSeated = 16u;
 inline constexpr std::uint32_t kAction = 0x299u;
 inline constexpr std::uint32_t kPhase = 0x1D5u;
@@ -98,39 +104,39 @@ inline constexpr std::uint32_t kButtons = 0x484u;
 inline constexpr std::uint32_t kHunterBytes = kButtons + 4u;
 inline constexpr std::uint32_t kTriangle = 0x1000u;
 // The lobby's state: its mode at +0, 0 while nothing else runs.
-inline constexpr std::uint32_t kLobbyState = 0x09B22E70u;
+inline constexpr std::uint32_t kLobbyState = kFreedomUniteCode ? 0x09B22E70u : 0x09B1D9E8u;
 // GameSys, and what the kitchen keeps there.
-inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
+inline constexpr std::uint32_t kGameSysPointer = kFreedomUniteCode ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kOwnIndex = 0x28u;
 inline constexpr std::uint32_t kKitchenOpen = 0x696F4u; // word: 0 before the kitchen opens
 inline constexpr std::uint32_t kEaten = 0x69936u;       // u8: eaten since the last quest
 // The kitchen object, and game_sub's meal.
-inline constexpr std::uint32_t kKitchenPointer = 0x09CFB998u;
-inline constexpr std::uint32_t kMenuOpen = 0x09C1CBF0u;
-inline constexpr std::uint32_t kMenuFrame = 0x09C1CC38u;
-inline constexpr std::uint32_t kFlavour = 0x09C1E3F0u;
-inline constexpr std::uint32_t kRollSkills = 0x09C1DCA0u;
-inline constexpr std::uint32_t kMealRow = 0x09C1D720u;
-inline constexpr std::uint32_t kResults = 0x09C1E858u;
-inline constexpr std::uint32_t kSetEaten = 0x09C1B9A0u;
+inline constexpr std::uint32_t kKitchenPointer = kFreedomUniteCode ? 0x09CFB998u : 0x09CF6818u;
+inline constexpr std::uint32_t kMenuOpen = kFreedomUniteCode ? 0x09C1CBF0u : 0x09C17D70u;
+inline constexpr std::uint32_t kMenuFrame = kFreedomUniteCode ? 0x09C1CC38u : 0x09C17DB8u;
+inline constexpr std::uint32_t kFlavour = kFreedomUniteCode ? 0x09C1E3F0u : 0x09C19488u;
+inline constexpr std::uint32_t kRollSkills = kFreedomUniteCode ? 0x09C1DCA0u : 0x09C18D38u;
+inline constexpr std::uint32_t kMealRow = kFreedomUniteCode ? 0x09C1D720u : 0x09C187B8u;
+inline constexpr std::uint32_t kResults = kFreedomUniteCode ? 0x09C1E858u : 0x09C198F0u;
+inline constexpr std::uint32_t kSetEaten = kFreedomUniteCode ? 0x09C1B9A0u : 0x09C16B20u;
 // The lobby's sounds, 0x09A7BB50(state, which): 0 the confirm, 4 the refusal.
-inline constexpr std::uint32_t kSound = 0x09A7BB50u;
+inline constexpr std::uint32_t kSound = kFreedomUniteCode ? 0x09A7BB50u : 0x09A76C88u;
 inline constexpr std::uint32_t kSoundConfirm = 0u;
 inline constexpr std::uint32_t kSoundRefuse = 4u;
 // The lobby's text call, its core, and the bar's call for Stand Up to print.
-inline constexpr std::uint32_t kText = 0x09A7B890u;
-inline constexpr std::uint32_t kTextCore = 0x09A7B820u;
+inline constexpr std::uint32_t kText = kFreedomUniteCode ? 0x09A7B890u : 0x09A769C8u;
+inline constexpr std::uint32_t kTextCore = kFreedomUniteCode ? 0x09A7B820u : 0x09A76958u;
 inline constexpr std::uint16_t kStandUpText = 508u;
 inline constexpr std::uint16_t kOrderFoodText = 515u;
-inline constexpr std::uint32_t kBannerPrint = 0x08836C54u; // where the call returns
+inline constexpr std::uint32_t kBannerPrint = kFreedomUniteCode ? 0x08836C54u : 0x08836C7Cu; // where the call returns
 // The bar's calls, and where its button call returns.
-inline constexpr std::uint32_t kBarMeasure = 0x08890E48u;
-inline constexpr std::uint32_t kBarBox = 0x08838B08u;
-inline constexpr std::uint32_t kBarButton = 0x08838E0Cu;
-inline constexpr std::uint32_t kBarButtonDrawn = 0x08837594u;
-inline constexpr std::uint32_t kPlainPrint = 0x08891474u;
-inline constexpr std::uint32_t kFontPointer = 0x08A632C8u;
-inline constexpr std::uint32_t kPrintFormat = 0x0893B344u; // "%s%s"
+inline constexpr std::uint32_t kBarMeasure = kFreedomUniteCode ? 0x08890E48u : 0x08890908u;
+inline constexpr std::uint32_t kBarBox = kFreedomUniteCode ? 0x08838B08u : 0x08838B84u;
+inline constexpr std::uint32_t kBarButton = kFreedomUniteCode ? 0x08838E0Cu : 0x08838E88u;
+inline constexpr std::uint32_t kBarButtonDrawn = kFreedomUniteCode ? 0x08837594u : 0x088375BCu;
+inline constexpr std::uint32_t kPlainPrint = kFreedomUniteCode ? 0x08891474u : 0x08890F34u;
+inline constexpr std::uint32_t kFontPointer = kFreedomUniteCode ? 0x08A632C8u : 0x08A5E278u;
+inline constexpr std::uint32_t kPrintFormat = kFreedomUniteCode ? 0x0893B344u : 0x0893875Cu; // "%s%s"
 inline constexpr std::uint32_t kColonRegister = 16u;      // s0 at the button call: the ":"
 inline constexpr std::uint32_t kBarColour = 0x801D3905u;
 inline constexpr std::uint32_t kBarTop = 16u;

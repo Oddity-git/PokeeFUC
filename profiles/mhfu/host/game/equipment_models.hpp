@@ -11,6 +11,8 @@
 //
 // Pure functions over a Ram, so the unit tests run them on a buffer.
 
+#include "title.hpp"
+
 #include <cstdint>
 #include <optional>
 
@@ -22,11 +24,12 @@ enum class Sex : std::uint8_t { Male = 0, Female = 1 };
 [[nodiscard]] const char *sex_name(Sex sex);
 
 inline constexpr std::uint32_t kArmorRecord = 40u;
-inline constexpr std::uint32_t kChestData = 0x08967794u;
-inline constexpr std::uint32_t kArmsData = 0x0896B934u;
-inline constexpr std::uint32_t kWaistData = 0x0896F96Cu;
-inline constexpr std::uint32_t kLegsData = 0x08973954u;
-inline constexpr std::uint32_t kHeadData = 0x08963374u;
+// FUComplete keeps the armor tables 0x2C24 lower (its lookup, 0x088517A8).
+inline constexpr std::uint32_t kChestData = kTitle == Title::FreedomUnite ? 0x08967794u : 0x08964B70u;
+inline constexpr std::uint32_t kArmsData = kTitle == Title::FreedomUnite ? 0x0896B934u : 0x08968D10u;
+inline constexpr std::uint32_t kWaistData = kTitle == Title::FreedomUnite ? 0x0896F96Cu : 0x0896CD48u;
+inline constexpr std::uint32_t kLegsData = kTitle == Title::FreedomUnite ? 0x08973954u : 0x08970D30u;
+inline constexpr std::uint32_t kHeadData = kTitle == Title::FreedomUnite ? 0x08963374u : 0x08960750u;
 
 // The table of an armor part (kind 0 to 4), or 0 for other kinds.
 [[nodiscard]] std::uint32_t armor_data(std::uint8_t kind);

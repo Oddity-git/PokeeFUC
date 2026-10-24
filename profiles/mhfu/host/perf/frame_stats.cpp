@@ -327,9 +327,16 @@ RenderSplit &render_split() {
     return value;
 }
 
-// MHFU_TRACE_RENDER: the [render-split] line once a second.
+// MHFU_TRACE_RENDER: the [render-split] line once a second. Android has no
+// environment to set it in, so Performance: Log there also asks for the split:
+// the saved log then says where the renderer's CPU time went, not only where
+// it waited.
 bool render_split_line() {
+#if defined(__ANDROID__)
+    static const bool enabled = std::getenv("MHFU_TRACE_RENDER") != nullptr || options().log;
+#else
     static const bool enabled = std::getenv("MHFU_TRACE_RENDER") != nullptr;
+#endif
     return enabled;
 }
 

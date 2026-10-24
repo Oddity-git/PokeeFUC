@@ -244,7 +244,8 @@ public class PokeeActivity extends SDLActivity {
     /** Asks the player for a folder; its tree URI, or null when cancelled. */
     public static String pickFolder() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         return pick(intent);
     }
 
@@ -295,6 +296,16 @@ public class PokeeActivity extends SDLActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == kPickTree) {
             Uri uri = resultCode == RESULT_OK && data != null ? data.getData() : null;
+            if (uri != null) {
+                // A sync folder is used again after restarts, so keep the
+                // permission; not every provider supports this, which is fine
+                // for a one-off import or export.
+                try {
+                    mSingleton.getContentResolver().takePersistableUriPermission(uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                } catch (SecurityException ignored) {
+                }
+            }
             finishPick(uri != null ? uri.toString() : null);
             return;
         }

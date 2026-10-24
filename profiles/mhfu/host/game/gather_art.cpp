@@ -1,11 +1,18 @@
 #include "game/gather_art.hpp"
 
+#include "title.hpp"
+
 #include <iostream>
+#include <iterator>
 
 namespace mhfu::game {
 namespace {
 
-constexpr GatherArtWord kWords[] = {
+// FUComplete has the same code at its own addresses, and its tables lower in
+// memory; the build's title picks the table (title.hpp).
+constexpr bool kFreedomUniteArt = kTitle == Title::FreedomUnite;
+
+constexpr GatherArtWord kWordsFreedomUnite[] = {
     {0x08869750u, 0x3C0208A6u}, // lui v0,0x08A6: the point lookup
     {0x08869754u, 0x8C840050u}, // lw a0,80(a0): the gather object's base
     {0x08869758u, 0x8C42C584u}, // lw v0,-14972(v0): the offset at 0x08A5C584
@@ -20,22 +27,39 @@ constexpr GatherArtWord kWords[] = {
     {0x0882BE94u, 0x3C020894u}, // lui v0,0x0894: the sprite rectangles
     {0x0882BEA0u, 0x244292C8u}, // addiu v0,v0,-27960: at 0x089392C8
 };
+constexpr GatherArtWord kWordsFUComplete[] = {
+    {0x08869748u, 0x3C0208A5u}, // lui v0,0x08A5: the point lookup
+    {0x0886974Cu, 0x8C840050u}, // lw a0,80(a0): the gather object's base
+    {0x08869750u, 0x8C427534u}, // lw v0,30004(v0): the offset at 0x08A57534
+    {0x08869754u, 0x00051880u}, // sll v1,a1,2: four bytes a point
+    {0x0882E350u, 0x3C03089Au}, // lui v1,0x089A: the item records
+    {0x0882E354u, 0x2463A23Du}, // addiu v1,v1,-24003: the icon byte at 0x0899A23D
+    {0x0882E3ACu, 0x3C02089Au}, // lui v0,0x089A
+    {0x0882E3B0u, 0x2442A23Cu}, // addiu v0,v0,-24004: the records at 0x0899A23C
+    {0x0882E3E8u, 0x24847FA4u}, // addiu a0,a0,32676: the tints at 0x08937FA4
+    {0x0883060Cu, 0x3C030894u}, // lui v1,0x0894: the icon's sprite
+    {0x08830614u, 0x24638014u}, // addiu v1,v1,-32748: the sprites at 0x08938014
+    {0x0882C0D8u, 0x3C020893u}, // lui v0,0x0893: the sprite rectangles
+    {0x0882C0E4u, 0x244266F0u}, // addiu v0,v0,26352: at 0x089366F0
+};
+static_assert(std::size(kWordsFreedomUnite) == std::size(kWordsFUComplete));
+constexpr const auto &kWords = kFreedomUniteArt ? kWordsFreedomUnite : kWordsFUComplete;
 
-constexpr std::uint32_t kGatherObject = 0x08A62D9Cu;
+constexpr std::uint32_t kGatherObject = kFreedomUniteArt ? 0x08A62D9Cu : 0x08A5DD4Cu;
 constexpr std::uint32_t kGatherBase = 80u;
-constexpr std::uint32_t kPointOffset = 0x08A5C584u;
+constexpr std::uint32_t kPointOffset = kFreedomUniteArt ? 0x08A5C584u : 0x08A57534u;
 constexpr std::uint16_t kListEnd = 0xFFFFu;
 constexpr std::uint32_t kMaxPairs = 64u;
 
-constexpr std::uint32_t kItemRecords = 0x0899D2BCu;
+constexpr std::uint32_t kItemRecords = kFreedomUniteArt ? 0x0899D2BCu : 0x0899A23Cu;
 constexpr std::uint32_t kItemStride = 24u;
 constexpr std::uint32_t kItems = 1500u; // 0x0885C83C turns away ids past 1500
 constexpr std::uint8_t kNoIcon = 255u;
-constexpr std::uint32_t kIconSprites = 0x0893ABECu;
+constexpr std::uint32_t kIconSprites = kFreedomUniteArt ? 0x0893ABECu : 0x08938014u;
 constexpr std::uint32_t kIcons = 56u; // the large size's table; the small one follows
-constexpr std::uint32_t kSprites = 0x089392C8u;
+constexpr std::uint32_t kSprites = kFreedomUniteArt ? 0x089392C8u : 0x089366F0u;
 constexpr std::uint32_t kSpriteStride = 12u;
-constexpr std::uint32_t kTints = 0x0893AB7Cu;
+constexpr std::uint32_t kTints = kFreedomUniteArt ? 0x0893AB7Cu : 0x08937FA4u;
 constexpr std::uint8_t kTintCount = 11u;
 constexpr std::uint32_t kAtlasSide = 256u;
 constexpr std::uint32_t kRam = 0x08800000u;

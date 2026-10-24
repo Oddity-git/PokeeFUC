@@ -25,11 +25,16 @@ void check(bool condition, const char *message) {
     }
 }
 
+// An empty value removes the variable, as _putenv_s does on Windows: set but
+// empty, a switch such as MHFU_KEY_QUESTS would read as on.
 void set_environment(const char *name, const std::string &value) {
 #if defined(_WIN32)
     _putenv_s(name, value.c_str());
 #else
-    setenv(name, value.c_str(), 1);
+    if (value.empty())
+        unsetenv(name);
+    else
+        setenv(name, value.c_str(), 1);
 #endif
 }
 
@@ -161,18 +166,22 @@ void test_find_pack() {
     const std::vector<std::uint8_t> pack = build_pack(kQuests);
     std::vector<std::uint8_t> ram(0x40000u, 0xEEu);
     const std::uint32_t base = 0x08800000u;
-    check(!find_pack(ram, base, pack), "no pack in memory");
+    check(find_packs(ram, base, pack).empty(), "no pack in memory");
     // Same start, different end: a pack the game has changed, or another.
     std::copy(pack.begin(), pack.end(), ram.begin() + 0x1000);
     ram[0x1000 + pack.size() - 1u] ^= 0xFFu;
     // Unaligned: not where the game puts one.
     std::copy(pack.begin(), pack.end(), ram.begin() + 0x10002);
-    check(!find_pack(ram, base, pack), "an unaligned or changed copy is not the pack");
+    check(find_packs(ram, base, pack).empty(), "an unaligned or changed copy is not the pack");
     std::copy(pack.begin(), pack.end(), ram.begin() + 0x20000);
-    check(find_pack(ram, base, pack) == std::optional<std::uint32_t>{base + 0x20000u}, "the exact copy is found");
-    check(!find_pack(ram, base, pack, base + 0x20004u), "and nothing after it");
-    check(!find_pack(std::span<const std::uint8_t>(ram).first(16), base, pack), "a pack larger than memory");
-    check(!find_pack(ram, base, {}), "nothing to look for");
+    check(find_packs(ram, base, pack) == std::vector<std::uint32_t>{base + 0x20000u}, "the exact copy is found");
+    check(find_packs(ram, base, pack, base + 0x20004u).empty(), "and nothing after it");
+    check(find_packs(std::span<const std::uint8_t>(ram).first(16), base, pack).empty(), "a pack larger than memory");
+    check(find_packs(ram, base, {}).empty(), "nothing to look for");
+    // FUComplete can hold the read's copy and the list's copy at once.
+    std::copy(pack.begin(), pack.end(), ram.begin() + 0x30000);
+    check(find_packs(ram, base, pack) == std::vector<std::uint32_t>({base + 0x20000u, base + 0x30000u}),
+        "every copy is found, in order");
 }
 
 void test_tag_untag() {
@@ -231,13 +240,13 @@ void test_switch() {
     reset();
     disc().clear();
     const std::vector<std::uint8_t> pack = build_pack(kQuests);
-    disc()[5345u] = pack;
+    disc()[kFirstPack + 3u] = pack;
     disc()[5346u] = std::vector<std::uint8_t>(64u, 0u); // not a pack as traced
     psprecomp::GuestMemory memory(kMemory);
     place(memory, kPackAt, pack);
 
     check(!settings.key_quests, "off by default");
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     frame(memory, &allocate_block, &disc_bytes);
     check(allocations == 0 && name_in_memory(memory, kPackAt, 2u, 0u) == "Battle of the Blos",
         "off, nothing runs and nothing is tagged");
@@ -253,7 +262,7 @@ void test_switch() {
     // The game loads the pack again elsewhere.
     const std::uint32_t again = kPackAt + 0x40000u;
     place(memory, again, pack);
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     file_loaded(1234u); // not a pack
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "[Key] Commander in the Flames", "a pack read again is tagged");
@@ -266,7 +275,7 @@ void test_switch() {
     settings.key_quests = false;
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "Commander in the Flames", "turned off, the names are put back");
-    file_loaded(5345u);
+    file_loaded(kFirstPack + 3u);
     frame(memory, &allocate_block, &disc_bytes);
     check(name_in_memory(memory, again, 3u, 0u) == "Commander in the Flames", "and stay the game's while off");
 
@@ -277,13 +286,47 @@ void test_switch() {
     frame(memory, &allocate_block, &disc_bytes);
 }
 
+void test_every_copy() {
+    auto &settings = mhfu::settings::current();
+    reset();
+    disc().clear();
+    disc()[kFirstPack + 3u] = build_pack(kQuests);
+    psprecomp::GuestMemory memory(kMemory);
+    allocations = 0;
+    settings.key_quests = true;
+    // FUComplete reads a pack into a staging buffer and copies it to the
+    // list's own. Both copies must be tagged against their own start.
+    place(memory, kPackAt, disc()[kFirstPack + 3u]);
+    const std::uint32_t copy = kPackAt + 0x100000u;
+    place(memory, copy, disc()[kFirstPack + 3u]);
+    file_loaded(kFirstPack + 3u);
+    frame(memory, &allocate_block, &disc_bytes);
+    check(name_in_memory(memory, kPackAt, 2u, 0u) == "[Key] Battle of the Blos", "the read's copy is tagged");
+    check(name_in_memory(memory, copy, 2u, 0u) == "[Key] Battle of the Blos", "and the copy the list keeps");
+
+    // Each tag points at the same name block through its own copy's base.
+    const auto names = key_names(disc()[kFirstPack + 3u]);
+    const std::uint32_t word = names ? (*names)[2].word : 0u;
+    const std::uint32_t first = memory.load32(kPackAt + word);
+    const std::uint32_t second = memory.load32(copy + word);
+    check(first != second, "each copy gets its own offset");
+    check(kPackAt + first == copy + second, "and both point at the same tagged name");
+
+    // Turning the switch off puts both copies back.
+    settings.key_quests = false;
+    frame(memory, &allocate_block, &disc_bytes);
+    check(name_in_memory(memory, kPackAt, 2u, 0u) == "Battle of the Blos" &&
+            name_in_memory(memory, copy, 2u, 0u) == "Battle of the Blos",
+        "both copies are put back");
+}
+
 void test_no_block() {
     auto &settings = mhfu::settings::current();
     reset();
     disc().clear();
-    disc()[5345u] = build_pack(kQuests);
+    disc()[kFirstPack + 3u] = build_pack(kQuests);
     psprecomp::GuestMemory memory(kMemory);
-    place(memory, kPackAt, disc()[5345u]);
+    place(memory, kPackAt, disc()[kFirstPack + 3u]);
     allocations = 0;
     settings.key_quests = true;
     frame(memory, &no_block, &disc_bytes);
@@ -307,6 +350,7 @@ int main() {
     test_find_pack();
     test_tag_untag();
     test_switch();
+    test_every_copy();
     test_no_block();
     std::error_code ec;
     std::filesystem::remove_all(data, ec);

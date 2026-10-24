@@ -8,11 +8,13 @@
 #include "install/user_data.hpp"
 #include "platform/utf8_path.hpp"
 #include "settings/settings.hpp"
+#include "save_data/save_sync.hpp"
 #include "save_data/save_transfer.hpp"
 #include "ui/ui.hpp"
 #include "pokee_version.hpp"
 #if defined(MHFU_ANDROID_APP)
 #include "platform/android_documents.hpp"
+#include "platform/android_jni.hpp"
 #endif
 
 #include "imgui.h"
@@ -50,6 +52,25 @@ enum class Stage {
     ConfirmBackup,
     BackedUp,
     Reminder,
+    Sync,
+    ChooseSyncFolder,
+};
+
+// What the sync screen knows about the two copies. Refreshed when the screen
+// opens or after an action, not every frame: hashing and the Android copy
+// are not free.
+struct SyncView {
+    fs::path local;
+    fs::path remote;
+    std::string local_hash;
+    std::string remote_hash;
+    sd::FolderSummary local_summary;
+    sd::FolderSummary remote_summary;
+    sd::sync::Decision decision{sd::sync::Decision::NoLocal};
+    std::string error;
+    std::string note;
+    bool downloaded{}; // the last action brought the folder's save here: restart to load it
+    bool ready{};
 };
 
 struct Found {
@@ -82,6 +103,9 @@ struct State {
     bool focus{};                // focus the first row of a new stage
     bool restart{};              // the player chose to restart
     bool focus_row{};            // focus the Import row when the screen closes
+    SyncView sync_view;
+    bool sync_refresh{true}; // compare the two saves again
+    bool sync_conflict{};    // both changed: show the two choices
 };
 
 State &state() {
@@ -154,6 +178,162 @@ fs::path transfer_folder(const char *name) {
 }
 #endif
 
+void open_browser(Stage stage);
+
+std::string sync_folder_name() {
+    const std::string &folder = settings::current().save_sync_folder;
+    if (folder.empty()) return "";
+#if defined(MHFU_ANDROID_APP)
+    return android::describe_tree_uri(folder);
+#else
+    return utf8(fs::path(folder));
+#endif
+}
+
+// The two saves compared: this device's game save, and the copy in the sync
+// folder. On Android the folder is a document tree, so it is copied into a
+// local staging folder first.
+void refresh_sync() {
+    State &s = state();
+    const std::string note = s.sync_view.note; // an action's result survives the refresh
+    const bool downloaded = s.sync_view.downloaded;
+    SyncView view;
+    view.local = sd::sync::game_save_folder(sd::memory_stick());
+    if (!view.local.empty()) {
+        view.local_hash = sd::sync::hash_folder(view.local);
+        view.local_summary = sd::summarize_folder(view.local);
+    }
+    const std::string folder = settings::current().save_sync_folder;
+    if (!folder.empty()) {
+#if defined(MHFU_ANDROID_APP)
+        const fs::path staging = transfer_folder("sync");
+        std::error_code ec;
+        fs::remove_all(staging, ec);
+        fs::create_directories(staging, ec);
+        if (!android::read_sync_folder(folder, staging, view.error)) {
+            view.error = "Cannot read the sync folder: " + view.error + ".";
+        } else {
+            view.remote = staging;
+        }
+#else
+        view.remote = fs::path(folder);
+        std::error_code ec;
+        fs::create_directories(view.remote, ec);
+#endif
+        if (view.remote.empty() || view.error.empty()) {
+            view.remote_hash = sd::sync::hash_folder(view.remote);
+            if (!view.remote_hash.empty()) view.remote_summary = sd::summarize_folder(view.remote);
+        }
+    }
+    view.decision = sd::sync::decide(view.local_hash, view.remote_hash, settings::current().save_sync_hash);
+    view.note = note;
+    view.downloaded = downloaded;
+    view.ready = true;
+    s.sync_view = std::move(view);
+}
+
+bool upload_sync() {
+    State &s = state();
+    SyncView &view = s.sync_view;
+    settings::Settings &settings = settings::current();
+    if (view.local.empty()) {
+        view.error = "This device has no save to upload yet.";
+        return false;
+    }
+    const auto now = std::chrono::system_clock::now();
+    // The folder's earlier save is kept before it is replaced.
+    if (!view.remote.empty() && !view.remote_hash.empty()) {
+        std::error_code ec;
+        const fs::path backup = backups_directory() / ("sync-" + sd::timestamp_for_path(now));
+        std::string error;
+        if (sd::sync::copy_folder(view.remote, backup, error)) {
+            std::cout << "[saves] the sync folder's earlier save is in " << utf8(backup) << "\n";
+        } else {
+            view.error = "The save was not uploaded: the folder's earlier save could not be kept (" + error + ").";
+            return false;
+        }
+    }
+    std::string error;
+#if defined(MHFU_ANDROID_APP)
+    const bool ok = android::write_sync_folder(view.local, settings.save_sync_folder, error);
+#else
+    const bool ok = sd::sync::copy_folder(view.local, view.remote, error);
+#endif
+    if (!ok) {
+        view.error = "The save was not uploaded: " + error + ".";
+        return false;
+    }
+    settings.save_sync_hash = sd::sync::hash_folder(view.local);
+    settings.save_sync_time = sd::timestamp_for_display(now);
+    settings::save();
+    view.error.clear();
+    view.note = "Uploaded this device's save.";
+    view.downloaded = false;
+    s.sync_conflict = false;
+    s.sync_refresh = true;
+    std::cout << "[saves] sync uploaded " << utf8(view.local) << "\n";
+    return true;
+}
+
+bool download_sync() {
+    State &s = state();
+    SyncView &view = s.sync_view;
+    settings::Settings &settings = settings::current();
+    if (view.remote.empty() || view.remote_hash.empty()) {
+        view.error = "The sync folder has no save to download yet.";
+        return false;
+    }
+    const auto now = std::chrono::system_clock::now();
+    const sd::SaveCheck check = sd::check_save_folder(view.remote, sd::game_key());
+    if (!check.ok()) {
+        view.error = "The folder's save cannot be read" + (check.problem.empty() ? "." : ": " + check.problem + ".");
+        return false;
+    }
+    const sd::ImportResult result =
+        sd::import_save(check, sd::memory_stick(), sd::backup_directory(savedata_root(), now));
+    if (!result.ok) {
+        view.error = "The save was not downloaded: " + result.error + ".";
+        return false;
+    }
+    settings.save_sync_hash = sd::sync::hash_folder(sd::sync::game_save_folder(sd::memory_stick()));
+    settings.save_sync_time = sd::timestamp_for_display(now);
+    settings::save();
+    view.error.clear();
+    view.note = result.backup.empty() ? "Downloaded the folder's save."
+                                      : "Downloaded the folder's save; the earlier one is backed up.";
+    view.downloaded = true;
+    s.sync_conflict = false;
+    s.sync_refresh = true;
+    std::cout << "[saves] sync downloaded " << utf8(view.remote) << "\n";
+    return true;
+}
+
+void run_sync() {
+    State &s = state();
+    switch (s.sync_view.decision) {
+    case sd::sync::Decision::Upload:
+    case sd::sync::Decision::NoRemote:
+        (void)upload_sync();
+        break;
+    case sd::sync::Decision::Download:
+        (void)download_sync();
+        break;
+    case sd::sync::Decision::NoLocal:
+        if (!s.sync_view.remote_hash.empty())
+            (void)download_sync();
+        else
+            s.sync_view.note = "There is no save on this device yet.";
+        break;
+    case sd::sync::Decision::InSync:
+        s.sync_view.note = "Already in sync.";
+        break;
+    case sd::sync::Decision::FirstSync:
+    case sd::sync::Decision::Conflict:
+        s.sync_conflict = true;
+        break;
+    }
+}
+
 // A backup of every save of this game into a new folder named by the time,
 // which never replaces anything: in the backups folder, or on Android in a
 // folder picked in the system's picker. The result is in s.backed_up. False
@@ -220,6 +400,19 @@ void open_picker(Stage stage) {
             go(Stage::Backup);
         return;
     }
+    if (stage == Stage::ChooseSyncFolder) {
+        const std::optional<std::string> tree = android::pick_folder();
+        if (tree) {
+            settings::Settings &settings = settings::current();
+            settings.save_sync_folder = *tree;
+            settings.save_sync_hash.clear();
+            settings.save_sync_time.clear();
+            settings::save();
+            state().sync_refresh = true;
+        }
+        go(Stage::Sync);
+        return;
+    }
     const fs::path local = transfer_folder("export");
     fs::remove_all(local, ec);
     fs::create_directories(local, ec);
@@ -265,6 +458,8 @@ void open_browser(Stage stage) {
         };
     } else if (stage == Stage::ChooseExport) {
         options.choose_folder = "Export to this folder";
+    } else if (stage == Stage::ChooseSyncFolder) {
+        options.choose_folder = "Use this folder for save sync";
     } else {
         options.choose_folder = "Back up to this folder";
     }
@@ -353,11 +548,14 @@ void start_backup(const fs::path &target) {
 bool browse(bool back) {
     State &s = state();
     ImGui::Indent(px(16.0f));
-    paragraph(s.stage == Stage::ChooseImport ? "Import: open a save folder (ULUS10391, ULUS10391QST), or choose a "
-                                               "folder that holds them, such as a memory stick's PSP/SAVEDATA. You "
-                                               "can also drop the folder on the window."
+    paragraph(s.stage == Stage::ChooseImport
+            ? "Import: open a save folder (ULUS10391, ULUS10391QST), or choose a folder that holds them, such as a "
+              "memory stick's PSP/SAVEDATA. You can also drop the folder on the window."
             : s.stage == Stage::ChooseExport ? "Export: choose the folder to copy your saves to."
-                                             : "Back up: choose the folder the backup goes to.",
+            : s.stage == Stage::ChooseSyncFolder
+            ? "Sync: choose the folder both devices can see. Use a folder only for this game's save; on a computer "
+              "it is the folder rclone, Insync, Syncthing or Nextcloud syncs."
+            : "Back up: choose the folder the backup goes to.",
         colors::kTextDim);
     ImGui::Unindent(px(16.0f));
     // A folder dropped on the window is chosen at once, as in the browser.
@@ -373,9 +571,13 @@ bool browse(bool back) {
     const Stage stage = s.stage;
     s.browser.reset();
     if (result == FileBrowser::Result::Cancelled) {
-        // Back from the backup's folder browser returns to the backup's choices.
+        // Back from a folder browser returns to the choices it came from.
         if (stage == Stage::ChooseBackup) {
             go(Stage::Backup);
+            return true;
+        }
+        if (stage == Stage::ChooseSyncFolder) {
+            go(Stage::Sync);
             return true;
         }
         close();
@@ -385,6 +587,14 @@ bool browse(bool back) {
         review(chosen);
     } else if (stage == Stage::ChooseBackup) {
         start_backup(chosen);
+    } else if (stage == Stage::ChooseSyncFolder) {
+        settings::Settings &settings = settings::current();
+        settings.save_sync_folder = utf8(chosen);
+        settings.save_sync_hash.clear();
+        settings.save_sync_time.clear();
+        settings::save();
+        state().sync_refresh = true;
+        go(Stage::Sync);
     } else {
         s.exported = sd::export_saves(sd::memory_stick(), chosen, std::chrono::system_clock::now());
         std::cout << "[saves] export to " << utf8(chosen) << ": "
@@ -692,6 +902,101 @@ bool open_folder(const fs::path &folder) {
     return false;
 }
 
+void sync_screen(bool back) {
+    State &s = state();
+    if (back) {
+        close();
+        return;
+    }
+    settings::Settings &settings = settings::current();
+    section("Sync saves");
+    ImGui::Indent(px(16.0f));
+    paragraph("Keep one save on this device and another through a folder both can see: a Google Drive "
+              "folder, Syncthing or Nextcloud. The folder holds only this game's save, and either copy can "
+              "be restored.",
+        colors::kTextDim);
+    ImGui::Unindent(px(16.0f));
+
+    if (settings.save_sync_folder.empty()) {
+        ImGui::Indent(px(16.0f));
+        paragraph("1. Choose a folder both devices can reach. On a phone, pick the Google Drive folder "
+                  "through the system folder picker. On a computer, sync the same Drive folder with rclone "
+                  "or Insync, or use Syncthing or Nextcloud.",
+            colors::kTextDim);
+        ImGui::Unindent(px(16.0f));
+        if (button_row("Choose the sync folder…",
+                {false, {},
+                    "A folder used only for this game's save. Google Drive, Syncthing and Nextcloud all work; "
+                    "the folder is picked, not typed."}))
+            open_browser(Stage::ChooseSyncFolder);
+        ImGui::Indent(px(16.0f));
+        paragraph("2. On the other device, choose the same folder here.", colors::kTextDim);
+        paragraph("3. Upload this device's save, then use Sync on the other device.", colors::kTextDim);
+        ImGui::Unindent(px(16.0f));
+        if (button_row("Back", {false, {}, "Back to the saves."})) close();
+        return;
+    }
+
+    if (s.sync_refresh) {
+        refresh_sync();
+        s.sync_refresh = false;
+    }
+    const SyncView &view = s.sync_view;
+    info_row("Sync folder", sync_folder_name().c_str());
+    if (button_row(
+            "Change the sync folder…", {false, {}, "Choose another folder. The next sync starts a new comparison."}))
+        open_browser(Stage::ChooseSyncFolder);
+    if (!settings.save_sync_time.empty()) info_row("Last sync", settings.save_sync_time.c_str());
+    if (view.local_summary.exists) info_row("This device", describe(view.local_summary).c_str());
+    if (view.remote_summary.exists) {
+#if defined(MHFU_ANDROID_APP)
+        // The staging copy was made just now, so its file time says nothing
+        // about when the folder's save was written; its size does.
+        info_row("The folder", human_size(view.remote_summary.bytes).c_str());
+#else
+        info_row("The folder", describe(view.remote_summary).c_str());
+#endif
+    }
+    ImGui::Dummy({0.0f, px(4.0f)});
+    ImGui::Indent(px(16.0f));
+    const bool conflict = view.decision == sd::sync::Decision::Conflict ||
+        view.decision == sd::sync::Decision::FirstSync || s.sync_conflict;
+    paragraph(sd::sync::decision_text(view.decision), conflict ? colors::kDanger : colors::kTextDim);
+    if (!view.note.empty()) paragraph(view.note, colors::kTextDim);
+    if (!view.error.empty()) paragraph(view.error, colors::kDanger);
+    if (view.downloaded)
+        paragraph("The game reads its save at the title screen. Restart now to load the downloaded save; progress "
+                  "since your last save is lost. If you keep playing instead, do not save before you restart.");
+    ImGui::Unindent(px(16.0f));
+    if (view.downloaded &&
+        button_row("Restart now", {false, {}, "Closes the game and starts it again at the title screen."},
+            colors::kAccentBright)) {
+        s.restart = true;
+        close();
+    }
+    if (s.sync_conflict) {
+        ImGui::Indent(px(16.0f));
+        paragraph("Both copies changed since the last sync, so pick the one to keep. The other is kept as a "
+                  "backup.",
+            colors::kDanger);
+        ImGui::Unindent(px(16.0f));
+        if (button_row("Keep this device (upload)", {false, {}, "Replace the folder's save with this device's."}))
+            (void)upload_sync();
+        if (button_row("Use the folder's save (download)",
+                {false, {}, "Replace this device's save with the folder's; the earlier save is kept."}))
+            (void)download_sync();
+        if (button_row("Cancel", {false, {}, "Leave both copies as they are."})) s.sync_conflict = false;
+    } else {
+        if (button_row("Sync now", {false, {}, "Upload or download only what changed; ask before replacing both."}))
+            run_sync();
+        if (button_row("Upload this device's save", {false, {}, "Make the folder match this device."}))
+            (void)upload_sync();
+        if (button_row("Use the folder's save", {false, {}, "Make this device match the folder."}))
+            (void)download_sync();
+        if (button_row("Back", {false, {}, "Back to the saves."})) close();
+    }
+}
+
 void save_rows() {
     State &s = state();
     const bool available = !sd::memory_stick().empty();
@@ -737,6 +1042,25 @@ void save_rows() {
         settings.backup_reminder = !settings.backup_reminder;
         settings::save();
     }
+    section("Sync saves");
+    ImGui::Indent(px(16.0f));
+    paragraph(settings.save_sync_folder.empty()
+            ? "Keep the same save on this device and another through a folder both can reach: Google Drive, "
+              "Syncthing or Nextcloud."
+            : "This device and another use the save in the sync folder. Sync compares them and asks before "
+              "replacing a changed save.",
+        colors::kTextDim);
+    ImGui::Unindent(px(16.0f));
+    if (button_row(settings.save_sync_folder.empty() ? "Set up save sync…" : "Sync saves…",
+            {!available, {},
+                "Choose a folder both devices can see, upload this device's save, and sync it with the other. "
+                "The folder is only for this game's save."})) {
+        state().sync_refresh = true;
+        state().sync_conflict = false;
+        state().sync_view = SyncView{};
+        go(Stage::Sync);
+    }
+    if (!settings.save_sync_folder.empty()) info_row("Sync folder", sync_folder_name().c_str());
 #if !defined(MHFU_ANDROID_APP)
     if (button_row("Open the saves folder",
             {!available, {}, "Show the folder the game saves to (PSP/SAVEDATA) in the file manager."}))
@@ -758,6 +1082,7 @@ bool save_screen(bool back) {
     case Stage::ChooseImport:
     case Stage::ChooseExport:
     case Stage::ChooseBackup:
+    case Stage::ChooseSyncFolder:
         return browse(back);
     case Stage::Backup:
         backup_screen(back);
@@ -779,6 +1104,9 @@ bool save_screen(bool back) {
         break;
     case Stage::Reminder:
         reminder_screen(back);
+        break;
+    case Stage::Sync:
+        sync_screen(back);
         break;
     }
     return true;

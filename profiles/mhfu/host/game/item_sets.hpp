@@ -105,6 +105,8 @@
 
 #include "psprecomp/guest_memory.hpp"
 
+#include "title.hpp"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -123,8 +125,13 @@ class Ram;
 
 namespace mhfu::game::item_sets {
 
+// The addresses below are Freedom Unite's, and FUComplete's after them: the
+// same code and data in its executable and its lobby_task (loaded at
+// 0x09A5A580, as FUComplete's loader patches it).
+inline constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+
 // GameSys and what it holds.
-inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
+inline constexpr std::uint32_t kGameSysPointer = kFreedomUniteCode ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kBox = 0x3428u;
 inline constexpr std::uint32_t kBoxSlots = 1000u;
 inline constexpr std::uint32_t kPouch = 0x6AEA6u;
@@ -138,26 +145,26 @@ inline constexpr std::uint16_t kPageItems[] = {829u, 830u};
 inline constexpr std::uint32_t kBasePages = 8u;
 inline constexpr std::uint32_t kPageSlots = 100u;
 // The item table.
-inline constexpr std::uint32_t kItemTable = 0x0899D2B8u;
+inline constexpr std::uint32_t kItemTable = kFreedomUniteCode ? 0x0899D2B8u : 0x0899A238u;
 inline constexpr std::uint32_t kItemRecord = 24u;
 inline constexpr std::uint32_t kCarryByte = 3u;
 inline constexpr std::uint16_t kStack = 99u;
 inline constexpr std::uint16_t kLargeStack = 255u;
 
 // The menu and the box record.
-inline constexpr std::uint32_t kMenuRecord = 0x09B0B0A8u;
-inline constexpr std::uint32_t kBoxList = 0x09B05158u;
-inline constexpr std::uint32_t kSmallBoxList = 0x09B05168u;
+inline constexpr std::uint32_t kMenuRecord = kFreedomUniteCode ? 0x09B0B0A8u : 0x09B05C78u;
+inline constexpr std::uint32_t kBoxList = kFreedomUniteCode ? 0x09B05158u : 0x09AFFD98u;
+inline constexpr std::uint32_t kSmallBoxList = kFreedomUniteCode ? 0x09B05168u : 0x09AFFDA8u;
 inline constexpr std::uint16_t kGameRows = 6u;
 inline constexpr std::uint16_t kRows = 7u;
 inline constexpr std::uint8_t kRow = 6u;      // Item Sets, as the box numbers its rows
 inline constexpr std::uint8_t kShownRow = 3u; // where it is shown: after Combine Items
-inline constexpr std::uint32_t kMenuDrawReturn = 0x09AE6784u; // 0x09AE66F0's call of 0x0882F580
-inline constexpr std::uint32_t kText = 0x09A7B890u;
-inline constexpr std::uint32_t kCursor = 0x0881C2E4u;
-inline constexpr std::uint32_t kCursorReturn = 0x09ADCE14u;
-inline constexpr std::uint32_t kUpdate = 0x09AE38F8u;
-inline constexpr std::uint32_t kBoxFrame = 0x09ADCCD0u; // the box's buttons, then its update
+inline constexpr std::uint32_t kMenuDrawReturn = kFreedomUniteCode ? 0x09AE6784u : 0x09AE14BCu; // 0x09AE66F0's call of 0x0882F580
+inline constexpr std::uint32_t kText = kFreedomUniteCode ? 0x09A7B890u : 0x09A769C8u;
+inline constexpr std::uint32_t kCursor = kFreedomUniteCode ? 0x0881C2E4u : 0x0881CE38u;
+inline constexpr std::uint32_t kCursorReturn = kFreedomUniteCode ? 0x09ADCE14u : 0x09AD7CACu;
+inline constexpr std::uint32_t kUpdate = kFreedomUniteCode ? 0x09AE38F8u : 0x09ADE790u;
+inline constexpr std::uint32_t kBoxFrame = kFreedomUniteCode ? 0x09ADCCD0u : 0x09AD7B68u; // the box's buttons, then its update
 inline constexpr std::uint32_t kBoxFlags = 48u;
 inline constexpr std::uint32_t kMenuShown = 96u; // 0 while START has hidden the menu
 inline constexpr std::uint16_t kStart = 0x0008u;inline constexpr std::uint32_t kChosenRow = 54u;
@@ -261,27 +268,27 @@ private:
 // Hooks ----------------------------------------------------------------------
 
 // The screens' parts.
-inline constexpr std::uint32_t kButtons = 0x08A62D8Cu;
-inline constexpr std::uint32_t kHeldDpad = 0x08A62D94u;
-inline constexpr std::uint32_t kInputOwner = 0x08A62D80u;
+inline constexpr std::uint32_t kButtons = kFreedomUniteCode ? 0x08A62D8Cu : 0x08A5DD3Cu;
+inline constexpr std::uint32_t kHeldDpad = kFreedomUniteCode ? 0x08A62D94u : 0x08A5DD44u;
+inline constexpr std::uint32_t kInputOwner = kFreedomUniteCode ? 0x08A62D80u : 0x08A5DD30u;
 inline constexpr std::uint32_t kInputBlocked = 116u;
-inline constexpr std::uint32_t kUiPointer = 0x089CBD0Cu;
+inline constexpr std::uint32_t kUiPointer = kFreedomUniteCode ? 0x089CBD0Cu : 0x089C6CBCu;
 inline constexpr std::uint32_t kUiFlags = 1512u;
 inline constexpr std::uint32_t kUiMessage = 4u; // the box's update shows its row's message
-inline constexpr std::uint32_t kFontPointer = 0x08A632C8u;
-inline constexpr std::uint32_t kSoundPointer = 0x08A62EACu;
-inline constexpr std::uint32_t kBoxMenu = 0x09AE66F0u;
-inline constexpr std::uint32_t kWindowBuild = 0x0882FA24u;
-inline constexpr std::uint32_t kWindowDraw = 0x0882F580u;
-inline constexpr std::uint32_t kPager = 0x0882FB38u;
-inline constexpr std::uint32_t kFontSize = 0x08890DE8u;   // (font, width, height)
-inline constexpr std::uint32_t kFontColour = 0x08890E38u; // (font, colour): 5 the titles' yellow
-inline constexpr std::uint32_t kItemWindow = 0x088198E4u;
-inline constexpr std::uint32_t kMessageDraw = 0x0882FC50u;
-inline constexpr std::uint32_t kMessageRecord = 0x09B0B128u;
-inline constexpr std::uint32_t kPrint = 0x088920A8u;
-inline constexpr std::uint32_t kPrintFormat = 0x08938598u; // "%s"
-inline constexpr std::uint32_t kSound = 0x08883988u;
+inline constexpr std::uint32_t kFontPointer = kFreedomUniteCode ? 0x08A632C8u : 0x08A5E278u;
+inline constexpr std::uint32_t kSoundPointer = kFreedomUniteCode ? 0x08A62EACu : 0x08A5DE5Cu;
+inline constexpr std::uint32_t kBoxMenu = kFreedomUniteCode ? 0x09AE66F0u : 0x09AE1428u;
+inline constexpr std::uint32_t kWindowBuild = kFreedomUniteCode ? 0x0882FA24u : 0x0882FC68u;
+inline constexpr std::uint32_t kWindowDraw = kFreedomUniteCode ? 0x0882F580u : 0x0882F7C4u;
+inline constexpr std::uint32_t kPager = kFreedomUniteCode ? 0x0882FB38u : 0x0882FD7Cu;
+inline constexpr std::uint32_t kFontSize = kFreedomUniteCode ? 0x08890DE8u : 0x088908A8u;   // (font, width, height)
+inline constexpr std::uint32_t kFontColour = kFreedomUniteCode ? 0x08890E38u : 0x088908F8u; // (font, colour): 5 the titles' yellow
+inline constexpr std::uint32_t kItemWindow = kFreedomUniteCode ? 0x088198E4u : 0x0881A3C4u;
+inline constexpr std::uint32_t kMessageDraw = kFreedomUniteCode ? 0x0882FC50u : 0x0882FE94u;
+inline constexpr std::uint32_t kMessageRecord = kFreedomUniteCode ? 0x09B0B128u : 0x09B05CF8u;
+inline constexpr std::uint32_t kPrint = kFreedomUniteCode ? 0x088920A8u : 0x08891B68u;
+inline constexpr std::uint32_t kPrintFormat = kFreedomUniteCode ? 0x08938598u : 0x08935AB8u; // "%s"
+inline constexpr std::uint32_t kSound = kFreedomUniteCode ? 0x08883988u : 0x0888368Cu;
 inline constexpr std::uint32_t kYesText = 8u; // "[Yes] · No", table 0
 inline constexpr std::uint32_t kNoText = 9u;  // "Yes · [No]"
 

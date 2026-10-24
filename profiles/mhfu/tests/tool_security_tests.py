@@ -15,6 +15,7 @@ from unittest.mock import patch
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 import add_overlay
+import overlay_code
 import embed_shaders
 import databin
 import wrap_overlay
@@ -183,7 +184,7 @@ class ArchiveBehaviorTests(unittest.TestCase):
         return xor.translate(databin.ENCODE_TABLE)[:len(plain)]
 
     @classmethod
-    def archive(cls, path):
+    def archive(cls, path, plain=False):
         overlay = bytearray(80)
         overlay[:4] = b"MWo3"
         struct.pack_into("<7I", overlay, 4, 1, 0x08804000, 12, 4, 8, 0x08804018, 0x08804000)
@@ -192,9 +193,32 @@ class ArchiveBehaviorTests(unittest.TestCase):
         struct.pack_into("<7I", directory, 0, 1, 2, 3, 4, 0, 80, 1)
         # Third entry is block-aligned; first two have explicit logical lengths.
         struct.pack_into("<I", directory, 28, 8)
-        path.write_bytes(cls.encrypt(directory, 0) + cls.encrypt(overlay + bytes(2048 - len(overlay)), 1) +
-                         b"PSMFtest" + bytes(2040) + cls.encrypt(bytes(2048), 3))
+        encode = (lambda data, block: data) if plain else cls.encrypt
+        path.write_bytes(encode(bytes(directory), 0) + encode(bytes(overlay) + bytes(2048 - len(overlay)), 1) +
+                         b"PSMFtest" + bytes(2040) + encode(bytes(2048), 3))
         return bytes(overlay)
+
+    def test_plain_archive_reads_like_the_obfuscated_one(self):
+        # FUComplete's image stores DATA.BIN without the obfuscation.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for plain in (False, True):
+                with self.subTest(plain=plain):
+                    path = root / ("plain.bin" if plain else "obfuscated.bin")
+                    overlay = self.archive(path, plain)
+                    archive = databin.Archive(path)
+                    try:
+                        self.assertEqual(archive.plain, plain)
+                        self.assertEqual(len(archive), 3)
+                        self.assertEqual(archive.read(0), overlay)
+                        self.assertEqual(archive.read(1), b"PSMFtest")
+                        self.assertEqual(archive.overlay(0)["load"], 0x08804000)
+                        self.assertEqual(archive.read(2), bytes(2048))
+                    finally:
+                        archive.stream.close()
+                    with patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()):
+                        databin.main(["databin", str(path), "extract-overlays", str(root / ("out%d" % plain))])
+                    self.assertEqual((root / ("out%d" % plain) / "overlay_08804000_public.bin").read_bytes(), overlay)
 
     def test_keystream_long_cycle_and_partial_words(self):
         for block in (0, 1, 0x12345678):
@@ -327,6 +351,19 @@ class ArchiveBehaviorTests(unittest.TestCase):
 
 
 class BuildToolContracts(unittest.TestCase):
+    def test_overlay_corpora_follow_the_build_title(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR)
+            cache = build / "CMakeCache.txt"
+            cache.write_text("MHFU_TITLE:STRING=FU\n")
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR)
+            cache.write_text("OTHER:BOOL=ON\nMHFU_TITLE:STRING=fuc\n")
+            self.assertEqual(add_overlay.overlay_dir(str(build)), add_overlay.OVERLAY_DIR + "_fuc")
+            cache.write_text("MHFU_TITLE:STRING=P3RD\n")
+            with self.assertRaises(SystemExit):
+                add_overlay.overlay_dir(str(build))
+
     def test_overlay_header_identity_and_errors(self):
         self.assertEqual(add_overlay.fnv1a64(b""), 0xCBF29CE484222325)
         self.assertEqual(add_overlay.fnv1a64(b"hello"), 0xA430D84680AABD0B)
@@ -402,6 +439,69 @@ class BuildToolContracts(unittest.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError):
                     embed_shaders.compile_shader(compiler, str(source), [])
                 self.assertEqual(set(root.glob("*.spv")), before)
+
+class OverlayCodeTests(unittest.TestCase):
+    @staticmethod
+    def elf(code):
+        header = bytearray(overlay_code.EHDR_SIZE + 32)
+        header[:4] = b"\x7fELF"
+        struct.pack_into("<I", header, 28, overlay_code.EHDR_SIZE)
+        struct.pack_into("<I", header, overlay_code.EHDR_SIZE + 4, len(header))
+        struct.pack_into("<I", header, overlay_code.EHDR_SIZE + 16, len(code))
+        return bytes(header) + code
+
+    def run_tool(self, *args):
+        with patch("sys.stdout", io.StringIO()):
+            return overlay_code.main(["overlay_code", *map(str, args)])
+
+    def test_writes_each_library_code_and_skips_the_rest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            libs, sources = root / "libs", root / "sources"
+            libs.mkdir()
+            for name in ("ovl1_a.so", "ovl2_b.dll", "ovl3_c.so", "ovl4_d.so", "other.so", "ovl5_e.txt"):
+                (libs / name).write_bytes(b"")
+            (sources / "ovl1_a").mkdir(parents=True)
+            (sources / "ovl1_a" / "overlay.elf").write_bytes(self.elf(b"\x01\x02\x03\x04"))
+            (sources / "ovl2_b").mkdir()
+            (sources / "ovl2_b" / "overlay.elf").write_bytes(self.elf(b"\x05\x06"))
+            (sources / "ovl3_c").mkdir()
+            (sources / "ovl3_c" / "overlay.elf").write_bytes(b"not an elf")
+            self.assertEqual(self.run_tool(libs, sources), 0)
+            self.assertEqual((libs / "ovl1_a.code").read_bytes(), b"\x01\x02\x03\x04")
+            self.assertEqual((libs / "ovl2_b.code").read_bytes(), b"\x05\x06")
+            self.assertEqual(sorted(p.name for p in libs.glob("*.code")), ["ovl1_a.code", "ovl2_b.code"])
+            out = root / "out"
+            out.mkdir()
+            self.assertEqual(self.run_tool(libs, sources, out), 0)
+            self.assertEqual((out / "ovl1_a.code").read_bytes(), b"\x01\x02\x03\x04")
+
+    def test_a_segment_past_the_end_of_the_file_is_not_code(self):
+        broken = bytearray(self.elf(b"\x01\x02"))
+        struct.pack_into("<I", broken, overlay_code.EHDR_SIZE + 16, 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "overlay.elf"
+            path.write_bytes(bytes(broken))
+            self.assertIsNone(overlay_code.code_of(path))
+
+    @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
+    def test_a_corpus_folder_linked_outside_its_directory_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            libs, sources, elsewhere = root / "libs", root / "sources", root / "elsewhere"
+            for folder in (libs, sources, elsewhere):
+                folder.mkdir()
+            (libs / "ovl1_a.so").write_bytes(b"")
+            (elsewhere / "overlay.elf").write_bytes(self.elf(b"\x01\x02\x03\x04"))
+            (sources / "ovl1_a").symlink_to(elsewhere, target_is_directory=True)
+            self.assertEqual(self.run_tool(libs, sources), 0)
+            self.assertFalse((libs / "ovl1_a.code").exists())
+
+    def test_wrong_arguments_print_the_usage(self):
+        with patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(overlay_code.main(["overlay_code"]), 2)
+        self.assertIn("overlay_code.py", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

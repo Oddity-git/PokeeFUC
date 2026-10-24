@@ -6,6 +6,7 @@
 #include "camera/hunt_icon.hpp"
 #include "camera/lock_on.hpp"
 #include "game/guest_layout.hpp"
+#include "title.hpp"
 #include "input/bindings.hpp"
 #include "input/presets.hpp"
 #include "settings/settings.hpp"
@@ -27,10 +28,15 @@ Settings &current() {
 }
 
 namespace {
+
+// This build's address: Freedom Unite's, or FUComplete's (title.hpp).
+constexpr std::uint32_t for_title(std::uint32_t freedom_unite, std::uint32_t fucomplete) {
+    return mhfu::kTitle == mhfu::Title::FreedomUnite ? freedom_unite : fucomplete;
+}
 using namespace mhfu::camera;
 namespace game = mhfu::game::layout;
 
-constexpr std::uint32_t helper = 0x08886E50u;
+constexpr std::uint32_t helper = for_title(0x08886E50u, 0x08886B54u);
 constexpr std::uint32_t camera_address = 0x08900000u;
 constexpr std::uint32_t parent_address = camera_address - 0xA0u;
 constexpr std::uint32_t preset_address = 0x08902000u;
@@ -57,7 +63,7 @@ void check(bool condition, const char *message) {
     }
 }
 
-constexpr std::uint32_t hunter_list = 0x089CBD04u;
+constexpr std::uint32_t hunter_list = for_title(0x089CBD04u, 0x089C6CB4u);
 constexpr std::uint32_t hunters = 0x09400000u;
 constexpr std::uint32_t hunter = 0x09410000u;
 // The game's L recenter with the camera already near behind the hunter: the
@@ -129,10 +135,10 @@ void original(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     }
     psprecomp::AllegrexContext gate = ctx;
     gate.gpr[4] = parent_address;
-    gate.gpr[31] = 0x088874ECu;
+    gate.gpr[31] = for_title(0x088874ECu, 0x088871F0u);
     gate.gpr[2] = 0u;
-    gate.pc = 0x0888E494u;
-    if (auto check = runtime.function_at(0x0888E494u)) check(runtime, gate);
+    gate.pc = for_title(0x0888E494u, 0x0888E198u);
+    if (auto check = runtime.function_at(for_title(0x0888E494u, 0x0888E198u))) check(runtime, gate);
     if (gate.gpr[2] != 0u) {
         place_behind_eye(memory);
     } else if (static_cast<std::int8_t>(memory.load8(camera_address + 0x91u)) >= 0) {
@@ -208,7 +214,7 @@ struct Fixture {
         overlay_recenters = false;
         runtime.register_generated_unit(29u, 0x08886000u, 0x1000u, &original, nullptr);
         runtime.register_function(helper, &original, "recomp_unit_test");
-        runtime.register_function(0x0888E494u, &recenter_stand_in, "recomp_unit_test_recenter");
+        runtime.register_function(for_title(0x0888E494u, 0x0888E198u), &recenter_stand_in, "recomp_unit_test_recenter");
         auto &memory = runtime.memory();
         for (const CodeWord &word : game_code_signature()) memory.store32(word.address, word.word);
         check(prepare_game_camera(runtime, &original), "the matching game code is accepted");
@@ -1251,9 +1257,15 @@ void test_marker_sits_on_the_drawn_view() {
 // The three instructions the marker requires before it reads the camera object:
 // the pointer store, the view's addiu, and the projection's addiu.
 void allow_camera_object(psprecomp::GuestMemory &memory) {
-    memory.store32(0x08812954u, 0xAC50BD04u);
-    memory.store32(0x0881439Cu, 0x26640C80u);
-    memory.store32(0x088145D8u, 0x26050C00u);
+    if constexpr (mhfu::kTitle == mhfu::Title::FreedomUnite) {
+        memory.store32(0x08812954u, 0xAC50BD04u);
+        memory.store32(0x0881439Cu, 0x26640C80u);
+        memory.store32(0x088145D8u, 0x26050C00u);
+    } else {
+        memory.store32(0x08813714u, 0xAC506CB4u);
+        memory.store32(0x0881515Cu, 0x26640C80u);
+        memory.store32(0x08815398u, 0x26050C00u);
+    }
 }
 
 void store_matrix(psprecomp::GuestMemory &memory, std::uint32_t address, const std::array<float, 16> &matrix) {
@@ -1280,7 +1292,7 @@ void test_marker_tracks_the_camera_object() {
 
     constexpr std::uint32_t object = 0x09400000u;
     allow_camera_object(memory);
-    memory.store32(0x089CBD04u, object);
+    memory.store32(for_title(0x089CBD04u, 0x089C6CB4u), object);
     LockOnView tracked = picture_camera();
     tracked.view[12] = -eye_x;
     tracked.view[13] = -eye_y;
@@ -1318,7 +1330,7 @@ void test_marker_tracks_the_camera_object() {
     check(fallback && (*fallback)[0] == 0.5f && (*fallback)[1] == 0.5f,
         "a projection that was not built falls back to the draw");
 
-    memory.store32(0x089CBD04u, 0u);
+    memory.store32(for_title(0x089CBD04u, 0x089C6CB4u), 0u);
     lock_on_note_view(drawn, 100u);
     const auto missing = lock_on_marker(memory);
     check(missing && (*missing)[0] == 0.5f, "a missing camera object falls back to the draw");
@@ -1533,6 +1545,11 @@ void test_follow_toggle_uses_the_focus_camera_bind() {
 }
 
 int main() {
+    // Lock-on reads Freedom Unite's monsters; another title's build leaves it off.
+    if constexpr (!mhfu::kLockOn) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
     test_geometry();
     test_monsters_and_pick();
     test_monster_in_another_area();

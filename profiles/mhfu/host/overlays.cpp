@@ -7,6 +7,9 @@
 #include "overlays.hpp"
 
 #include "app_paths.hpp"
+#include "fuc_code_patches.hpp"
+#include "install/user_data.hpp"
+#include "title.hpp"
 #include "hle/hle_common.hpp"
 #include "overlay_module.hpp"
 #include "platform/utf8_path.hpp"
@@ -14,10 +17,14 @@
 #include "psprecomp/stale_code_hook.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -40,6 +47,9 @@ struct OverlayCorpus {
     std::uint32_t code_size{};
     std::uint64_t hash{};
     decltype(&mhfu_register_overlay) install{};
+    // The library, and beside it (same name, .code) the code it was generated
+    // from, when that was installed with it.
+    std::filesystem::path library;
 };
 
 std::vector<OverlayCorpus> &overlay_corpora() {
@@ -204,7 +214,7 @@ void load_overlay_library(const std::filesystem::path &path) {
         return;
     }
     overlay_corpora().push_back(
-        OverlayCorpus{info->name, info->base, info->size, info->code_size, info->hash, install});
+        OverlayCorpus{info->name, info->base, info->size, info->code_size, info->hash, install, path});
 }
 
 void load_overlay_libraries() {
@@ -226,16 +236,18 @@ void load_overlay_libraries() {
 
 // Writes the loaded image next to the other dumps so the corpus can be built.
 void dump_slot(const psprecomp::GuestMemory &memory, std::uint32_t slot_start, std::uint32_t slot_end) {
-    const std::optional<std::string> directory_text = environment_utf8("MHFU_DUMP_OVERLAYS");
-    if (!directory_text) {
+    const std::optional<std::filesystem::path> directory = overlay_dump_directory();
+    if (!directory) {
         log_once("overlay-dump-hint",
             "[overlay] set MHFU_DUMP_OVERLAYS=<dir> to dump the loaded overlay for recompilation");
         return;
     }
     std::vector<std::uint8_t> image;
+    std::string name;
     if (const std::optional<OverlayHeader> header = read_overlay_header(memory, slot_start);
         header.has_value() && header->image_size != 0u) {
         image = read_guest(memory, slot_start, header->image_size);
+        name = header->name;
     } else {
         // Not a recognisable image: fall back to the whole slot without its
         // trailing padding.
@@ -247,15 +259,96 @@ void dump_slot(const psprecomp::GuestMemory &memory, std::uint32_t slot_start, s
         return;
     }
     std::error_code ec;
-    const std::filesystem::path directory = path_from_utf8(*directory_text);
-    std::filesystem::create_directories(directory, ec);
-    const std::filesystem::path path = directory / ("overlay_" + psprecomp::hex32(slot_start).substr(2) + ".bin");
+    std::filesystem::create_directories(*directory, ec);
+    const std::filesystem::path path = *directory / overlay_dump_name(slot_start, name);
+    // A miss repeats while the image stays loaded; one dump of it is enough.
+    static std::vector<std::filesystem::path> written;
+    if (std::find(written.begin(), written.end(), path) != written.end()) return;
+    written.push_back(path);
     std::ofstream out(path, std::ios::binary);
     if (!out) throw psprecomp::Error("Cannot write overlay dump: " + path_to_utf8(path));
     out.write(reinterpret_cast<const char *>(image.data()), static_cast<std::streamsize>(image.size()));
     std::cout << "[overlay] dumped " << image.size() / 1024u << " KiB to " << path_to_utf8(path) << "\n"
               << "[overlay] recompile it with: profiles/mhfu/tools/add_overlay.py <build_dir> " << path_to_utf8(path)
-              << " " << psprecomp::hex32(slot_start) << "\n";
+              << " " << psprecomp::hex32(slot_start)
+              << ", or every dump with profiles/mhfu/scripts/build_overlay_dumps.sh <build_dir> "
+              << path_to_utf8(*directory) << "\n";
+}
+
+// The code a corpus was generated from, as installed beside its library
+// (<library>.code: the image's code, after its 64-byte header). Empty when it
+// was not installed. Read once per corpus.
+const std::vector<std::uint32_t> &corpus_code(const OverlayCorpus &corpus) {
+    static std::map<std::uint64_t, std::vector<std::uint32_t>> cache;
+    const auto found = cache.find(corpus.hash);
+    if (found != cache.end()) return found->second;
+    std::vector<std::uint32_t> &words = cache[corpus.hash];
+    std::filesystem::path path = corpus.library;
+    path.replace_extension(".code");
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return words;
+    const std::vector<char> bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    if (bytes.size() != corpus.code_size || bytes.size() % 4u != 0u) return words;
+    words.resize(bytes.size() / 4u);
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        const auto *b = reinterpret_cast<const unsigned char *>(bytes.data() + i * 4u);
+        words[i] = static_cast<std::uint32_t>(b[0]) | static_cast<std::uint32_t>(b[1]) << 8u |
+            static_cast<std::uint32_t>(b[2]) << 16u | static_cast<std::uint32_t>(b[3]) << 24u;
+    }
+    return words;
+}
+
+// An image no corpus matches exactly may still be one of them with a few words
+// changed: FUComplete's loader patches game_task and lobby_task as they load,
+// according to CONFIG.BIN, and a mod's patch can do the same. The corpus of the
+// same overlay whose code differs least from the loaded image is installed
+// instead of interpreting the whole image, and the code around each word that
+// differs goes to the interpreter (fuc::run_interpreted). At most 1/64 of the
+// words may differ; more, and the image is treated as unmatched.
+// MHFU_FUC_INTERPRET_CHANGES=0 turns this off.
+bool install_nearest_overlay(Runtime &runtime, std::uint32_t slot_start) {
+    if (!fuc::interpret_changes()) return false;
+    // Installed already, nearest or exact, for the image still there: a miss
+    // in it is a real one.
+    if (const auto installed = installed_overlays().find(slot_start); installed != installed_overlays().end()) {
+        const auto recorded = installed_headers().find(slot_start);
+        if (recorded != installed_headers().end() && recorded->second == header_hash(runtime.memory(), slot_start))
+            return false;
+    }
+    const std::optional<OverlayHeader> header = read_overlay_header(runtime.memory(), slot_start);
+    if (!header.has_value()) return false;
+    const OverlayCorpus *best = nullptr;
+    std::vector<std::uint32_t> best_changed;
+    for (const OverlayCorpus &corpus : overlay_corpora()) {
+        // The header names the image with its extension, the corpus without.
+        if (corpus.base != slot_start || (corpus.name != header->name && corpus.name + ".ovl" != header->name))
+            continue;
+        const std::vector<std::uint32_t> &code = corpus_code(corpus);
+        if (code.empty()) continue;
+        const std::uint32_t code_base = slot_start + kOverlayHeaderBytes;
+        if (runtime.memory().raw_pointer(code_base, corpus.code_size) == nullptr) continue;
+        const std::size_t limit = std::max<std::size_t>(16u, code.size() / 64u);
+        std::vector<std::uint32_t> changed;
+        for (std::size_t i = 0; i < code.size() && changed.size() <= limit; ++i) {
+            const std::uint32_t address = code_base + static_cast<std::uint32_t>(i * 4u);
+            if (runtime.memory().load32(address) != code[i]) changed.push_back(address);
+        }
+        if (changed.size() > limit || (best != nullptr && changed.size() >= best_changed.size())) continue;
+        best = &corpus;
+        best_changed = std::move(changed);
+    }
+    if (best == nullptr) return false;
+    runtime.unregister_functions(slot_start, slot_start + best->size);
+    best->install(runtime);
+    std::set<std::uint32_t> done;
+    const std::size_t replaced = fuc::run_interpreted(runtime, best_changed, done);
+    installed_overlays()[slot_start] = best->hash;
+    installed_headers()[slot_start] = header_hash(runtime.memory(), slot_start);
+    std::cout << "[overlay] installed " << best->name << " (" << best->size / 1024u << " KiB) at "
+              << psprecomp::hex32(slot_start) << " with " << best_changed.size()
+              << (best_changed.size() == 1u ? " word" : " words") << " changed since it was compiled; " << replaced
+              << " compiled blocks around them run interpreted\n";
+    return true;
 }
 
 bool install_overlay_for(Runtime &runtime, std::uint32_t pc) {
@@ -281,6 +374,8 @@ bool install_overlay_for(Runtime &runtime, std::uint32_t pc) {
                   << psprecomp::hex32(slot_start) << "\n";
         return true;
     }
+
+    if (install_nearest_overlay(runtime, slot_start)) return true;
 
     const std::optional<OverlayHeader> header = read_overlay_header(runtime.memory(), slot_start);
     // One line per image. The slot is reused, so a key of only the base would
@@ -378,6 +473,29 @@ void install_overlay_support(Runtime &runtime) {
     psprecomp::set_runtime_missing_function_hook(&missing_function_hook);
     psprecomp::set_runtime_unsupported_hook(&unsupported_instruction_hook);
     psprecomp::set_runtime_stale_code_hook(&overlay_call_is_stale);
+}
+
+std::optional<std::filesystem::path> overlay_dump_directory() {
+    if (const std::optional<std::string> text = environment_utf8("MHFU_DUMP_OVERLAYS")) {
+        if (*text == "0") return std::nullopt;
+        return path_from_utf8(*text);
+    }
+    if constexpr (kTitle == Title::FUComplete) {
+        try {
+            return install::user_data_directory() / "overlay_dumps";
+        } catch (const std::exception &) {
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;
+}
+
+std::string overlay_dump_name(std::uint32_t slot, const std::string &image_name) {
+    std::string name = "overlay_" + psprecomp::hex32(slot).substr(2);
+    const std::string stem = image_name.substr(0, image_name.find('.'));
+    if (!stem.empty()) name += '_';
+    for (const char c : stem) name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    return name + ".bin";
 }
 
 } // namespace mhfu

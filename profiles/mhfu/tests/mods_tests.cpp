@@ -330,7 +330,7 @@ struct Archive {
     Bytes bytes;
 };
 
-Archive make_archive() {
+Archive make_archive(bool plain = false) {
     Archive a;
     const std::vector<std::size_t> sizes = {2048, 3000, 6144, 2048, 1000};
     a.directory.directory_blocks = 2u;
@@ -347,10 +347,16 @@ Archive make_archive() {
     const std::size_t tables = (a.directory.blocks.size() + 4u) * 4u;
     a.directory.trailer = pattern(2u * p3::kBlock - tables, 99);
     a.bytes = a.directory.encode();
+    if (plain) {
+        // FUComplete stores DATA.BIN without the cipher: the tables, then the
+        // entries, are the bytes the archive holds.
+        const std::size_t tables = (a.directory.blocks.size() + 2u * a.directory.sizes.size()) * 4u;
+        p3::decrypt(std::span(a.bytes).first(tables), 0u, 0u);
+    }
     a.bytes.resize(static_cast<std::size_t>(block) * p3::kBlock, 0u);
     for (std::size_t i = 0; i < sizes.size(); ++i) {
         Bytes stored = a.plain[i];
-        if (i != 3u) p3::encrypt(stored, a.directory.blocks[i], 0u);
+        if (i != 3u && !plain) p3::encrypt(stored, a.directory.blocks[i], 0u);
         std::copy(stored.begin(), stored.end(), a.bytes.begin() + a.directory.blocks[i] * p3::kBlock);
     }
     return a;
@@ -372,6 +378,28 @@ void test_archive(const fs::path &root) {
         "archive: the directory parses");
     check(parsed && parsed->encode() == Bytes(a.bytes.begin(), a.bytes.begin() + 2 * p3::kBlock),
         "archive: and encodes back to the same bytes");
+
+    // FUComplete stores DATA.BIN without the cipher: the same layout, read
+    // plain, serves the same entries.
+    const Archive stored = make_archive(true);
+    const std::optional<p3::Directory> plain =
+        p3::Directory::parse(std::span(stored.bytes).first(2u * p3::kBlock), stored.bytes.size(), true);
+    check(plain && plain->blocks == stored.directory.blocks && plain->sizes == stored.directory.sizes,
+        "archive: a plain directory parses");
+    const auto plain_raw = [&stored](std::uint64_t offset, std::span<std::uint8_t> out) -> std::size_t {
+        if (offset >= stored.bytes.size()) return 0u;
+        const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(out.size(), stored.bytes.size() - offset));
+        std::copy_n(stored.bytes.begin() + static_cast<std::ptrdiff_t>(offset), count, out.begin());
+        return count;
+    };
+    if (plain) {
+        p3::ArchiveView view(*plain, plain_raw, true);
+        for (std::uint32_t i = 0; i < plain->entries(); ++i) {
+            Bytes got(static_cast<std::size_t>(plain->size(i)));
+            view.read(static_cast<std::uint64_t>(plain->blocks[i]) * p3::kBlock, got);
+            check(got == stored.plain[i], "archive: a plain entry reads as stored");
+        }
+    }
     const p3::Directory &disc = *parsed;
     const auto raw = [&a](std::uint64_t offset, std::span<std::uint8_t> out) -> std::size_t {
         if (offset >= a.bytes.size()) return 0u;

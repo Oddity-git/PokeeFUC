@@ -14,6 +14,16 @@ constexpr std::int64_t kRealignUs = 2000;
 // A gap of this many frames between two flips (a load, a pause) starts over.
 constexpr std::int64_t kGapFrames = 10;
 
+// A rate the display can show evenly: its presents fall on whole refresh
+// intervals. 45 on 60 Hz is 1.5 intervals, which alternates between one and
+// two refreshes and reads as judder; 60 on 90 Hz is 1.5 in the other
+// direction. Unknown displays keep every rate.
+bool presentable(double rate, double display_hz) {
+    if (!(display_hz >= 1.0) || rate <= 0.0) return true;
+    const double intervals = display_hz / rate;
+    return std::fabs(intervals - std::round(intervals)) <= 0.03;
+}
+
 } // namespace
 
 double presents_per_frame(double rate) noexcept {
@@ -141,13 +151,28 @@ void RateGovernor::set_requested(double rate) {
     requested_ = std::max(rate, 30.0);
     ladder_.clear();
     for (const double known : kRates)
-        if (known < requested_ - 0.5) ladder_.push_back(known);
+        if (known < requested_ - 0.5 && presentable(known, display_hz_)) ladder_.push_back(known);
+    // An unusual display (a 144 Hz panel, say) has none of the known rates on
+    // its refresh grid. Keep the old ladder so there is still a way down,
+    // rather than only the rate asked for.
+    if (ladder_.empty() && display_hz_ >= 1.0)
+        for (const double known : kRates)
+            if (known < requested_ - 0.5) ladder_.push_back(known);
     ladder_.push_back(requested_);
     index_ = ladder_.size() - 1u;
     blocked_.assign(ladder_.size(), 0);
     block_length_.assign(ladder_.size(), kBlockSeconds);
     slow_seconds_ = skipping_seconds_ = spare_seconds_ = wait_up_ = 0;
     reason_ = "";
+}
+
+void RateGovernor::set_display_hz(double hz) {
+    const double value = std::isfinite(hz) && hz >= 1.0 ? hz : 0.0;
+    if (value == display_hz_) return;
+    display_hz_ = value;
+    // A display change can make the current rate uneven (or a blocked one
+    // fair again). Start from the rate the setting asks for.
+    set_requested(requested_);
 }
 
 void RateGovernor::set_automatic(bool automatic) {

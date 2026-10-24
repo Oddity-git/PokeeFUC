@@ -13,7 +13,7 @@
 namespace mhfu::game::hall_equipment {
 namespace {
 
-constexpr std::array<CodeWord, 70> kSignature = {{
+constexpr std::array<CodeWord, 70> kSignatureFreedomUnite = {{
     {kSlotReset, 0x27BDFFF0u},  // addiu sp, sp, -16
     {0x088DB560u, 0x0E219C02u}, // jal 0x08867008: a part's row reset
     {0x09A7D338u, 0x0E236D4Du}, // jal 0x088DB534: a member who left
@@ -85,6 +85,81 @@ constexpr std::array<CodeWord, 70> kSignature = {{
     {0x0884FB8Cu, 0x8C422D8Cu}, // lw v0, 0x2D8C(v0)
     {0x0884FB90u, 0x306300F0u}, // andi v1, v1, 0xF0
 }};
+// FUComplete: the same words where its executable and lobby_task have them.
+constexpr std::array<CodeWord, 70> kSignatureFUComplete = {{
+    {kSlotReset, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {0x088DDEA8u, 0x0E219C00u}, // jal 0x08867000: a part's row reset
+    {0x09A784A8u, 0x0E23779Fu}, // jal 0x088DDE7C: a member who left
+    {0x0889F39Cu, 0x3C0209A2u}, // lui v0, 0x09A2: this console's address
+    {0x0889F3A4u, 0x244245B8u}, // addiu v0, v0, 0x45B8
+    {0x09A77C58u, 0x90C50000u}, // lbu a1, 0(a2): a member's hunter into a request
+    {0x09A77CACu, 0xC4C0001Cu}, // lwc1 f0, 0x1C(a2)
+    {0x09A77CECu, 0x24CA002Cu}, // addiu t2, a2, 0x2C: the armor
+    {0x09A788D4u, 0x92030008u}, // lbu v1, 8(s0): the request into the record
+    {0x09A788D8u, 0x24820040u}, // addiu v0, a0, 0x40
+    {0x09A7898Cu, 0x92030070u}, // lbu v1, 0x70(s0)
+    {0x0889B830u, 0x922212D5u}, // lbu v0, 0x12D5(s1): the status 0x0889B804 sends
+    {0x0889B850u, 0x8E2212D0u}, // lw v0, 0x12D0(s1): the counter
+    {0x0889B864u, 0x0E227F6Eu}, // jal 0x0889FDB8: the status into the entry
+    {0x0889B86Cu, 0x0E22815Cu}, // jal 0x088A0570: the entry refreshed
+    {0x0889C350u, 0x908412D5u}, // lbu a0, 0x12D5(a0): 0x0889C330
+    {0x0889C438u, 0x90A300BFu}, // lbu v1, 0xBF(a1): the member's status
+    {kLoaderFrame, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {0x09A77B44u, 0x8C830000u}, // lw v1, 0(a0): the head's state
+    {0x09A77BDCu, 0x0E69E2DCu}, // jal 0x09A78B70: state 3
+    {0x09A77BECu, 0x0E69E51Au}, // jal 0x09A79468: state 4
+    {0x09A77BFCu, 0x0E69E5C2u}, // jal 0x09A79708: state 5
+    {kRequestOwnReload, 0x00003021u}, // addu a2, zr, zr
+    {0x09A78520u, 0x24050003u}, // addiu a1, zr, 3
+    {0x09A7852Cu, 0xAC650000u}, // sw a1, 0(v1)
+    {0x09A9C568u, 0x0E69E140u}, // jal 0x09A78500: the commit's request
+    {0x09A790D4u, 0x24050001u}, // addiu a1, zr, 1: slot 1
+    {0x09A790D8u, 0x0E237784u}, // jal 0x088DDE10: a piece's file
+    {0x09A7930Cu, 0x0E23779Fu}, // jal 0x088DDE7C: slot 1's parts reset
+    {0x09A79310u, 0x24050001u}, // addiu a1, zr, 1
+    {0x09A79770u, 0x904203E6u}, // lbu v0, 0x3E6(v0): slot 1's part 6
+    {0x09A79784u, 0x94520424u}, // lhu s2, 0x424(v0)
+    {0x0886740Cu, 0x342100A8u}, // ori at, at, 0xA8: the kind rows
+    {0x0886741Cu, 0x342103D8u}, // ori at, at, 0x3D8: the state rows
+    {0x088674C4u, 0xAC620258u}, // sw v0, 0x258(v1): the address rows
+    {0x088674F4u, 0xAC530318u}, // sw s3, 0x318(v0): the size rows
+    {0x08867584u, 0xA4530408u}, // sh s3, 0x408(v0): the file rows
+    {0x088DDEECu, 0xAC600024u}, // sw zr, 0x24(v1): the slot's progress
+    {kRefreshOwnEntry, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {0x088A0598u, 0x8C63A3BCu}, // lw v1, -0x5C44(v1): only in ad hoc play
+    {0x088A05BCu, 0x0E227CE7u}, // jal 0x0889F39C: this console's address
+    {0x088A062Cu, 0x0E22CE89u}, // jal 0x088B3A24: the hunter into the entry
+    {0x088A0630u, 0x2444059Cu}, // addiu a0, v0, 0x59C: entry + 0x20
+    {0x088A064Cu, 0x2403003Cu}, // addiu v1, zr, 60
+    {0x088A0650u, 0xAE4312D0u}, // sw v1, 0x12D0(s2): send it
+    {0x09AAA9C8u, 0x3C0209A0u}, // lui v0, 0x09A0: the hall's own refresh
+    {0x09AAA9CCu, 0x0E22815Cu}, // jal 0x088A0570
+    {0x09AAA9D0u, 0x8C447284u}, // lw a0, 0x7284(v0): the session
+    {0x09AD7ED8u, 0xA2400038u}, // sb zr, 0x38(s2): back to the top menu
+    {kBoxUpdate, 0x27BDFFD0u}, // addiu sp, sp, -48
+    {0x09AD7B84u, 0x0E213EACu}, // jal 0x0884FAB0: the buttons
+    {0x09AD7B90u, 0x92420034u}, // lbu v0, 0x34(s2): Start is dropped in the hall
+    {0x09AD7C58u, 0x92430038u}, // lbu v1, 0x38(s2): the top menu
+    {0x09AD7CACu, 0x32022000u}, // andi v0, s0, 0x2000: the choice
+    {0x09AD7CB8u, 0x92420034u}, // lbu v0, 0x34(s2)
+    {0x09AD7CC4u, 0x92430036u}, // lbu v1, 0x36(s2): the cursor
+    {0x09AD7CC8u, 0x24020003u}, // addiu v0, zr, 3: Change Equipment
+    {0x09AD7F80u, 0x0E6B79E4u}, // jal 0x09ADE790: the menu is drawn
+    {0x09AD7974u, 0xA2300034u}, // sb s0, 0x34(s1): the box is opened
+    {0x09AA8DF0u, 0x0E6B5E4Cu}, // jal 0x09AD7930: the Guild Hall's box
+    {0x09AA8DF4u, 0x24050001u}, // addiu a1, zr, 1
+    {kMenuDraw, 0x27BDFFF0u}, // addiu sp, sp, -16
+    {0x09AE1490u, 0x3C0209B0u}, // lui v0, 0x09B0
+    {0x09AE1494u, 0x2442FDA8u}, // addiu v0, v0, -0x258: the hall's labels
+    {0x0884FAB0u, 0x3C0308A6u}, // lui v1, 0x08A6
+    {0x0884FAB4u, 0x8C63DD30u}, // lw v1, -0x22D0(v1)
+    {0x0884FAB8u, 0x90630074u}, // lbu v1, 0x74(v1)
+    {0x0884FAC8u, 0x8C43DD44u}, // lw v1, -0x22BC(v0)
+    {0x0884FAD0u, 0x8C42DD3Cu}, // lw v0, -0x22C4(v0)
+    {0x0884FAD4u, 0x306300F0u}, // andi v1, v1, 0xF0
+}};
+constexpr const std::array<CodeWord, 70> &kSignature =
+    kFreedomUniteCode ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
     psprecomp::Runtime::RecompiledFunction box_update{};
@@ -372,16 +447,16 @@ void trace_models(const psprecomp::GuestMemory &memory) {
     };
     std::ostringstream line;
     line << std::hex;
-    const std::uint32_t game = word(0x089CC558u);
+    const std::uint32_t game = word(kGameSysPointer);
     line << "own " << (memory.contains(game + 0x28u, 1u) ? unsigned(memory.load8(game + 0x28u)) : 0xFFu);
-    const std::uint32_t files = word(0x09A4F204u);
+    const std::uint32_t files = word(kFilesPointer);
     for (std::uint32_t i = 0; i < 4u; ++i) {
         const std::uint32_t hunter = files != 0u ? word(files + 0xCu + 4u * i) : 0u;
         line << " | h" << i << " " << hunter;
         if (hunter != 0u)
             line << " " << word(hunter + 0x190u) << " " << word(hunter + 0xF60u) << " " << word(hunter + 0x1090u);
     }
-    const std::uint32_t loader = word(0x09B23790u);
+    const std::uint32_t loader = word(kLoaderPointer);
     line << " | load";
     for (std::uint32_t k = 0; k < 8u && loader != 0u; ++k)
         line << " " << word(loader + 0x84u * k) << ":" << word(loader + 0x84u * k + 4u);
@@ -405,7 +480,7 @@ void trace_models(const psprecomp::GuestMemory &memory) {
     // and the size at +0x80318 + 4e; and its two bump pools (0x08866B5C:
     // base +0x80230, used +0x8022C; 0x08866BD4: base +0x80248, used +0x80244,
     // size +0x80240).
-    const std::uint32_t archive = word(0x08A62D7Cu);
+    const std::uint32_t archive = word(kArchivePointer);
     if (archive != 0u && memory.contains(archive + 0x80400u, 4u)) {
         line << " | pools " << word(archive + 0x80230u) << "+" << word(archive + 0x8022Cu) << " "
              << word(archive + 0x80248u) << "+" << word(archive + 0x80244u) << "/" << word(archive + 0x80240u);

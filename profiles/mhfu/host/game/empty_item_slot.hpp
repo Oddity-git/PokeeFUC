@@ -67,6 +67,7 @@
 // gather, runs the game's code.
 
 #include "psprecomp/guest_memory.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <cstdint>
@@ -79,44 +80,48 @@ class Runtime;
 
 namespace mhfu::game::empty_item_slot {
 
-inline constexpr std::uint32_t kStep = 0x088D81FCu;
-inline constexpr std::uint32_t kForwardReturn = 0x09A6AAD0u;
-inline constexpr std::uint32_t kBackwardReturn = 0x09A6AB28u;
-inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
+// FUComplete's executable and game_task have the same code at their own
+// addresses (title.hpp): each address below has its FUComplete value.
+inline constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+
+inline constexpr std::uint32_t kStep = kFreedomUniteCode ? 0x088D81FCu : 0x088DAB44u;
+inline constexpr std::uint32_t kForwardReturn = kFreedomUniteCode ? 0x09A6AAD0u : 0x09A65CD0u;
+inline constexpr std::uint32_t kBackwardReturn = kFreedomUniteCode ? 0x09A6AB28u : 0x09A65D28u;
+inline constexpr std::uint32_t kGameSysPointer = kFreedomUniteCode ? 0x089CC558u : 0x089C7508u;
 inline constexpr std::uint32_t kLocalHunterByte = 40u;
 inline constexpr std::uint32_t kHunterIndex = 486u;
 inline constexpr std::uint32_t kSelectedSlot = 1608u;
 inline constexpr std::uint32_t kPouch = 0x6AEA6u;
-inline constexpr std::uint32_t kItemTable = 0x0899D2B8u;
+inline constexpr std::uint32_t kItemTable = kFreedomUniteCode ? 0x0899D2B8u : 0x0899A238u;
 inline constexpr std::uint32_t kItemRecord = 24u;
 inline constexpr std::uint16_t kSlots = 24u;
 // The word past the pouch, the empty stop while it holds nothing.
 inline constexpr std::uint16_t kSpare = kSlots;
 // jal 0x088D81FC, then the direction in its delay slot: addu a2, zr, zr for
 // ○ and addiu a2, zr, 1 for □.
-inline constexpr std::uint32_t kStepCall = 0x0E23607Fu;
+inline constexpr std::uint32_t kStepCall = kFreedomUniteCode ? 0x0E23607Fu : 0x0E236AD1u;
 inline constexpr std::uint32_t kForwardDelay = 0x00003021u;
 inline constexpr std::uint32_t kBackwardDelay = 0x24060001u;
 
 // The HUD's strip: the step's return addresses in its two layouts, the
 // animated one and the still one, and the place that holds nothing.
-inline constexpr std::uint32_t kStripFirst = 0x08845FF4u;
-inline constexpr std::uint32_t kStripFirstEnd = 0x08846118u;
-inline constexpr std::uint32_t kStripSecond = 0x088464F4u;
-inline constexpr std::uint32_t kStripSecondEnd = 0x08846590u;
+inline constexpr std::uint32_t kStripFirst = kFreedomUniteCode ? 0x08845FF4u : 0x08845FA4u;
+inline constexpr std::uint32_t kStripFirstEnd = kFreedomUniteCode ? 0x08846118u : 0x088460C8u;
+inline constexpr std::uint32_t kStripSecond = kFreedomUniteCode ? 0x088464F4u : 0x088464A4u;
+inline constexpr std::uint32_t kStripSecondEnd = kFreedomUniteCode ? 0x08846590u : 0x08846540u;
 inline constexpr std::uint16_t kNone = 255u;
 // The name under the bar.
-inline constexpr std::uint32_t kHasItem = 0x0882693Cu;
-inline constexpr std::uint32_t kNameGateReturn = 0x08845AC4u;
-inline constexpr std::uint32_t kItemName = 0x08851528u;
-inline constexpr std::uint32_t kNameWidthReturn = 0x08845BB0u;
-inline constexpr std::uint32_t kNamePrintReturn = 0x08845C00u;
+inline constexpr std::uint32_t kHasItem = kFreedomUniteCode ? 0x0882693Cu : 0x08827194u;
+inline constexpr std::uint32_t kNameGateReturn = kFreedomUniteCode ? 0x08845AC4u : 0x08845A74u;
+inline constexpr std::uint32_t kItemName = kFreedomUniteCode ? 0x08851528u : 0x08851448u;
+inline constexpr std::uint32_t kNameWidthReturn = kFreedomUniteCode ? 0x08845BB0u : 0x08845B60u;
+inline constexpr std::uint32_t kNamePrintReturn = kFreedomUniteCode ? 0x08845C00u : 0x08845BB0u;
 // The step after an item leaves the pouch.
-inline constexpr std::uint32_t kTakeReturn = 0x088D7504u;
+inline constexpr std::uint32_t kTakeReturn = kFreedomUniteCode ? 0x088D7504u : 0x088D9E4Cu;
 // The pouch's packing.
-inline constexpr std::uint32_t kPack = 0x088292ACu;
+inline constexpr std::uint32_t kPack = kFreedomUniteCode ? 0x088292ACu : 0x08829948u;
 // game_task's first selection, at the hunter's set-up.
-inline constexpr std::uint32_t kSelectFirst = 0x09A68128u;
+inline constexpr std::uint32_t kSelectFirst = kFreedomUniteCode ? 0x09A68128u : 0x09A63328u;
 // In the window the host reserves below the load image (kernel/kernel.hpp).
 inline constexpr std::uint32_t kNothingText = 0x08803F00u;
 inline constexpr char kNothingName[] = "Nothing Selected";

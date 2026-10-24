@@ -8,6 +8,13 @@
 
 namespace mhfu::game::layered {
 
+namespace {
+// A lobby_task or executable address in this build's game (title.hpp).
+constexpr std::uint32_t at(std::uint32_t freedom_unite, std::uint32_t fucomplete) {
+    return kFreedomUniteArmor ? freedom_unite : fucomplete;
+}
+} // namespace
+
 const char *part_label(std::uint8_t part) {
     static constexpr const char *kLabels[kParts] = {"Chest", "Arms", "Waist", "Legs", "Head"};
     return part < kParts ? kLabels[part] : "?";
@@ -112,14 +119,14 @@ bool equipment_resolve(std::uint32_t return_address) {
     // remaining calls of the same function. 0x08866EA8 and 0x08866EFC are
     // the resident file load, and they are not listed.
     switch (return_address) {
-    case 0x09A7DBB4u:
-    case 0x09A7DB68u:
-    case 0x09A7DCD0u:
-    case 0x09A7DD18u:
-    case 0x09A7DE54u:
-    case 0x09A7DE9Cu:
-    case 0x09A7E45Cu:
-    case 0x09A7E4ACu:
+    case at(0x09A7DBB4u, 0x09A78D24u):
+    case at(0x09A7DB68u, 0x09A78CD8u):
+    case at(0x09A7DCD0u, 0x09A78E40u):
+    case at(0x09A7DD18u, 0x09A78E88u):
+    case at(0x09A7DE54u, 0x09A78FC4u):
+    case at(0x09A7DE9Cu, 0x09A7900Cu):
+    case at(0x09A7E45Cu, 0x09A795CCu):
+    case at(0x09A7E4ACu, 0x09A7961Cu):
         return true;
     default:
         return false;
@@ -129,19 +136,19 @@ bool equipment_resolve(std::uint32_t return_address) {
 bool file_load_resolve(std::uint32_t return_address) {
     // 0x08866E10 calls 0x088D6388 and comes back here. Two sites: the armor
     // file table and the other model table.
-    return return_address == 0x08866EA8u || return_address == 0x08866EFCu;
+    return return_address == at(0x08866EA8u, 0x08866EA0u) || return_address == at(0x08866EFCu, 0x08866EF4u);
 }
 
-bool equipment_sex_lookup(std::uint32_t return_address) { return return_address == 0x09A7E360u; }
+bool equipment_sex_lookup(std::uint32_t return_address) { return return_address == at(0x09A7E360u, 0x09A794D0u); }
 
-bool equipment_part_model(std::uint32_t return_address) { return return_address == 0x09A7DF24u; }
+bool equipment_part_model(std::uint32_t return_address) { return return_address == at(0x09A7DF24u, 0x09A79094u); }
 
-bool equipment_part_present(std::uint32_t return_address) { return return_address == 0x09A7DF48u; }
+bool equipment_part_present(std::uint32_t return_address) { return return_address == at(0x09A7DF48u, 0x09A790B8u); }
 
 bool equipment_model_read(std::uint32_t return_address) {
     // lobby_task's equipment change. The character load returns to 0x088DBCCC
     // and is not this call.
-    return return_address == 0x09A7E548u;
+    return return_address == at(0x09A7E548u, 0x09A796B8u);
 }
 
 bool substitute_resolved_model(std::uint32_t return_address) { return equipment_resolve(return_address); }

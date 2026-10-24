@@ -5,6 +5,8 @@
 #include <optional>
 #include <span>
 
+#include "title.hpp"
+
 namespace psprecomp {
 class Runtime;
 struct AllegrexContext;
@@ -13,13 +15,33 @@ class GuestMemory;
 
 // Drives the game's own camera from camera::take() (camera_input.hpp).
 //
-// USA Freedom Unite. The port wraps the camera update and, before that update
+// USA Freedom Unite, and FUComplete at its own addresses (kCameraUpdate and
+// the rest below). The port wraps the camera update and, before that update
 // builds the view, sets the yaw and the preset offset it is about to read. The
 // game then runs its own smoothing, collision and recentre. A camera update
 // that is already placing the view itself is left alone.
 namespace mhfu::camera {
 
 using RotationFunction = void (*)(psprecomp::Runtime &, psprecomp::AllegrexContext &);
+
+// Where the code the driver hooks is, in this build's executable (title.hpp).
+// FUComplete's Portable 2nd G has the same functions as Freedom Unite at other
+// addresses; game_camera.cpp lists the instructions each one is checked by.
+inline constexpr bool kCameraFreedomUnite = kTitle == Title::FreedomUnite;
+// The camera update.
+inline constexpr std::uint32_t kCameraUpdate = kCameraFreedomUnite ? 0x08886E50u : 0x08886B54u;
+// The projection update: compares the camera's field of view with the one the
+// projection was built with, and builds it again when they differ. The game
+// writes the field at +0xC every frame before this call.
+inline constexpr std::uint32_t kProjectionUpdate = kCameraFreedomUnite ? 0x08815384u : 0x08816144u;
+// The aim function in game_task, for action 1001.
+inline constexpr std::uint32_t kAimFunction = kCameraFreedomUnite ? 0x09AA4DD0u : 0x09A9FFA0u;
+// game_task's weapon switch: its table of cases, the bow's case, and that
+// case's call towards the bow's handler (jal 0x09BB4F18, in FUComplete jal
+// 0x09BB00C8).
+inline constexpr std::uint32_t kWeaponTable = kCameraFreedomUnite ? 0x09C0C830u : 0x09C079B0u;
+inline constexpr std::uint32_t kBowCase = kCameraFreedomUnite ? 0x09A8AF98u : 0x09A86198u;
+inline constexpr std::uint32_t kBowCaseCall = kCameraFreedomUnite ? 0x0E6ED3C6u : 0x0E6EC032u;
 
 // One instruction or constant of the game that the driver depends on.
 struct CodeWord {
@@ -105,6 +127,11 @@ void game_camera_anticipate_aim(psprecomp::Runtime &runtime);
 // Full-deflection speed for the current camera: Aim speed while a bow or a
 // bowgun aims, Camera speed otherwise.
 [[nodiscard]] float game_camera_degrees_per_second();
+
+// Scales the projection camera's field of view at `camera + 0xC`, which the
+// game sets before each projection update. False when the value there is not
+// a plausible field of view, or `scale` is 1.
+bool scale_projection_fov(psprecomp::GuestMemory &memory, std::uint32_t camera, float scale);
 
 // The quest camera's eye and look-at point in world space, as its last update
 // left them (+0x0 and +0x10 of the camera structure). Nothing when no update

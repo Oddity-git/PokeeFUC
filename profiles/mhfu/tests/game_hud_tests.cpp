@@ -1,12 +1,18 @@
 // No game code or game data is needed: the words hiding the HUD checks are
 // written into guest memory as stand-ins.
 #include "gpu/game_hud.hpp"
+#include "title.hpp"
 #include "psprecomp/allegrex_context.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <iostream>
 
 namespace {
+
+// This build's address of each anchor: Freedom Unite's, or FUComplete's.
+constexpr std::uint32_t at(std::uint32_t freedom_unite, std::uint32_t fucomplete) {
+    return mhfu::kTitle == mhfu::Title::FreedomUnite ? freedom_unite : fucomplete;
+}
 using namespace mhfu::gpu::hud;
 int failures{};
 
@@ -24,15 +30,15 @@ void store_signature(psprecomp::GuestMemory &memory) {
 void test_signature_accepts_this_executable() {
     psprecomp::Runtime runtime;
     store_signature(runtime.memory());
-    check(code_matches(runtime), "the Freedom Unite words are accepted");
+    check(code_matches(runtime), "this title's words are accepted");
     check(code_signature().size() == 25u, "every anchor is checked");
 }
 
 void test_signature_refuses_a_different_word() {
     psprecomp::Runtime runtime;
     store_signature(runtime.memory());
-    const CodeWord &insert = code_signature().front();
-    check(insert.address == 0x088596C8u, "the ordering-table insert is the first anchor");
+    const CodeWord insert = code_signature().front();
+    check(insert.address == at(0x088596C8u, 0x088595E8u), "the ordering-table insert is the first anchor");
     runtime.memory().store32(insert.address, 0u);
     check(!code_matches(runtime), "a different insert is refused");
 }
@@ -42,12 +48,12 @@ void test_hud_functions() {
     auto &memory = runtime.memory();
     const auto functions = hud_functions();
     check(functions.size() == 6u, "village text and labels, the quest HUD and the labels");
-    check(functions[0].address == 0x09AE38F8u, "the village layer");
-    check(functions[1].address == 0x09A6C248u, "the lobby task callback");
-    check(functions[2].address == 0x09A60298u, "the quest HUD");
-    check(functions[3].address == 0x09A617A8u, "a quest HUD state");
-    check(functions[4].address == 0x09A62400u, "another quest HUD state");
-    check(functions[5].address == 0x09B62488u, "the quest labels");
+    check(functions[0].address == at(0x09AE38F8u, 0x09ADE790u), "the village layer");
+    check(functions[1].address == at(0x09A6C248u, 0x09A673D0u), "the lobby task callback");
+    check(functions[2].address == at(0x09A60298u, 0x09A5B508u), "the quest HUD");
+    check(functions[3].address == at(0x09A617A8u, 0x09A5CA18u), "a quest HUD state");
+    check(functions[4].address == at(0x09A62400u, 0x09A5D670u), "another quest HUD state");
+    check(functions[5].address == at(0x09B62488u, 0x09B5D628u), "the quest labels");
 
     for (const HudFunction &fn : functions) {
         memory.store32(fn.address, fn.first);
@@ -57,30 +63,31 @@ void test_hud_functions() {
         check(!hud_function_matches(memory, fn.address), "a replaced overlay does not count");
         memory.store32(fn.address + 4u, fn.saved_ra);
     }
-    check(!hud_function_matches(memory, 0x088596C8u), "the packet insert is not a HUD function");
+    check(!hud_function_matches(memory, at(0x088596C8u, 0x088595E8u)), "the packet insert is not a HUD function");
     // The quest slot and the village slot are the same load address, so a
     // quest function's bytes are not the village function.
     memory.store32(functions[0].address, functions[2].first);
     memory.store32(functions[0].address + 4u, functions[2].saved_ra);
     check(!hud_function_matches(memory, functions[0].address), "the other overlay's words do not count");
-    check(!name_label(0x09A6C248u), "the lobby callback is not a name; it draws the village interface");
+    check(
+        !name_label(at(0x09A6C248u, 0x09A673D0u)), "the lobby callback is not a name; it draws the village interface");
     check(!name_label(0x09A81220u), "a village hunter label is not a separate name");
     check(!name_label(0x09A825B8u), "the village name is drawn with the rest of that screen");
     check(!name_label(0x09A82AD0u), "the other village name is drawn with the rest of that screen");
     check(!name_label(0x09A85C90u), "the mark beside a village name is drawn with that screen");
     check(!name_label(0x09A79030u), "the gathering-hall name is drawn with that screen");
-    check(name_label(0x09B62488u), "the quest name is a name");
-    check(!name_tag_only(0x09B62488u), "a quest name is scaled with its mark");
-    check(!name_label(0x09A60298u), "the quest HUD is not a teammate's name");
-    check(!name_tag_only(0x09A60298u), "the quest HUD is not a name tag");
+    check(name_label(at(0x09B62488u, 0x09B5D628u)), "the quest name is a name");
+    check(!name_tag_only(at(0x09B62488u, 0x09B5D628u)), "a quest name is scaled with its mark");
+    check(!name_label(at(0x09A60298u, 0x09A5B508u)), "the quest HUD is not a teammate's name");
+    check(!name_tag_only(at(0x09A60298u, 0x09A5B508u)), "the quest HUD is not a name tag");
 
     // Only game_task's functions are the quest HUD the sizes apply to.
     check(!functions[0].quest && !functions[1].quest, "the village functions are not resized");
     check(functions[2].quest && functions[3].quest && functions[4].quest && functions[5].quest,
         "the quest HUD functions are resized");
-    check(!quest_function(0x09A6C248u), "the lobby callback draws shops and dialogs");
-    check(quest_function(0x09A60298u), "the quest HUD");
-    check(!quest_function(0x088596C8u), "the packet insert is no HUD function");
+    check(!quest_function(at(0x09A6C248u, 0x09A673D0u)), "the lobby callback draws shops and dialogs");
+    check(quest_function(at(0x09A60298u, 0x09A5B508u)), "the quest HUD");
+    check(!quest_function(at(0x088596C8u, 0x088595E8u)), "the packet insert is no HUD function");
 }
 
 // A stand-in for game code that files a packet: a function at `start` with
@@ -155,16 +162,16 @@ void test_draw_owner() {
 void test_names_over_characters() {
     psprecomp::Runtime runtime;
     auto &memory = runtime.memory();
-    constexpr std::uint32_t kLabels = 0x088392F4u;
+    constexpr std::uint32_t kLabels = at(0x088392F4u, 0x08839370u);
     watch_for_tests();
-    memory.store32(0x09A60298u, 0u);
+    memory.store32(at(0x09A60298u, 0x09A5B508u), 0u);
 
     psprecomp::AllegrexContext ctx = filed_from(memory, kLabels, 0x27BDFF60u, 0xAFBF002Cu, 0x09004000u, 16u);
     packet_filed(runtime, ctx);
     check(!name_at(0x09004010u, 0u).is_name, "outside a quest the labels are not names for the Names size");
 
-    memory.store32(0x09A60298u, 0x27BDFFA0u);
-    memory.store32(0x09A6029Cu, 0xAFBF001Cu);
+    memory.store32(at(0x09A60298u, 0x09A5B508u), 0x27BDFFA0u);
+    memory.store32(at(0x09A6029Cu, 0x09A5B50Cu), 0xAFBF001Cu);
     ctx = filed_from(memory, kLabels, 0x27BDFF60u, 0xAFBF002Cu, 0x09005000u, 16u);
     packet_filed(runtime, ctx);
     const NameDraw named = name_at(0x09005010u, 0u);
@@ -187,7 +194,7 @@ void test_overhead_name() {
     const HudFunction &quest = hud_functions()[2];
     constexpr std::uint32_t kContext = 0x09100000u;
     constexpr std::uint32_t kEntries = 0x09110000u;
-    memory.store32(0x08A632C8u, kContext);
+    memory.store32(at(0x08A632C8u, 0x08A5E278u), kContext);
     memory.store32(kContext + 320u, kEntries);
     const auto queued = [&](std::uint8_t length) { memory.store8(kContext + 308u, length); };
     const auto place = [&](std::uint32_t index, std::int16_t x, std::int16_t y) {
@@ -197,11 +204,11 @@ void test_overhead_name() {
     // A glyph of entry `index`, filed as the per-character draw files it.
     constexpr std::uint32_t kGlyphStack = 0x09F10000u;
     const auto glyph = [&](std::uint32_t index, std::uint32_t packet) {
-        memory.store32(kGlyphStack + 44u, 0x0889384Cu);
+        memory.store32(kGlyphStack + 44u, at(0x0889384Cu, 0x08893300u));
         memory.store32(kGlyphStack + 20u, kEntries + index * 12u);
         psprecomp::AllegrexContext ctx{};
         ctx.gpr[29] = kGlyphStack;
-        ctx.gpr[31] = 0x08893C2Cu;
+        ctx.gpr[31] = at(0x08893C2Cu, 0x088936E0u);
         ctx.gpr[5] = packet;
         ctx.gpr[6] = 16u;
         packet_filed(runtime, ctx);
@@ -247,12 +254,12 @@ void test_overhead_name() {
 void test_hall_names() {
     psprecomp::Runtime runtime;
     auto &memory = runtime.memory();
-    constexpr std::uint32_t kLabel = 0x08835470u;
-    constexpr std::uint32_t kOverHunter = 0x088351F0u;
-    constexpr std::uint32_t kLobby = 0x09A6C248u;
+    constexpr std::uint32_t kLabel = at(0x08835470u, 0x08835498u);
+    constexpr std::uint32_t kOverHunter = at(0x088351F0u, 0x08835218u);
+    constexpr std::uint32_t kLobby = at(0x09A6C248u, 0x09A673D0u);
     constexpr std::uint32_t kContext = 0x09100000u;
     constexpr std::uint32_t kEntries = 0x09110000u;
-    memory.store32(0x08A632C8u, kContext);
+    memory.store32(at(0x08A632C8u, 0x08A5E278u), kContext);
     memory.store32(kContext + 320u, kEntries);
     const auto queued = [&](std::uint8_t length) { memory.store8(kContext + 308u, length); };
     const auto place = [&](std::uint32_t index, std::int16_t x, std::int16_t y) {
@@ -261,11 +268,11 @@ void test_hall_names() {
     };
     constexpr std::uint32_t kGlyphStack = 0x09F10000u;
     const auto glyph = [&](std::uint32_t index, std::uint32_t packet) {
-        memory.store32(kGlyphStack + 44u, 0x0889384Cu);
+        memory.store32(kGlyphStack + 44u, at(0x0889384Cu, 0x08893300u));
         memory.store32(kGlyphStack + 20u, kEntries + index * 12u);
         psprecomp::AllegrexContext ctx{};
         ctx.gpr[29] = kGlyphStack;
-        ctx.gpr[31] = 0x08893C2Cu;
+        ctx.gpr[31] = at(0x08893C2Cu, 0x088936E0u);
         ctx.gpr[5] = packet;
         ctx.gpr[6] = 16u;
         packet_filed(runtime, ctx);

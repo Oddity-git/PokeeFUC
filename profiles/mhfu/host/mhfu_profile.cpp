@@ -3,6 +3,7 @@
 #include "hle/hle_common.hpp"
 #include "kernel/kernel.hpp"
 #include "overlays.hpp"
+#include "title.hpp"
 
 #include "psprecomp/common.hpp"
 
@@ -107,9 +108,20 @@ void install_profile(Runtime &runtime, const psprecomp::Elf32Image &elf, const P
     const std::uint32_t user_end =
         psprecomp::GuestMemory::kPhysicalBase + static_cast<std::uint32_t>(runtime.memory().size());
     kernel().install(runtime, module->gp, image_end, user_end);
+    // Freedom Unite's slots were read from its DATA.BIN. Another executable
+    // (FUComplete's Portable 2nd G) names its own in its *.ovl sections.
+    if constexpr (!kFreedomUniteExtras) {
+        std::vector<std::uint32_t> slots = overlay_slots_from_sections(elf, kLoadBase, user_end);
+        if (slots.empty()) {
+            std::cerr << "[overlay] the executable names no overlay sections; overlays run in the interpreter\n";
+        } else {
+            std::cout << "[overlay] " << slots.size() - 1u << " slot(s) from the executable's overlay sections\n";
+            set_overlay_slots(std::move(slots));
+        }
+    }
     // Freedom Unite copies its overlays into the load image, below the end of
     // the 32 MiB map. An image that stops before the first slot has none.
-    if (image_end > kOverlaySlots[0]) install_overlay_support(runtime);
+    if (image_end > overlay_slots().front()) install_overlay_support(runtime);
 
     HleRegistrar hle(runtime);
     register_threadman(hle);

@@ -25,6 +25,7 @@ namespace {
 
 namespace io_error {
 constexpr std::uint32_t kFileNotFound = 0x80010002u;
+constexpr std::uint32_t kFileExists = 0x80010011u;
 constexpr std::uint32_t kBadFileDescriptor = 0x80010009u;
 constexpr std::uint32_t kDeviceNotFound = 0x80010013u;
 constexpr std::uint32_t kInvalidArgument = 0x80010016u;
@@ -124,6 +125,24 @@ std::optional<std::pair<std::uint64_t, std::uint64_t>> parse_lbn_path(const std:
 
 std::filesystem::path host_path(const std::string &path) {
     return io().memory_stick / path;
+}
+
+// sceIoMkdir: one directory on the memory stick, whose parent must exist, as
+// on a PSP. A formatted stick always has PSP/SAVEDATA, so those two are made
+// when missing. FUComplete's loader makes its PSP/SAVEDATA/FUCDAT this way.
+std::uint32_t make_directory(const std::string &full_path) {
+    const SplitPath split = split_path(full_path);
+    if (split.device == Device::Disc) return io_error::kReadOnly;
+    if (split.device != Device::MemoryStick || split.path.empty()) return io_error::kDeviceNotFound;
+    const std::filesystem::path path = host_path(split.path);
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec)) return io_error::kFileExists;
+    const std::string parent = std::filesystem::path(split.path).parent_path().generic_string();
+    std::string lower = parent;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (lower == "psp" || lower == "psp/savedata") std::filesystem::create_directories(host_path(parent), ec);
+    if (!std::filesystem::is_directory(path.parent_path(), ec)) return io_error::kFileNotFound;
+    return std::filesystem::create_directory(path, ec) && !ec ? 0u : io_error::kFileNotFound;
 }
 
 bool trace_io() {
@@ -426,6 +445,13 @@ void register_io(
         std::error_code ec;
         std::filesystem::rename(host_path(from.path), host_path(to.path), ec);
         kernel().finish(ctx, ec ? io_error::kFileNotFound : 0u);
+    });
+    hle.add("IoFileMgrForUser", "sceIoMkdir", [](Runtime &rt, AllegrexContext &ctx) {
+        const std::string path = read_cstring(rt.memory(), arg(ctx, 0), 256u);
+        const std::uint32_t result = make_directory(path);
+        if (trace_io() || (result != 0u && result != io_error::kFileExists))
+            std::cerr << "[io] mkdir " << path << " -> " << psprecomp::hex32(result) << "\n";
+        kernel().finish(ctx, result);
     });
     hle.add("IoFileMgrForUser", "sceIoDevctl", [](Runtime &rt, AllegrexContext &ctx) {
         const std::string device = read_cstring(rt.memory(), arg(ctx, 0), 64u);

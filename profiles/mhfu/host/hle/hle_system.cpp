@@ -2,11 +2,13 @@
 // InterruptManager, scePower, sceRtc, sceImpose, sceOpenPSID and the parameter
 // part of sceUtility. sceWlanDrv is with the ad hoc calls in hle_adhoc.cpp.
 #include "hle_common.hpp"
+#include "fuc_code_patches.hpp"
 #include "mods/mhfu_mods.hpp"
 
 #include "overlays.hpp"
 
 #include "psprecomp/common.hpp"
+#include "title.hpp"
 
 #include <array>
 #include <chrono>
@@ -42,6 +44,8 @@ void register_utils(HleRegistrar &hle) {
     const auto flush_icache = [](Runtime &rt, AllegrexContext &ctx) {
         // An overlay has finished loading: patches that write outside it go in first.
         mods::code_loaded(rt);
+        // FUComplete's loader has written the executable's code.
+        if constexpr (kTitle == Title::FUComplete) fuc::code_flushed(rt);
         forget_unmatched_overlays();
         revalidate_overlays(rt);
         kernel().finish(ctx, 0u);

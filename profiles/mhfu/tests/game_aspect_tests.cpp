@@ -1,16 +1,21 @@
 // No game code or game data is needed: the words the aspect ratio checks are
 // written into guest memory as stand-ins, with a camera beside them.
 #include "camera/game_aspect.hpp"
+#include "title.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <bit>
+#include <cstdlib>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 namespace {
 using namespace mhfu::camera;
 
-constexpr std::uint32_t kCameraPointer = 0x089CBD04u;
-constexpr std::uint32_t kCullFactor = 0x08815EC4u;
+constexpr bool kFreedomUnite = mhfu::kTitle == mhfu::Title::FreedomUnite;
+constexpr std::uint32_t kCameraPointer = kFreedomUnite ? 0x089CBD04u : 0x089C6CB4u;
+constexpr std::uint32_t kCullFactor = kFreedomUnite ? 0x08815EC4u : 0x08816C84u;
 constexpr std::uint32_t kCullFactorWord = 0x3C023FC0u; // lui v0,0x3fc0: the baked 1.5
 constexpr std::uint32_t kCamera = 0x08900000u;
 constexpr std::uint32_t kGameAspectBits = 0x3FE1E1E2u;
@@ -47,6 +52,29 @@ struct Fixture {
     }
     [[nodiscard]] const psprecomp::GuestMemory &memory() const { return runtime.memory(); }
 };
+
+// MHFU_TRACE_FOV=1 prints the camera's field of view when it changes, and only
+// then. It is read once, at the first frame, so this runs first.
+void test_field_of_view_trace() {
+    setenv("MHFU_TRACE_FOV", "1", 1);
+    Fixture f;
+    check(prepare_game_aspect(f.runtime), "the matching game code is accepted");
+    std::ostringstream out;
+    std::streambuf *const saved = std::cout.rdbuf(out.rdbuf());
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string first = out.str();
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string unchanged = out.str();
+    write_float(f.runtime.memory(), kCamera + 0xCu, 1.2f);
+    game_aspect_frame(f.runtime, kGameAspect);
+    const std::string changed = out.str();
+    std::cout.rdbuf(saved);
+    unsetenv("MHFU_TRACE_FOV");
+    check(first.find("[fov] camera 0x08900000 fov 0.872222") != std::string::npos,
+        "the trace names the camera and its field of view");
+    check(unchanged == first, "an unchanged field of view prints nothing");
+    check(changed.find("fov 1.2") != std::string::npos, "a changed one prints again");
+}
 
 void test_own_shape_writes_nothing() {
     Fixture f;
@@ -108,6 +136,12 @@ void test_other_code_is_left_alone() {
 } // namespace
 
 int main() {
+    // The aspect patch is Freedom Unite's; another title's build leaves it off.
+    if constexpr (!mhfu::kGameAspect) {
+        std::cout << "skipped: not available for this build's title\n";
+        return 0;
+    }
+    test_field_of_view_trace();
     test_own_shape_writes_nothing();
     test_wide_and_back();
     test_camera_set_up_later();

@@ -42,11 +42,18 @@ void ram_bounds() {
 }
 
 void slots_match_the_profile() {
+    check(layout::kRamEnd == mhfu::kOverlaySlots[4], "user RAM ends where the slots end");
+    // FUComplete's slots are read from its executable's *.ovl sections when it
+    // starts (set_overlay_slots); kOverlaySlots holds Freedom Unite's.
+    if constexpr (mhfu::kTitle == mhfu::Title::FUComplete) {
+        check(layout::kTaskSlot == 0x09A5A580u && layout::kSubSlot == 0x09C14280u, "FUComplete's task and sub slots");
+        check(layout::kEmOverlay == 0x09D15100u && layout::kEmOverlayEnd == 0x09D5DF80u, "and its em and stage slots");
+        return;
+    }
     check(layout::kTaskSlot == mhfu::kOverlaySlots[0], "the task slot is the profile's");
     check(layout::kSubSlot == mhfu::kOverlaySlots[1], "the sub slot is the profile's");
     check(layout::kEmOverlay == mhfu::kOverlaySlots[2], "the em slot is the profile's");
     check(layout::kEmOverlayEnd == mhfu::kOverlaySlots[3], "the em slot ends where the stage slot starts");
-    check(layout::kRamEnd == mhfu::kOverlaySlots[4], "user RAM ends where the slots end");
 }
 
 void overlays() {

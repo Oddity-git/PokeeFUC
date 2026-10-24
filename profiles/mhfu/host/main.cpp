@@ -1,4 +1,5 @@
 #include "mhfu_profile.hpp"
+#include "fuc_code_patches.hpp"
 
 #include "app_paths.hpp"
 #include "platform/utf8_path.hpp"
@@ -467,7 +468,7 @@ int main(int argc, char **argv) {
 
         const std::optional<GameFiles> files = locate_game(options);
         if (!files) return 1;
-        const std::filesystem::path &executable = files->executable;
+        std::filesystem::path executable = files->executable;
         mhfu::ProfilePaths paths;
         paths.disc_image = files->disc_image;
         paths.memory_stick = files->memory_stick;
@@ -475,8 +476,26 @@ int main(int argc, char **argv) {
             throw psprecomp::Error(
                 "Missing " + mhfu::path_to_utf8(executable) + " (run profiles/mhfu/scripts/prepare_game.sh)");
 
-        const std::string sha256 = psprecomp::sha256_file(executable);
+        std::string sha256 = psprecomp::sha256_file(executable);
+        // FUComplete's loader changes the game's code when it starts. Once the
+        // corpus is generated from the executable with those changes
+        // (fuc_code_patches.hpp), the game starts from that file.
+        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete) {
+            const std::filesystem::path patched = mhfu::fuc::patched_path(executable);
+            std::error_code ec;
+            if (sha256 != mhfu::kCorpusExecutableSha256 && std::filesystem::is_regular_file(patched, ec)) {
+                if (std::string patched_sha256 = psprecomp::sha256_file(patched);
+                    patched_sha256 == mhfu::kCorpusExecutableSha256) {
+                    executable = patched;
+                    sha256 = std::move(patched_sha256);
+                }
+            }
+        }
         const mhfu::install::SupportedRelease *release = mhfu::install::find_release_by_executable_hash(sha256);
+        // A plain executable pins no hash (game_identity.hpp); the installer
+        // checked the disc it came from.
+        if (release == nullptr && mhfu::install::kBuildRelease.plain_executable)
+            release = &mhfu::install::kBuildRelease;
         if (release == nullptr) std::cerr << "warning: unsupported executable hash " << sha256 << "\n";
         const std::uint32_t guest_ram = release != nullptr ? release->guest_ram_bytes : mhfu::kGuestRamBytes;
 
@@ -484,7 +503,7 @@ int main(int argc, char **argv) {
         if (elf.required_ram_size(mhfu::kLoadBase) != guest_ram)
             throw psprecomp::Error(
                 release != nullptr ? std::string(release->title) + " does not match its guest RAM layout"
-                                   : "Executable is not USA Freedom Unite");
+                                   : std::string("Executable is not ") + mhfu::install::kGameTitle);
 
         psprecomp::Runtime runtime(guest_ram);
         for (const EmbeddedNid &entry : kEmbeddedNids) runtime.nids().add(entry.library, entry.nid, entry.name);
@@ -493,18 +512,23 @@ int main(int argc, char **argv) {
         // other corpus would run that game's code at overlapping addresses.
         const bool corpus_matches = mhfu::kCorpusExecutableSha256[0] != '\0' &&
             sha256 == mhfu::kCorpusExecutableSha256;
+        if constexpr (mhfu::kTitle == mhfu::Title::FUComplete)
+            mhfu::fuc::watch(elf, executable, mhfu::kLoadBase, corpus_matches);
         if (corpus_matches) psprecomp::register_generated_functions(runtime);
         const std::size_t generated_functions = runtime.function_count();
         mhfu::install_profile(runtime, elf, paths);
-        // The projection was read from this executable. The signature inside
-        // prepare_game_aspect refuses it if those instructions differ.
-        if (sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256)
-            (void)mhfu::camera::prepare_game_aspect(runtime);
+        // The projection was read from this executable, and from FUComplete's
+        // at its own addresses. The signature inside prepare_game_aspect
+        // refuses it if those instructions differ.
+        const bool known_executable =
+            mhfu::kFreedomUniteExtras ? sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256 : corpus_matches;
+        if (known_executable) (void)mhfu::camera::prepare_game_aspect(runtime);
 #if defined(MHFU_CAMERA_HELPER_UNIT)
         // CMake names the generated unit that holds the camera update, so a
         // new partition of the code cannot hand the camera the wrong one.
-        if (sha256 == mhfu::install::kFreedomUniteUsa.executable_sha256)
-            (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
+        // FUComplete's executable is not pinned: the corpus it was generated
+        // from, and the signature prepare_game_camera checks, stand in.
+        if (known_executable) (void)mhfu::camera::prepare_game_camera(runtime, &psprecomp::MHFU_CAMERA_HELPER_UNIT);
 #endif
 
         std::cout << "Pokee PSP bootstrap\n"

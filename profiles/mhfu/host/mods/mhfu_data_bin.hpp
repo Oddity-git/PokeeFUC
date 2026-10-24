@@ -53,9 +53,10 @@ struct Directory {
     // The entry that holds archive block `block`, or -1 for the directory.
     [[nodiscard]] std::int64_t entry_at(std::uint32_t block) const;
 
-    // Parses the archive's first `directory_blocks` blocks as stored.
+    // Parses the archive's first `directory_blocks` blocks as stored. A plain
+    // archive, as FUComplete stores DATA.BIN, is read without the cipher.
     [[nodiscard]] static std::optional<Directory> parse(
-        std::span<const std::uint8_t> encrypted, std::uint64_t archive_bytes);
+        std::span<const std::uint8_t> encrypted, std::uint64_t archive_bytes, bool plain = false);
     // The directory as stored: encrypted tables followed by the trailer.
     [[nodiscard]] std::vector<std::uint8_t> encode() const;
 };
@@ -85,7 +86,9 @@ class ArchiveView {
 public:
     using RawRead = std::function<std::size_t(std::uint64_t offset, std::span<std::uint8_t> out)>;
 
-    ArchiveView(const Directory &disc, RawRead raw) : disc_(&disc), raw_(std::move(raw)) {}
+    // `plain`: the archive's entries are stored without the cipher.
+    ArchiveView(const Directory &disc, RawRead raw, bool plain = false)
+        : disc_(&disc), raw_(std::move(raw)), plain_(plain) {}
 
     void set(std::shared_ptr<const Layout> layout, FileOverlay *overlay);
     [[nodiscard]] const Layout *layout() const noexcept { return layout_.get(); }
@@ -109,6 +112,7 @@ private:
 
     const Directory *disc_;
     RawRead raw_;
+    bool plain_{};
     std::shared_ptr<const Layout> layout_;
     FileOverlay *overlay_{};
     std::vector<std::uint8_t> directory_bytes_;

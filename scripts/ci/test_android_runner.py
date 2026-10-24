@@ -81,7 +81,9 @@ class AndroidRunnerTests(unittest.TestCase):
         self.assertIn("'arg with spaces'", commands[0])
         self.assertIn("'quote'\"'\"'s'", commands[0])
         self.assertEqual(calls[-1], ['shell', 'rm -rf /data/local/tmp/pokee-unit-tests'])
-        self.assertEqual(len([call for call in calls if call[0] == 'push']), 5)
+        self.assertEqual(len([call for call in calls if call[0] == 'push']), 6)
+        self.assertTrue(any(call[0] == 'push' and call[-2].endswith('/hud_scale_fixtures') for call in calls))
+        self.assertIn('MHFU_HUD_SCALE_FIXTURE_DIR=/data/local/tmp/pokee-unit-tests/hud_scale_fixtures', commands[0])
         self.assertIn('PSPRECOMP_TEST_NIDS_CSV=/data/local/tmp/pokee-unit-tests/nids.csv', commands[0])
         self.assertTrue(any(call[0] == 'push' and call[-1].endswith('/nids.csv') for call in calls))
 

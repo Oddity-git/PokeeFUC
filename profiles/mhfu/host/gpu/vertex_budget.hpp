@@ -14,8 +14,11 @@ inline constexpr std::uint64_t kVertexRegionBase = 128ull << 20u;
 inline constexpr std::uint64_t kVertexRegions = 3ull;
 inline constexpr std::uint64_t kVertexScratch = 6ull << 20u;
 // Host-visible heap required before the larger budget is even attempted.
-// Below this the process stays on the smaller one, including phones.
-inline constexpr std::uint64_t kVertexFullHeap = 8ull << 30u;
+// Below this the process stays on the smaller one. 7 GiB lets a phone with an
+// 8 GB package (about 7.2 GiB usable) keep the larger hold and per-frame
+// region; 6 GB phones stay on the smaller one. The larger budget is about
+// 1.2 GiB, and a refused allocation still falls back.
+inline constexpr std::uint64_t kVertexFullHeap = 7ull << 30u;
 
 [[nodiscard]] inline constexpr std::uint64_t vertex_storage_bytes(std::uint64_t region) {
     return kVertexRegions * region + 2ull * kVertexScratch;

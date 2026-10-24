@@ -7,6 +7,7 @@
 #include "input/bindings.hpp"
 #include "platform/utf8_path.hpp"
 #include "settings/settings.hpp"
+#include "title.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <algorithm>
@@ -18,6 +19,7 @@
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <utility>
 
 namespace mhfu::camera {
@@ -57,8 +59,8 @@ namespace {
 // at +4, distance at +8) before collision. A non-negative byte at +0x91 takes
 // the behind-the-hunter placement instead. These facts come from this
 // project's own reading of the executable; each one the driver relies on is
-// listed in kSignature.
-constexpr std::uint32_t kCameraUpdate = 0x08886E50u;
+// listed in kSignature. kCameraUpdate (game_camera.hpp) is its address in
+// this build's executable.
 constexpr std::uint32_t kCameraFromParent = 0xA0u;
 constexpr float kRadians = 3.14159265358979323846f / 180.0f;
 constexpr float kAngleUnits = 65536.0f / 360.0f;
@@ -119,8 +121,16 @@ constexpr std::uint32_t kAim = 0x91u;
 // at 0x089CC558, plus 0x6ADE0. The gate can stay set for many seconds, after
 // a bowgun's aim among others, and leaving those updates to the game left
 // the stick doing nothing.
-constexpr std::uint32_t kGameOptions = 0x089CC558u;
+constexpr std::uint32_t kGameOptions = game::layout::kGameSysPointer;
 constexpr std::uint32_t kPlacementOff = 0x6ADE0u;
+// The same byte also has the follow update pick again, every update, the
+// vertical preset whose height is nearest the view it has (0x088876A8 in
+// Freedom Unite, 0x088873AC in FUComplete, where FUComplete's configuration
+// sets it) and point +0x70 at it. That undid the height and distance the
+// driver had bent the preset to, so the tilt eased back as soon as it was
+// made. While the driver owns the pitch, the byte reads as 0 for the update
+// and is put back afterwards.
+constexpr std::uint32_t kVerticalSnapOption = kPlacementOff;
 // The followed hunter is not an argument of the camera update. 0x08886E80
 // loads the camera object and 0x08886EF8 loads the hunter from it
 // (game::layout::followed_hunter). The same object is s3 where the aim camera
@@ -174,17 +184,27 @@ constexpr int kStickDeadzone = 40;
 constexpr int kStickFull = 127;
 // The aim functions, in game_task. Each prologue is checked before its wrapper
 // is installed, because these addresses belong to whichever overlay is loaded.
-// 0x09AA4DD0 aims in action 1001. 0x09AAA158 is the same code for an action
-// its caller passes in a1 (8 from 0x09AA3D4C, 0x09AA3D5C and 0x09AA3D70). It
-// is not wrapped: once it had run, every hunter in that action counted as
-// aiming, which took the right stick off the camera during sword swings.
-constexpr std::uint32_t kAimFunction = 0x09AA4DD0u;
-constexpr std::array<CodeWord, 4> kAimSignature{{
+// 0x09AA4DD0 aims in action 1001 (kAimFunction). 0x09AAA158 is the same code
+// for an action its caller passes in a1 (8 from 0x09AA3D4C, 0x09AA3D5C and
+// 0x09AA3D70). It is not wrapped: once it had run, every hunter in that action
+// counted as aiming, which took the right stick off the camera during sword
+// swings.
+constexpr std::array<CodeWord, 4> kAimSignatureFreedomUnite{{
     {0x09AA4DD0u, 0x27BDFFE0u, "addiu sp,sp,-32"},
     {0x09AA4DD4u, 0xAFBF001Cu, "sw ra,28(sp)"},
     {0x09AA4DD8u, 0xAFB30018u, "sw s3,24(sp)"},
     {0x09AA4DDCu, 0xAFB20014u, "sw s2,20(sp)"},
 }};
+// FUComplete's game_task loads at 0x09A5A580, 0x4D80 below Freedom Unite's,
+// and the aim function sits a further 0xB0 lower: the same prologue.
+constexpr std::array<CodeWord, 4> kAimSignatureFUComplete{{
+    {0x09A9FFA0u, 0x27BDFFE0u, "addiu sp,sp,-32"},
+    {0x09A9FFA4u, 0xAFBF001Cu, "sw ra,28(sp)"},
+    {0x09A9FFA8u, 0xAFB30018u, "sw s3,24(sp)"},
+    {0x09A9FFACu, 0xAFB20014u, "sw s2,20(sp)"},
+}};
+constexpr const std::array<CodeWord, 4> &kAimSignature =
+    kTitle == Title::FreedomUnite ? kAimSignatureFreedomUnite : kAimSignatureFUComplete;
 // The bow aims in its own actions, 1400 and up (traced with MHFU_TRACE_AIM:
 // 1401 while the arrow's line is up, 1405 and 1408 as it draws). The bow's
 // handler 0x09BB5440 calls 0x09BB6D98 from 0x09BB57D4, and that call is a
@@ -201,14 +221,12 @@ constexpr std::array<CodeWord, 4> kAimSignature{{
 // MHFU_TRACE_WEAPON dump). 0x09A8AEB0 switches on it below 11 through the
 // table at 0x09C0C830; the case at 0x09A8AF98 is `jal 0x09BB4F18`, which
 // leads to the bow's handler 0x09BB5440. There are fewer cases than weapons,
-// so the bow's number is read from that table rather than assumed.
+// so the bow's number is read from that table rather than assumed. The table,
+// the case and its call are kWeaponTable, kBowCase and kBowCaseCall.
 constexpr std::uint16_t kBowActions = 1400u;
 constexpr std::uint16_t kBowActionsEnd = 1500u;
 constexpr std::uint32_t kWeaponType = 488u;
-constexpr std::uint32_t kWeaponTable = 0x09C0C830u;
 constexpr std::uint32_t kWeaponTypes = 11u;
-constexpr std::uint32_t kBowCase = 0x09A8AF98u;
-constexpr std::uint32_t kBowCaseCall = 0x0E6ED3C6u; // jal 0x09BB4F18
 constexpr std::uint32_t kBowAimReady = 1040u;
 constexpr std::uint32_t kBowAimBlocked = 4380u;
 constexpr std::uint32_t kBowAimBit = 0x8u;
@@ -239,7 +257,7 @@ constexpr std::uint16_t kTurnBits = 0x00A0u;
 constexpr std::uint16_t kVerticalBits = 0x0050u;
 // The camera update copies its two button halfwords from the object at
 // 0x089CBD04: +0xA70 onto camera +0x84 (0x0888D04C) and +0xA72 onto +0x86.
-constexpr std::uint32_t kCameraObject = 0x089CBD04u;
+constexpr std::uint32_t kCameraObject = kTitle == Title::FreedomUnite ? 0x089CBD04u : 0x089C6CB4u;
 constexpr std::uint32_t kObjectTurnButtons = 0xA70u;
 constexpr std::uint32_t kObjectVerticalButtons = 0xA72u;
 
@@ -267,9 +285,9 @@ constexpr float kMouseStockTurn = 0.5f;
 // stopped it while the view turned, then snapped once the wanted eye came
 // clear. While the analog camera drives, the wrapper picks the pull-in from
 // any side. MHFU_CAMERA_WALL_SLIDE=1 leaves the choice to the game.
-constexpr std::uint32_t kPullInChoice = 0x0888FCE4u;
+constexpr std::uint32_t kPullInChoice = kTitle == Title::FreedomUnite ? 0x0888FCE4u : 0x0888F9E8u;
 
-constexpr std::array<CodeWord, 46> kSignature{{
+constexpr std::array<CodeWord, 47> kSignatureFreedomUnite{{
     {0x08886E50u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
     {0x08886EC8u, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
     {0x08887470u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
@@ -318,13 +336,74 @@ constexpr std::array<CodeWord, 46> kSignature{{
     {0x0888FCECu, 0x9083012Du, "lbu v1,301(a0): it pulls in during a snap"},
     {0x088874E4u, 0x0E223925u, "jal 0x0888E494: the recenter check"},
     {0x0888E494u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
+    {0x088876A8u, 0x8042ADE0u, "lb v0,-0x5220(v0): the same byte, before the vertical preset is picked again"},
 }};
+// The same code in FUComplete's Portable 2nd G executable. The camera update
+// and its helpers sit 0x2FC below Freedom Unite's, the aim pitch's clamp
+// 0x2948 above, and every word is the same apart from the hunter list's
+// address (0x089C6CB4) and the calls, which move with their targets.
+constexpr std::array<CodeWord, 47> kSignatureFUComplete{{
+    {0x08886B54u, 0x27BDFE30u, "addiu sp,sp,-464: the camera update"},
+    {0x08886BCCu, 0x26B400A0u, "addiu s4,s5,160: the camera is the parent object plus 0xA0"},
+    {0x08887174u, 0x96850084u, "lhu a1,0x84(s4): the turn buttons"},
+    {0x08887178u, 0x30A200A0u, "andi v0,a1,0xa0: left and right gate the turn"},
+    {0x088871A0u, 0x2403FB82u, "addiu v1,zero,-1150: one sign of the yaw step"},
+    {0x088871A4u, 0x2403047Eu, "addiu v1,zero,1150: and the other"},
+    {0x088871B4u, 0x86820080u, "lh v0,0x80(s4): the target yaw"},
+    {0x088871BCu, 0xA6820080u, "sh v0,0x80(s4): written back by that step"},
+    {0x08887318u, 0x86820080u, "lh v0,0x80(s4): the filter reads the target"},
+    {0x0888731Cu, 0x86830082u, "lh v1,0x82(s4): and the filtered yaw"},
+    {0x08887328u, 0x00021083u, "sra v0,v0,2: a quarter of the difference"},
+    {0x08887334u, 0xA6820082u, "sh v0,0x82(s4): the filtered yaw"},
+    {0x088871F8u, 0x8E6401F4u, "lw a0,500(s3): L's recenter reads the hunter's facing"},
+    {0x08887210u, 0xA283008Eu, "sb v1,0x8E(s4): and sets the snap byte"},
+    {0x08887354u, 0x2C621000u, "sltiu v0,v1,4096: within 22.5 degrees of the target"},
+    {0x0888735Cu, 0xA280008Eu, "sb zero,0x8E(s4): the snap is dropped at once"},
+    {0x08887234u, 0x82860091u, "lb a2,0x91(s4): the behind-the-hunter gate"},
+    {0x08887238u, 0x04C00029u, "bltz a2: a negative gate skips that placement"},
+    {0x08887518u, 0xC4400004u, "lwc1 f0,4(v0): the preset's eye-offset height"},
+    {0x08887520u, 0xC4400008u, "lwc1 f0,8(v0): and its distance"},
+    {0x08886B84u, 0x3C03089Cu, "lui v1,0x89c: the base of the hunter list"},
+    {0x08886B88u, 0x8C706CB4u, "lw s0,27828(v1): the list at 0x089C6CB4"},
+    {0x08886BFCu, 0x8E130A84u, "lw s3,2692(s0): the hunter the camera follows"},
+    {0x08887260u, 0x8E6301F4u, "lw v1,500(s3): the hunter's facing"},
+    {0x088D8838u, 0x8083067Eu, "lb v1,1662(a0): the aim pitch"},
+    {0x088D8840u, 0xA083067Eu, "sb v1,1662(a0): the aim pitch, written back"},
+    {0x088D8848u, 0x28610065u, "slti at,v1,101: the aim pitch stops at 100"},
+    {0x0888814Cu, 0x8265067Eu, "lb a1,1662(s3): the aim camera reads that pitch"},
+    {0x08888164u, 0x00052840u, "sll a1,a1,1: one pitch unit becomes 34 angle units"},
+    {0x08888168u, 0x24A5F500u, "addiu a1,a1,-2816: the aim camera's pitch angle"},
+    {0x08887A10u, 0xC6820004u, "lwc1 f2,4(s4): the eye height the ease reads"},
+    {0x08887A14u, 0x3C023E00u, "lui v0,0x3e00: one eighth, the eye-height ease"},
+    {0x08887A28u, 0xE6800004u, "swc1 f0,4(s4): the eased eye height"},
+    // The camera update copies this halfword onto camera +0x86 before it tests
+    // L. Clearing the camera's copy is undone by that copy.
+    {0x08886C18u, 0x0E223342u, "jal 0x0888CD08: copies the button halfwords onto the camera"},
+    {0x0888CD58u, 0x96230A72u, "lhu v1,0xA72(s1): the recenter bit, on the hunter list"},
+    {0x0888CD60u, 0xA6030086u, "sh v1,0x86(s0): written to the camera in the branch delay"},
+    {0x088871E8u, 0x0E223866u, "jal 0x0888E198: the recenter check"},
+    {0x0888E198u, 0x27BDFFF0u, "addiu sp,sp,-16: the recenter check"},
+    {0x0888CD50u, 0x96230A70u, "lhu v1,0xA70(s1): the turn buttons, on the hunter list"},
+    {0x0888CD54u, 0xA6030084u, "sh v1,0x84(s0): written to the camera"},
+    {0x08887244u, 0x8C447508u, "lw a0,29960(v0): the options at 0x089C7508"},
+    {0x0888724Cu, 0x3C020007u, "lui v0,0x7: plus 0x70000"},
+    {0x08887254u, 0x8042ADE0u, "lb v0,-21024(v0): the byte that turns the placement off at 1"},
+    {0x088879D0u, 0x0E223E7Au, "jal 0x0888F9E8: whether a blocked eye is pulled in along the view line"},
+    {0x0888F9E8u, 0x3C02089Cu, "lui v0,0x89c: that choice"},
+    {0x0888F9F0u, 0x9083012Du, "lbu v1,301(a0): it pulls in during a snap"},
+    {0x088873ACu, 0x8042ADE0u, "lb v0,-0x5220(v0): the same byte, before the vertical preset is picked again"},
+}};
+constexpr const std::array<CodeWord, 47> &kSignature =
+    kTitle == Title::FreedomUnite ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
     bool prepared{};
     bool hooked{};
     RotationFunction original{};
     RotationFunction pull_in_original{};
+    // The projection update's wrapper, when a field of view scale needs it.
+    bool projection_hooked{};
+    RotationFunction projection_original{};
     std::uint64_t frame{};
     std::uint64_t last_update{};
     std::uint32_t address{};
@@ -445,7 +524,7 @@ bool driving_allowed() {
 }
 
 bool lock_on_allowed() {
-    return settings::current().lock_on;
+    return kLockOn && settings::current().lock_on;
 }
 
 float load_float(const psprecomp::GuestMemory &memory, std::uint32_t address) {
@@ -1463,6 +1542,8 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
     std::optional<DpadMute> dpad;
     std::uint8_t saved_gate = 0u;
     bool restore_gate = false;
+    std::uint32_t snap_option = 0u;
+    std::uint8_t saved_snap_option = 0u;
     bool follow = false;
     bool fresh_wall = false;
     if (hunter_aiming(memory, hunter)) {
@@ -1484,6 +1565,24 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
             memory.store8(address + kAim, 0xFFu);
             restore_gate = true;
         }
+        // The pitch the preset was bent to holds only if the vertical preset
+        // is not picked again in this update. The byte also turned the
+        // behind-the-hunter placement off, so while it reads as 0 the gate is
+        // held negative in its place.
+        if (state.preset_patched) {
+            const std::uint32_t options = memory.load32(kGameOptions);
+            const std::uint32_t option = options + kVerticalSnapOption;
+            if (options != 0u && memory.raw_pointer(option, 1u) != nullptr && memory.load8(option) != 0u) {
+                snap_option = option;
+                saved_snap_option = memory.load8(option);
+                memory.store8(option, 0u);
+                if (!restore_gate && static_cast<std::int8_t>(memory.load8(address + kAim)) >= 0) {
+                    saved_gate = memory.load8(address + kAim);
+                    memory.store8(address + kAim, 0xFFu);
+                    restore_gate = true;
+                }
+            }
+        }
         // A shared trigger is not "focus held": L's recenter is left where the
         // game put it. Holding LT must not put that recenter back.
         const bool focus_held = focus_bind_held_now && !lock_on_trigger_initiates_camera();
@@ -1497,6 +1596,7 @@ void camera_rotation(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ct
     state.original(runtime, ctx);
     if (dpad) unmute_dpad(memory, *dpad);
     if (restore_gate) memory.store8(address + kAim, saved_gate);
+    if (snap_option != 0u) memory.store8(snap_option, saved_snap_option);
     if (watch) check_recenter(memory, *watch);
     restore_preset(memory);
     if (follow) ease_wall(memory, address, fresh_wall);
@@ -1540,6 +1640,26 @@ std::uint32_t game_camera_aim_dpad(int x, int y) {
     return dpad;
 }
 
+bool scale_projection_fov(psprecomp::GuestMemory &memory, std::uint32_t camera, float scale) {
+    if (!(scale > 0.0f) || std::abs(scale - 1.0f) < 0.001f) return false;
+    const std::uint32_t address = camera + 0x0Cu;
+    if (memory.raw_pointer(address, 4u) == nullptr) return false;
+    const float fov = std::bit_cast<float>(memory.load32(address));
+    if (!std::isfinite(fov) || fov < 0.05f || fov > 3.0f) return false;
+    memory.store32(address, std::bit_cast<std::uint32_t>(fov * scale));
+    return true;
+}
+
+// The projection update runs after the game has written the camera's field of
+// view for this frame and before the projection is built from it. The game
+// writes its own value again next frame, so scaling it here applies once each
+// time and does not grow.
+void projection_update(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    if (state.projection_original == nullptr) return;
+    (void)scale_projection_fov(runtime.memory(), ctx.gpr[4], settings::current().fov_scale);
+    state.projection_original(runtime, ctx);
+}
+
 bool prepare_game_camera(psprecomp::Runtime &runtime, RotationFunction original) {
     state = State{};
     reset();
@@ -1571,7 +1691,10 @@ void game_camera_frame(psprecomp::Runtime &runtime) {
     // A lock that is on, or a tap waiting, needs the hook as well; a player
     // who never taps pays nothing for lock-on either.
     if (!lock_on_allowed()) lock_on_release("");
-    lock_on_frame(runtime.memory());
+    // Another title's monsters are not where lock-on reads them.
+    if constexpr (kLockOn) lock_on_frame(runtime.memory());
+    const float fov_scale = settings::current().fov_scale;
+    const bool fov_wanted = std::abs(fov_scale - 1.0f) >= 0.001f;
     if (state.prepared && !state.hooked && (option_on() || pose_wanted || (lock_on_allowed() && lock_on_wanted()))) {
         // Only ever at the game's flip, from an import: no generated frame is
         // live on the host stack, so the dispatch tables can change here.
@@ -1585,6 +1708,21 @@ void game_camera_frame(psprecomp::Runtime &runtime) {
             runtime.register_function(kPullInChoice, &pull_in_choice, "mhfu_camera_pull_in");
         }
         state.hooked = true;
+    }
+    // A field of view scale needs the projection update, which runs after the
+    // game writes the camera's field of view and before it builds the view.
+    if (state.prepared && !state.projection_hooked && fov_wanted && runtime.has_function(kProjectionUpdate)) {
+        const psprecomp::GuestMemory &memory = runtime.memory();
+        // lwc1 f1,0x10(a0); lwc1 f0,0xc(a0): the values it compares.
+        if (memory.load32(kProjectionUpdate + 0x0Cu) == 0xC4810010u &&
+            memory.load32(kProjectionUpdate + 0x10u) == 0xC480000Cu) {
+            state.projection_original = runtime.function_at(kProjectionUpdate);
+            runtime.register_function(kProjectionUpdate, &projection_update, "mhfu_projection_fov");
+            state.projection_hooked = true;
+            if (std::getenv("MHFU_TRACE_FOV") != nullptr)
+                std::cout << "[fov] projection update wrapped at 0x" << std::hex << kProjectionUpdate << std::dec
+                          << std::endl;
+        }
     }
     install_aim_hook(runtime);
     // The aim camera replaces the follow camera, so this update can stop

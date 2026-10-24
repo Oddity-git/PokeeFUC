@@ -3,19 +3,27 @@
 #include "game/damage_numbers.hpp"
 #include "game/guest_layout.hpp"
 #include "settings/settings.hpp"
+#include "title.hpp"
 
 #include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <utility>
 
 namespace mhfu::game {
 namespace {
 
+// FUComplete's Portable 2nd G has each of these functions at its own address:
+// game_task, lobby_task and game_sub load lower and their code moves with
+// them, the executable's by a few words. Each Freedom Unite table below has
+// a FUComplete one of the same length, and the build's title picks one.
+constexpr bool kFreedomUniteCode = kTitle == Title::FreedomUnite;
+
 // game_task 0x09A6F490 and the two calls it makes to find the list.
-constexpr GatherWord kWords[] = {
+constexpr GatherWord kWordsFreedomUnite[] = {
     {0x09A6F490u, 0x27BDFFF0u}, // addiu sp,sp,-16: the search
     {0x09A6F4ACu, 0x3C0208A6u}, // lui v0,0x08A6: the gather object
     {0x09A6F4B0u, 0x8C442D9Cu}, // lw a0,11676(v0): the pointer at 0x08A62D9C
@@ -31,13 +39,33 @@ constexpr GatherWord kWords[] = {
     {0x08886E80u, 0x3C03089Du}, // lui v1,0x89d: the base of the hunter list
     {0x08886EF8u, 0x8E130A84u}, // lw s3,2692(s0): the hunter the camera follows
 };
+// FUComplete: game_task 0x09A6A690, the area lookup at 0x08869568 and the
+// stage-id table's load at 0x088C9B74.
+constexpr GatherWord kWordsFUComplete[] = {
+    {0x09A6A690u, 0x27BDFFF0u}, // addiu sp,sp,-16: the search
+    {0x09A6A6ACu, 0x3C0208A6u}, // lui v0,0x08A6: the gather object
+    {0x09A6A6B0u, 0x8C44DD4Cu}, // lw a0,-8884(v0): the pointer at 0x08A5DD4C
+    {0x09A6A6B4u, 0x9645029Au}, // lhu a1,666(s2): the hunter's stage
+    {0x09A6A6D0u, 0x3C03BF80u}, // lui v1,0xBF80: the list ends where x is -1
+    {0x09A6A6E8u, 0x3C0342C8u}, // lui v1,0x42C8: 100 above the node
+    {0x09A6A6F0u, 0x3C034348u}, // lui v1,0x4348: 200 below the node
+    {0x08869568u, 0x27BDFFF0u}, // addiu sp,sp,-16: the area lookup
+    {0x08869578u, 0x8C900060u}, // lw s0,96(a0): the area table
+    {0x088695A0u, 0x9065AF10u}, // lbu a1,-20720(v1): the area byte at GameSys+0x6AF10
+    {0x088C9B74u, 0x3C0209CEu}, // lui v0,0x09CE: the stage-id table
+    {0x088C9B7Cu, 0x2442F678u}, // addiu v0,v0,-2440: the table at 0x09CDF678
+    {0x08886B84u, 0x3C03089Cu}, // lui v1,0x89c: the base of the hunter list
+    {0x08886BFCu, 0x8E130A84u}, // lw s3,2692(s0): the hunter the camera follows
+};
+static_assert(std::size(kWordsFreedomUnite) == std::size(kWordsFUComplete));
+constexpr const auto &kWords = kFreedomUniteCode ? kWordsFreedomUnite : kWordsFUComplete;
 
-constexpr std::uint32_t kGatherObject = 0x08A62D9Cu;
+constexpr std::uint32_t kGatherObject = kFreedomUniteCode ? 0x08A62D9Cu : 0x08A5DD4Cu;
 constexpr std::uint32_t kAreas = 96u;
 constexpr std::uint32_t kListBias = 80u;
 using layout::kGameSysPointer;
 constexpr std::uint32_t kAreaByte = 0x6AF10u;
-constexpr std::uint32_t kStageTable = 0x09CE4808u;
+constexpr std::uint32_t kStageTable = kFreedomUniteCode ? 0x09CE4808u : 0x09CDF678u;
 // The hunter's position, and the stage it stands in.
 constexpr std::uint32_t kHunterPosition = layout::kPosition;
 constexpr std::uint32_t kHunterStage = layout::kStageId;
@@ -249,7 +277,8 @@ std::optional<GatherNode> read_node(const psprecomp::GuestMemory &memory) {
 }
 
 // 0x0886CEA8. The circle handler asks it only after the gather search misses.
-constexpr std::uint32_t kCarveTable = 0x09A4F1A0u;
+// In FUComplete that is 0x0886CEA0, and the pointer is at 0x09A4ADA0.
+constexpr std::uint32_t kCarveTable = kFreedomUniteCode ? 0x09A4F1A0u : 0x09A4ADA0u;
 constexpr std::uint32_t kCarveStride = 32u;
 constexpr std::uint32_t kCarveSlots = 20u;
 constexpr std::uint32_t kCarveFirst = 4u;
@@ -286,7 +315,7 @@ void trace_carve(const psprecomp::GuestMemory &memory, std::uint32_t record) {
 
 // game_task 0x09AA6B18, the spot search, and the item handler's bait case
 // that asks it.
-constexpr GatherWord kSpotWords[] = {
+constexpr GatherWord kSpotWordsFreedomUnite[] = {
     {0x09AA6B34u, 0x3C0209A5u}, // lui v0,0x09A5
     {0x09AA6B38u, 0x8C42F1A0u}, // lw v0,-3680(v0): the pointer at 0x09A4F1A0
     {0x09AA6B44u, 0x8C440000u}, // lw a0,0(v0): the stage object
@@ -304,6 +333,27 @@ constexpr GatherWord kSpotWords[] = {
     {0x09AA7FA4u, 0x0E6A9AC6u}, // jal 0x09AA6B18: a bait asks the spot search
     {0x09AA7FB0u, 0x24020017u}, // addiu v0,zero,23: and fishes at type 23
 };
+// FUComplete: the spot search at 0x09AA1CE8.
+constexpr GatherWord kSpotWordsFUComplete[] = {
+    {0x09AA1D04u, 0x3C0209A5u}, // lui v0,0x09A5
+    {0x09AA1D08u, 0x8C42ADA0u}, // lw v0,-21088(v0): the pointer at 0x09A4ADA0
+    {0x09AA1D14u, 0x8C440000u}, // lw a0,0(v0): the stage object
+    {0x09AA1D1Cu, 0x8C990000u}, // lw t9,0(a0): its vtable
+    {0x09AA1D20u, 0x8F390028u}, // lw t9,40(t9): method +40, the spot table
+    {0x09AA1D2Cu, 0x8C500010u}, // lw s0,16(v0): the spot list
+    {0x09AA1D58u, 0x8043003Eu}, // lb v1,62(v0): the spot count
+    {0x09AA1D64u, 0xC6840204u}, // lwc1 f4,516(s4): the hunter's height
+    {0x09AA1D68u, 0x3C024248u}, // lui v0,0x4248: 50 above and below the spot
+    {0x09AA1DDCu, 0xC6010010u}, // lwc1 f1,16(s0): the spot's radius
+    {0x09AA1E1Cu, 0x96020002u}, // lhu v0,2(s0): the type it returns
+    {0x09AA1E2Cu, 0x26100018u}, // addiu s0,s0,24: 24 bytes a spot
+    {0x09AA2C8Cu, 0x2402008Fu}, // addiu v0,zero,143: the last bait
+    {0x09AA2CE0u, 0x24020088u}, // addiu v0,zero,136: the first bait
+    {0x09AA3174u, 0x0E6A873Au}, // jal 0x09AA1CE8: a bait asks the spot search
+    {0x09AA3180u, 0x24020017u}, // addiu v0,zero,23: and fishes at type 23
+};
+static_assert(std::size(kSpotWordsFreedomUnite) == std::size(kSpotWordsFUComplete));
+constexpr const auto &kSpotWords = kFreedomUniteCode ? kSpotWordsFreedomUnite : kSpotWordsFUComplete;
 
 constexpr std::uint32_t kSpotMethod = 40u;
 constexpr std::uint32_t kSpotList = 16u;
@@ -448,7 +498,7 @@ namespace {
 
 // lobby_task 0x09AAF290 keeps the point in reach, 0x09AAD350 starts it on □,
 // and game_sub counts the uses left on a farm spot.
-constexpr GatherWord kFarmWords[] = {
+constexpr GatherWord kFarmWordsFreedomUnite[] = {
     {0x09AAF3ACu, 0xAE510554u}, // sw s1,1364(s2): the point in reach
     {0x09AAD4CCu, 0x962401E6u}, // lhu a0,486(s1): the local hunter only
     {0x09AAD4F8u, 0x3C0309B2u}, // lui v1,0x09B2: the village state object
@@ -473,8 +523,37 @@ constexpr GatherWord kFarmWords[] = {
     {0x08886E80u, 0x3C03089Du}, // lui v1,0x89d: the base of the hunter list
     {0x08886EF8u, 0x8E130A84u}, // lw s3,2692(s0): the hunter the camera follows
 };
+// FUComplete: lobby_task 0x09AAA128 keeps the point in reach and 0x09AA81E8
+// starts it; game_sub counts the uses at 0x09C244F0 and 0x09C24540.
+constexpr GatherWord kFarmWordsFUComplete[] = {
+    {0x09AAA244u, 0xAE510554u}, // sw s1,1364(s2): the point in reach
+    {0x09AA8364u, 0x962401E6u}, // lhu a0,486(s1): the local hunter only
+    {0x09AA8390u, 0x3C0309B2u}, // lui v1,0x09B2: the village state object
+    {0x09AA8394u, 0x8C70D9E8u}, // lw s0,-9752(v1): the pointer at 0x09B1D9E8
+    {0x09AA864Cu, 0x8E040000u}, // lw a0,0(s0): its state
+    {0x09AA8664u, 0x8603001Au}, // lh v1,26(s0): and the halfword at +26
+    {0x09AA88D8u, 0x8E230484u}, // lw v1,1156(s1): the buttons new this read
+    {0x09AA88DCu, 0x30638000u}, // andi v1,v1,0x8000: □ starts the point
+    {0x09AA88ECu, 0x96430002u}, // lhu v1,2(s2): the point's type
+    {0x09AA88FCu, 0x3C0409B1u}, // lui a0,0x09B1
+    {0x09AA8904u, 0x24849E80u}, // addiu a0,a0,-24960: the table at 0x09B09E80
+    {0x09B09EBCu, 0x09AA8F24u}, // type 15: mining
+    {0x09B09EC0u, 0x09AA8FB0u}, // type 16: bugs
+    {0x09AA8F2Cu, 0x0E70913Cu}, // jal 0x09C244F0: mining uses left
+    {0x09AA8FB8u, 0x0E709150u}, // jal 0x09C24540: bug uses left
+    {0x09C244FCu, 0x3421A238u}, // ori at,at,0xA238: the farm in GameSys
+    {0x09C24504u, 0x90620002u}, // lbu v0,2(v1): the mining spot count
+    {0x09C2451Cu, 0x94420008u}, // lhu v0,8(v0): its uses left
+    {0x09C2454Cu, 0x3421A238u}, // ori at,at,0xA238
+    {0x09C24554u, 0x90620003u}, // lbu v0,3(v1): the bug spot count
+    {0x09C2456Cu, 0x94420030u}, // lhu v0,48(v0): its uses left
+    {0x08886B84u, 0x3C03089Cu}, // lui v1,0x89c: the base of the hunter list
+    {0x08886BFCu, 0x8E130A84u}, // lw s3,2692(s0): the hunter the camera follows
+};
+static_assert(std::size(kFarmWordsFreedomUnite) == std::size(kFarmWordsFUComplete));
+constexpr const auto &kFarmWords = kFreedomUniteCode ? kFarmWordsFreedomUnite : kFarmWordsFUComplete;
 
-constexpr std::uint32_t kVillageState = 0x09B22E70u;
+constexpr std::uint32_t kVillageState = kFreedomUniteCode ? 0x09B22E70u : 0x09B1D9E8u;
 constexpr std::uint32_t kVillageBlock = 26u;
 constexpr std::uint32_t kPointInReach = 1364u;
 constexpr std::uint32_t kPointType = 2u;

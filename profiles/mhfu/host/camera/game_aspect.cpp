@@ -1,14 +1,17 @@
 #include "camera/game_aspect.hpp"
 
 #include "game/guest_layout.hpp"
+#include "title.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <string_view>
 
 namespace mhfu::camera {
 namespace {
@@ -41,7 +44,7 @@ constexpr std::uint32_t kFieldOfView = 0x0Cu;
 constexpr std::uint32_t kBuiltFieldOfView = 0x10u;
 constexpr std::uint32_t kCameraBytes = 0x20u;
 
-constexpr std::array<CodeWord, 22> kSignature{{
+constexpr std::array<CodeWord, 22> kSignatureFreedomUnite{{
     {0x08812948u, 0x3C02089Du, "lui v0,0x89d: the base of the camera pointer"},
     {0x08812954u, 0xAC50BD04u, "sw s0,-0x42fc(v0): the camera object, kept at 0x089CBD04"},
     {0x08812A70u, 0x3C0341F0u, "lui v1,0x41f0: near plane, 30"},
@@ -65,6 +68,34 @@ constexpr std::array<CodeWord, 22> kSignature{{
     {0x08815F50u, 0xC4800008u, "lwc1 f0,0x8(a0): the culling planes read the aspect"},
     {0x08815F54u, 0x46000803u, "div.s f0,f1,f0: and divide by it"},
 }};
+// The same code in FUComplete's executable, 0xDC0 higher; only the store of
+// the camera object differs, at 0x089C6CB4 (game::layout::kCameraObject).
+constexpr std::array<CodeWord, 22> kSignatureFUComplete{{
+    {0x08813708u, 0x3C02089Cu, "lui v0,0x89c: the base of the camera pointer"},
+    {0x08813714u, 0xAC506CB4u, "sw s0,27828(v0): the pointer at 0x089C6CB4"},
+    {0x08813830u, 0x3C0341F0u, "lui v1,0x41f0: near plane, 30"},
+    {0x08813868u, 0x3C02477Du, "lui v0,0x477d: far plane, 65000"},
+    {0x08813870u, 0x3442E800u, "ori v0,v0,0xe800: the low half of 65000"},
+    {0x0881386Cu, 0xAE030000u, "sw v1,0x0(s0): the near plane"},
+    {0x08813874u, 0xAE020004u, "sw v0,0x4(s0): the far plane"},
+    {0x08813884u, 0x3C023FE1u, "lui v0,0x3fe1: the aspect ratio 480/272"},
+    {0x08813888u, 0x3442E1E2u, "ori v0,v0,0xe1e2: its low half"},
+    {0x0881388Cu, 0xAE020008u, "sw v0,0x8(s0): into the camera's aspect"},
+    {0x0881397Cu, 0x3C023FE1u, "lui v0,0x3fe1: the same ratio where the camera is reset"},
+    {0x08813980u, 0x3442E1E2u, "ori v0,v0,0xe1e2: its low half, on the reset"},
+    {0x08813984u, 0xAC820008u, "sw v0,0x8(a0): into that camera's aspect"},
+    {0x08816114u, 0xC48C000Cu, "lwc1 f12,0xc(a0): the projection's field of view"},
+    {0x08816118u, 0xC48D0008u, "lwc1 f13,0x8(a0): the projection's aspect"},
+    {0x0881532Cu, 0x46160803u, "div.s f0,f1,f22: the projection's x scale is cot(fov/2) / aspect"},
+    {0x08816150u, 0xC4810010u, "lwc1 f1,0x10(a0): the field of view the projection was built with"},
+    {0x08816154u, 0xC480000Cu, "lwc1 f0,0xc(a0): and the current one"},
+    {0x08816158u, 0x46000832u, "c.eq.s f1,f0: the update builds the projection again when they differ"},
+    {0x08816C84u, 0x3C023FC0u, "lui v0,0x3fc0: the culling depth factor, 1.5"},
+    {0x08816D10u, 0xC4800008u, "lwc1 f0,0x8(a0): the culling planes read the aspect"},
+    {0x08816D14u, 0x46000803u, "div.s f0,f1,f0: and divide by it"},
+}};
+constexpr const std::array<CodeWord, 22> &kSignature =
+    kTitle == Title::FreedomUnite ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
     bool prepared{};
@@ -121,6 +152,24 @@ bool prepare_game_aspect(psprecomp::Runtime &runtime) {
 void game_aspect_frame(psprecomp::Runtime &runtime, float aspect) {
     if (!state.prepared) return;
     psprecomp::GuestMemory &memory = runtime.memory();
+    // MHFU_TRACE_FOV=1: the live camera's field of view, when it changes. The
+    // FUComplete build can change the camera's code while the game runs.
+    static const bool trace_fov = [] {
+        const char *value = std::getenv("MHFU_TRACE_FOV");
+        return value != nullptr && std::string_view(value) != "" && std::string_view(value) != "0";
+    }();
+    if (trace_fov) {
+        const std::uint32_t camera = camera_address(memory);
+        const std::uint32_t bits = camera != 0u ? memory.load32(camera + kFieldOfView) : 0u;
+        static std::uint32_t last_camera{};
+        static std::uint32_t last_bits{};
+        if (camera != last_camera || bits != last_bits) {
+            std::cout << "[fov] camera 0x" << std::hex << std::setfill('0') << std::setw(8) << camera << std::dec
+                      << std::setfill(' ') << " fov " << std::bit_cast<float>(bits) << "\n";
+            last_camera = camera;
+            last_bits = bits;
+        }
+    }
     const float game = std::bit_cast<float>(kGameAspectBits);
     // Within a hair of the game's own shape is the game's own shape, written
     // bit for bit as the game has it.

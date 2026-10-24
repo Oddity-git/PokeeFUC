@@ -1,4 +1,5 @@
 #include "install/installer.hpp"
+#include "title.hpp"
 
 #include "app_paths.hpp"
 
@@ -99,14 +100,14 @@ Inspection inspect(const std::filesystem::path &path) {
     const std::string name = display_name(path);
     std::error_code ec;
     if (!std::filesystem::is_regular_file(path, ec))
-        throw InstallError("\"" + path_to_utf8(path) + "\" is not a file Pokee can open.");
+        throw InstallError("\"" + path_to_utf8(path) + "\" is not a file " MHFU_APP_NAME " can open.");
     {
         std::ifstream in(path, std::ios::binary);
         std::array<char, 4> magic{};
         if (!in.read(magic.data(), magic.size())) throw InstallError("\"" + name + "\" is empty or cannot be read.");
         if (std::memcmp(magic.data(), "CISO", 4u) == 0 || std::memcmp(magic.data(), "ZISO", 4u) == 0)
             throw InstallError("\"" + name +
-                "\" is a compressed image. Pokee needs an uncompressed .iso image of the "
+                "\" is a compressed image. " MHFU_APP_NAME " needs an uncompressed .iso image of the "
                 "disc; decompress it first.");
     }
 
@@ -115,7 +116,7 @@ Inspection inspect(const std::filesystem::path &path) {
         iso.emplace(path);
     } catch (const std::exception &) {
         throw InstallError("\"" + name +
-            "\" is not a disc image Pokee can read. Choose an uncompressed .iso image "
+            "\" is not a disc image " MHFU_APP_NAME " can read. Choose an uncompressed .iso image "
             "of the game's PSP disc.");
     }
 
@@ -123,15 +124,15 @@ Inspection inspect(const std::filesystem::path &path) {
     if (!sfo_entry || sfo_entry->directory) {
         if (iso->find("PS3_GAME/PARAM.SFO"))
             throw InstallError("\"" + name +
-                "\" is a PlayStation 3 disc image. Pokee needs a PSP disc image of " + supported_release_list() +
-                ": an .iso whose top level holds a PSP_GAME folder.");
+                "\" is a PlayStation 3 disc image. " MHFU_APP_NAME " needs a PSP disc image of " +
+                supported_release_list() + ": an .iso whose top level holds a PSP_GAME folder.");
         throw InstallError("\"" + name + "\" is not a PSP game disc image: it has no PSP_GAME/PARAM.SFO.");
     }
     const auto sfo = parse_sfo(read_file(*iso, *sfo_entry));
     const auto disc_id = sfo.find("DISC_ID");
     if (disc_id == sfo.end())
         throw InstallError("\"" + name +
-            "\" has no disc id in PSP_GAME/PARAM.SFO, so it is not an image Pokee "
+            "\" has no disc id in PSP_GAME/PARAM.SFO, so it is not an image " MHFU_APP_NAME " "
             "supports.");
     const SupportedRelease *release = find_release_by_disc_id(disc_id->second);
     if (release == nullptr) {
@@ -139,11 +140,16 @@ Inspection inspect(const std::filesystem::path &path) {
         std::string what = "\"" + name + "\" is ";
         what += title != sfo.end() && !title->second.empty() ? title->second + " (" + disc_id->second + ")"
                                                              : "disc " + disc_id->second;
-        what += ". Pokee supports " + supported_release_list() + ".";
+        what += ". " MHFU_APP_NAME " supports " + supported_release_list() + ".";
         if (disc_id->second == "ULJM05800")
-            what += " This is the original PSP release of Portable 3rd, which Pokee does not support.";
+            what += " This is the original PSP release of Portable 3rd, which " MHFU_APP_NAME " does not support.";
         else if (disc_id->second == "NPJB40001")
-            what += " This is Portable 3rd HD, which Pokee does not support.";
+            what += " This is Portable 3rd HD, which " MHFU_APP_NAME " does not support.";
+        else if (disc_id->second == kFUComplete.disc_id)
+            what += " Portable 2nd G and FUComplete run in a FUComplete build of Pokee, PokeeFUC (configured with "
+                    "-DMHFU_TITLE=FUC).";
+        else if (disc_id->second == kFreedomUniteUsa.disc_id)
+            what += " USA Freedom Unite runs in the standard build of Pokee.";
         else
             what += " Other releases and regions are not supported.";
         throw InstallError(what);
@@ -156,9 +162,18 @@ Inspection inspect(const std::filesystem::path &path) {
             "disc.");
     Inspection result;
     result.eboot_bin = read_file(*iso, *eboot_entry);
-    if (psprecomp::sha256_bytes(result.eboot_bin) != release->encrypted_sha256)
+    if (release->plain_executable) {
+        // FUComplete leaves the disc id alone, so an unpatched Portable 2nd G
+        // has the same one. Its executable is still encrypted and it has no
+        // FUC folder.
+        const auto marker = iso->find(release->marker_on_disc);
+        if (!looks_like_elf(result.eboot_bin.data(), result.eboot_bin.size()) || !marker || marker->directory)
+            throw InstallError("\"" + name + "\" is " + release->disc_id_display +
+                " but is not patched with FUComplete. Patch it with FUCTool first "
+                "(https://fucomplete.github.io/docs/setup.html), then choose the _FUC image it makes.");
+    } else if (psprecomp::sha256_bytes(result.eboot_bin) != release->encrypted_sha256)
         throw InstallError("\"" + name + "\" is " + release->title + " (" + release->disc_id_display +
-            "), but its executable is not the version Pokee supports. The image may be patched, "
+            "), but its executable is not the version " MHFU_APP_NAME " supports. The image may be patched, "
             "modified or damaged; make it again from an unmodified disc.");
     result.info.size_bytes = iso->size_bytes();
     result.info.title = release->title;
@@ -289,7 +304,7 @@ bool is_document_uri(const std::filesystem::path &image) {
 std::filesystem::path copy_image_document(
     const std::string &uri, const std::filesystem::path &data_dir, const ProgressFn &progress) {
     const int fd = android::open_document(uri, "r");
-    if (fd < 0) throw InstallError("Android would not let Pokee read that file. Choose it again.");
+    if (fd < 0) throw InstallError("Android would not let " MHFU_APP_NAME " read that file. Choose it again.");
     struct stat info{};
     const std::uint64_t size = ::fstat(fd, &info) == 0 ? static_cast<std::uint64_t>(info.st_size) : 0u;
     // The copy, with room to spare for the executable prepared from it.
@@ -457,7 +472,7 @@ int restart(char **argv) {
     // An app cannot exec itself; Android starts it again instead.
     (void)argv;
     android::relaunch();
-    std::cerr << "Cannot restart; start Pokee again to load the imported save\n";
+    std::cerr << "Cannot restart; start " MHFU_APP_NAME " again to load the imported save\n";
     return 1;
 #endif
     const std::filesystem::path self = executable_path();
@@ -495,7 +510,7 @@ int restart_for_setup(const char *program) {
         std::ofstream(user_data_directory() / kSetupMarkerFile) << "setup\n";
     }
     android::relaunch();
-    std::cerr << "Start Pokee again to set up\n";
+    std::cerr << "Start " MHFU_APP_NAME " again to set up\n";
     return 1;
 #endif
     // The player asked for the setup: a game directory chosen for this run

@@ -3,10 +3,13 @@
 #include "psprecomp/elf32.hpp"
 #include "psprecomp/runtime.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
+#include <span>
 #include <utility>
+#include <vector>
 
 namespace mhfu {
 
@@ -42,11 +45,47 @@ inline constexpr std::uint32_t kOverlaySlots[] = {
     0x0A000000u, // end of user memory
 };
 
+// The overlay bases this run uses, ending with the end of user memory:
+// kOverlaySlots until set_overlay_slots names others.
+[[nodiscard]] inline std::vector<std::uint32_t> &overlay_slot_table() {
+    static std::vector<std::uint32_t> table(std::begin(kOverlaySlots), std::end(kOverlaySlots));
+    return table;
+}
+[[nodiscard]] inline std::span<const std::uint32_t> overlay_slots() {
+    return overlay_slot_table();
+}
+
+// Replaces the table: ascending bases followed by the end of user memory. A
+// table with no base below its end is ignored.
+inline void set_overlay_slots(std::vector<std::uint32_t> slots) {
+    if (slots.size() < 2u) return;
+    overlay_slot_table() = std::move(slots);
+}
+
+// The overlay bases another executable names: the distinct load addresses of
+// its *.ovl sections, which carry an overlay's name and address but no bytes
+// (Freedom Unite's do, and so does Portable 2nd G's), below user_end, with
+// user_end appended. Empty when it names none.
+[[nodiscard]] inline std::vector<std::uint32_t> overlay_slots_from_sections(
+    const psprecomp::Elf32Image &elf, std::uint32_t load_base, std::uint32_t user_end) {
+    std::vector<std::uint32_t> bases;
+    for (const psprecomp::ElfSection &section : elf.sections()) {
+        if (section.name.size() <= 4u || !section.name.ends_with(".ovl") || section.name.starts_with(".rel")) continue;
+        const std::uint32_t address = elf.section_runtime_address(section, load_base);
+        if (address != 0u && address < user_end) bases.push_back(address);
+    }
+    std::sort(bases.begin(), bases.end());
+    bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
+    if (bases.empty()) return {};
+    bases.push_back(user_end);
+    return bases;
+}
+
 // The slot containing `address`, or {0, 0} when it is outside every slot.
 [[nodiscard]] inline std::pair<std::uint32_t, std::uint32_t> overlay_slot_of(std::uint32_t address) {
-    for (std::size_t i = 0; i + 1u < std::size(kOverlaySlots); ++i) {
-        if (address >= kOverlaySlots[i] && address < kOverlaySlots[i + 1u])
-            return {kOverlaySlots[i], kOverlaySlots[i + 1u]};
+    const std::span<const std::uint32_t> slots = overlay_slots();
+    for (std::size_t i = 0; i + 1u < slots.size(); ++i) {
+        if (address >= slots[i] && address < slots[i + 1u]) return {slots[i], slots[i + 1u]};
     }
     return {0u, 0u};
 }

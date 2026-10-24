@@ -162,6 +162,17 @@ To set up from a terminal instead of the setup screens:
 
 To add the tarball to Steam, choose *Browse…* in *Add a Non-Steam Game* and pick the `pokee` script.
 
+## Install a source build for your user
+
+A build you made yourself (see [BUILDING.md](BUILDING.md)) can be added to the application menu without root:
+
+```bash
+profiles/mhfu/packaging/linux/install_user.sh out/mhfu     # Pokee
+profiles/mhfu/packaging/linux/install_user.sh out/fuc      # PokeeFUC, the FUComplete build
+```
+
+It copies the executable, its bundled libraries and the built overlay libraries into `~/.local/share/pokee` (or `~/.local/share/pokee-fuc`), with a launcher that sets the stack limit, and installs a `.desktop` entry and the icon under `~/.local/share`. The two builds have their own app ids (`io.github.teamgdb.Pokee` and `io.github.teamgdb.PokeeFUC`), entries and directories, so both can be installed side by side, and next to the Flatpak. The game data stays in the usual data directory (`~/.local/share/Pokee/MHFU` or `~/.local/share/Pokee/FUC`). Run the script again after a rebuild, or when more overlays are built; `--overlays DIR` takes them from another build directory, and `--uninstall` removes the copy and its entry. The copy contains code recompiled from your own game, so never share it.
+
 ## Troubleshooting
 
 - **Messages from the game.** Start it from a terminal (`flatpak run io.github.teamgdb.Pokee`, or `./pokee`) to see what it prints.

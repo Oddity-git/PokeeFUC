@@ -31,7 +31,7 @@ inline constexpr const char *kSettingsFile = "settings.ini";
 //   Environment  MHFU_DATA_DIR
 //   Portable     data/ next to the executable, when portable.txt or data/ is
 //                there, --portable was given or MHFU_PORTABLE=1 is set
-//   PerUser      SDL_GetPrefPath("Pokee", "MHFU")
+//   PerUser      SDL_GetPrefPath("Pokee", "MHFU"), or "FUC" in a FUComplete build
 //
 // MHFU_PORTABLE=0 turns the portable check off.
 enum class DataSource { CommandLine, Environment, Portable, PerUser };

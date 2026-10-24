@@ -15,6 +15,7 @@ SOURCE_ROOTS = ('include/psprecomp/', 'src/', 'tools/', 'scripts/',
                 'profiles/mhfu/host/', 'profiles/mhfu/tools/', 'profiles/mhfu/packaging/',
                 'profiles/mhfu/cmake/', 'profiles/mhfu/scripts/')
 EXCLUDED = {'third_party', 'generated', 'game', 'overlays', 'overlay_corpora', 'out', 'build'}
+HEADERS = {'.h', '.hh', '.hpp', '.hxx'}
 KINDS = {'.c': 'native', '.cc': 'native', '.cpp': 'native', '.cxx': 'native',
          '.h': 'native', '.hh': 'native', '.hpp': 'native', '.hxx': 'native',
          '.py': 'python', '.java': 'java', '.kt': 'java',
@@ -99,11 +100,17 @@ def diff_coverage(changed, inventory, coverage):
     details = []
     covered = count = 0
     unmeasured = []
+    without_code = []
     for name, lines in sorted(changed.items()):
         if inventory.get(name) not in {'native', 'python', 'java'} or not lines:
             continue
         if name not in coverage:
-            unmeasured.append(name)
+            # The test host compiles every host source, so a header that LLVM
+            # maps nowhere holds no code it uses: declarations and constants.
+            if Path(name).suffix in HEADERS:
+                without_code.append(name)
+            else:
+                unmeasured.append(name)
             continue
         hits = coverage[name]
         executable = lines & hits.keys()
@@ -113,7 +120,7 @@ def diff_coverage(changed, inventory, coverage):
         details.append({'file': name, 'covered': len(passed), 'count': len(executable),
                         'missing_lines': sorted(executable - passed)})
     return {'covered': covered, 'count': count, 'percent': 100 * covered / count if count else None,
-            'files': details, 'unmeasured_changed_files': unmeasured}
+            'files': details, 'unmeasured_changed_files': unmeasured, 'changed_headers_without_code': without_code}
 
 
 def measured_totals(languages):
@@ -151,9 +158,10 @@ def main():
     if not re.fullmatch(r'[0-9a-f]{40,64}', base):
         raise ValueError('Invalid base commit')
     merge_base = subprocess.check_output(['git', 'merge-base', base, 'HEAD'], cwd=ROOT, text=True).strip()
+    # Vendored sources need not be UTF-8; only hunk headers and file names are parsed.
     diff = subprocess.check_output(['git', '-c', 'core.quotepath=false', 'diff', '--no-ext-diff',
                                     '--find-renames', '--unified=0', merge_base, 'HEAD', '--'],
-                                   cwd=ROOT, text=True)
+                                   cwd=ROOT, text=True, errors='replace')
     changed = diff_coverage(changed_lines(diff), inventory, coverage)
     languages = {}
     for kind in sorted(set(inventory.values())):
@@ -185,6 +193,8 @@ def main():
               f'Changed executable lines: **{percent}**, {changed["covered"]}/{changed["count"]}; '
               'required: **80%**.', '',
               'Unmeasured changed native/Python/Java files: ' + ', '.join(changed['unmeasured_changed_files']), '',
+              'Changed headers with no mapped code (declarations and constants): '
+              + ', '.join(changed['changed_headers_without_code']), '',
               'Unmeasured files stay visible in the inventory. Percentages apply to mapped lines, '
               'not unknown lines; this report does not claim complete project coverage. '
               'Shaders/build scripts require appropriate behavioral/build validation rather than a fabricated line metric.',

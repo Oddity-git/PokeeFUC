@@ -3,6 +3,7 @@
 // dispatches the camera hook.
 #include "camera/camera_input.hpp"
 #include "camera/game_camera.hpp"
+#include "game/guest_layout.hpp"
 #include "settings/settings.hpp"
 #include "psprecomp/runtime.hpp"
 
@@ -24,7 +25,7 @@ Settings &current() {
 namespace {
 using namespace mhfu::camera;
 constexpr float frame_seconds = 1.0f / 30.0f;
-constexpr std::uint32_t helper = 0x08886E50u;
+constexpr std::uint32_t helper = kCameraUpdate;
 constexpr std::uint32_t camera_address = 0x08900000u;
 constexpr std::uint32_t parent_address = camera_address - 0xA0u;
 constexpr std::uint32_t preset_address = 0x08902000u;
@@ -40,6 +41,9 @@ float eye_on_entry{};
 float wall_scale = 1.0f;
 // The behind-the-hunter gate the update was entered with.
 int gate_on_entry{};
+// The vertical snap option, as the camera update saw it (when a test plants it).
+std::uint32_t snap_option_at{};
+int snap_option_on_entry{-1};
 // The button halfwords the update copies onto the camera, as it found them.
 std::uint16_t copied_turn{};
 std::uint16_t copied_vertical{};
@@ -66,7 +70,8 @@ void original(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
         eye_on_entry = read_float(memory, camera + 4u);
         gate_on_entry = static_cast<std::int8_t>(memory.load8(camera + 0x91u));
     }
-    if (const auto object = memory.load32(0x089CBD04u); object != 0u && memory.raw_pointer(object, 0xA74u)) {
+    if (snap_option_at != 0u) snap_option_on_entry = memory.load8(snap_option_at);
+    if (const auto object = memory.load32(mhfu::game::layout::kCameraObject); object != 0u && memory.raw_pointer(object, 0xA74u)) {
         copied_turn = memory.load16(object + 0xA70u);
         copied_vertical = memory.load16(object + 0xA72u);
     }
@@ -237,7 +242,7 @@ void test_dpad_camera_is_off() {
     f.enable();
     auto &memory = f.runtime.memory();
     constexpr std::uint32_t object = 0x08905000u;
-    memory.store32(0x089CBD04u, object);
+    memory.store32(mhfu::game::layout::kCameraObject, object);
     memory.store16(object + 0xA70u, 0x0120u); // right, and L
     memory.store16(object + 0xA72u, 0x0210u); // up, and R
     memory.store16(camera_address + 0x84u, 0x0020u);
@@ -259,7 +264,7 @@ void test_dpad_camera_is_off() {
     mhfu::settings::current().analog_camera = false;
     f.frame(0.0f, 0.0f);
     check(copied_turn == 0x0120u && copied_vertical == 0x0210u, "and so does the analog camera being off");
-    memory.store32(0x089CBD04u, 0u);
+    memory.store32(mhfu::game::layout::kCameraObject, 0u);
 }
 
 // The gate at +0x91 can stay set for seconds, after a bowgun's aim among
@@ -270,7 +275,7 @@ void test_gate_without_the_placement() {
     f.enable();
     auto &memory = f.runtime.memory();
     constexpr std::uint32_t options = 0x08906000u;
-    memory.store32(0x089CC558u, options);
+    memory.store32(mhfu::game::layout::kGameSysPointer, options);
     memory.store8(camera_address + 0x91u, 1u);
     f.frame(1.0f, 0.0f);
     check(!game_camera_driving(), "a set gate is the game's placement while the option allows it");
@@ -281,7 +286,7 @@ void test_gate_without_the_placement() {
     check(game_camera_driving(), "with the placement turned off, the stick stays the driver's");
     check(memory.load16(camera_address + 0x80u) != yaw, "and turns the camera");
     memory.store8(camera_address + 0x91u, 0xFFu);
-    memory.store32(0x089CC558u, 0u);
+    memory.store32(mhfu::game::layout::kGameSysPointer, 0u);
 }
 
 // A gate of exactly 0 is the game's soft follow, which drags the camera back
@@ -344,7 +349,8 @@ void test_wall_eases_back_out() {
     check(std::fabs(distance() - full) < 0.01f, "with the option off the eye is the game's");
 }
 
-// The game's choice at 0x0888FCE4, behind the hunter: the blocked eye is held
+constexpr std::uint32_t kPullIn = kCameraFreedomUnite ? 0x0888FCE4u : 0x0888F9E8u;
+// The game's choice at 0x0888FCE4 (0x0888F9E8 in FUComplete), behind the hunter: the blocked eye is held
 // where the wall stopped it (0), not pulled in along the view line (1).
 void pull_in_behind(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
     ctx.gpr[2] = 0u;
@@ -356,19 +362,19 @@ void pull_in_behind(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
 // blocked eye is pulled in along the view line from any side.
 void test_wall_pulls_in_behind_the_hunter() {
     Fixture f;
-    f.runtime.register_function(0x0888FCE4u, &pull_in_behind, "recomp_pull_in_test");
+    f.runtime.register_function(kPullIn, &pull_in_behind, "recomp_pull_in_test");
     f.enable();
     f.frame(0.0f, 0.0f);
     psprecomp::AllegrexContext choice{};
     choice.gpr[4] = parent_address;
     choice.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x0888FCE4u, choice), "the choice dispatches");
+    check(f.runtime.invoke_isolated_aot(kPullIn, choice), "the choice dispatches");
     check(choice.gpr[2] == 1u, "behind the hunter a blocked eye is pulled in");
     mhfu::settings::current().analog_camera = false;
     f.frame(0.0f, 0.0f);
     choice.gpr[2] = 7u;
     choice.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x0888FCE4u, choice), "the choice dispatches with the option off");
+    check(f.runtime.invoke_isolated_aot(kPullIn, choice), "the choice dispatches with the option off");
     check(choice.gpr[2] == 0u, "with the option off the choice is the game's");
 }
 
@@ -419,6 +425,33 @@ void test_pitch_is_not_left_for_the_eye_ease() {
 }
 }
 
+// With the game's vertical snap option on, the update picks the preset nearest
+// its view again and would drop the bent one: the tilt eased back as soon as
+// the stick let go. While the driver owns the pitch the option reads as off
+// for the update, and it is the player's again afterwards.
+void test_vertical_snap_option_is_held_off_while_tilting() {
+    Fixture f;
+    f.enable();
+    auto &memory = f.runtime.memory();
+    constexpr std::uint32_t kGameSys = 0x09400000u;
+    memory.store32(mhfu::game::layout::kGameSysPointer, kGameSys);
+    snap_option_at = kGameSys + 0x6ADE0u;
+    memory.store8(snap_option_at, 1u);
+    f.frame(0.0f, 0.0f);
+    check(snap_option_on_entry == 1, "without a tilt the update sees the option as the player set it");
+    f.frame(0.0f, -1.0f);
+    check(snap_option_on_entry == 0, "while the driver bends the preset, the update sees the option off");
+    check(memory.load8(snap_option_at) == 1u, "and the option is put back after the update");
+    f.frame(0.0f, 0.0f);
+    check(snap_option_on_entry == 0, "the tilt the driver holds after the stick is released keeps it off");
+    check(memory.load8(snap_option_at) == 1u, "and put back again");
+    memory.store8(snap_option_at, 0u);
+    f.frame(0.0f, -1.0f);
+    check(memory.load8(snap_option_at) == 0u, "an option already off is left off");
+    snap_option_at = 0u;
+    snap_option_on_entry = -1;
+}
+
 void test_signature_mismatch() {
     Fixture f;
     const CodeWord &first = game_code_signature().front();
@@ -430,6 +463,21 @@ void test_signature_mismatch() {
     check(f.snapshot() == before && !game_camera_driving(), "refused code is never written to");
 }
 
+void test_field_of_view_scale() {
+    psprecomp::GuestMemory memory(32u * 1024u * 1024u);
+    const std::uint32_t camera = camera_address;
+    write_float(memory, camera + 0x0Cu, 0.872665f);
+    check(!scale_projection_fov(memory, camera, 1.0f), "the game's own field of view is left as it is");
+    check(std::bit_cast<float>(memory.load32(camera + 0x0Cu)) == 0.872665f, "and the field stays the game's");
+    check(scale_projection_fov(memory, camera, 1.25f), "a scale changes the field of view");
+    check(std::abs(std::bit_cast<float>(memory.load32(camera + 0x0Cu)) - 0.872665f * 1.25f) < 1.0e-6f,
+        "by its share of the game's value");
+    write_float(memory, camera + 0x0Cu, 100.0f);
+    check(!scale_projection_fov(memory, camera, 1.25f), "a value that is no field of view is refused");
+    check(std::bit_cast<float>(memory.load32(camera + 0x0Cu)) == 100.0f, "and left alone");
+    check(!scale_projection_fov(memory, 0x0FFFFF00u, 1.25f), "a camera outside memory is refused");
+}
+
 void test_hook_waits_for_the_option() {
     Fixture f;
     f.flip(0.0f, 0.0f);
@@ -439,6 +487,34 @@ void test_hook_waits_for_the_option() {
     f.flip(0.0f, 0.0f);
     check(
         !f.runtime.invoke_chained_direct<&original, 29u, 1u, helper>(f.ctx), "turning the option on installs the hook");
+}
+
+float projection_saw{};
+
+// Records the field of view the game's projection update would build from.
+void projection_stand_in(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    projection_saw = std::bit_cast<float>(runtime.memory().load32(ctx.gpr[4] + 0x0Cu));
+}
+
+void test_projection_hook_for_field_of_view() {
+    Fixture f;
+    f.runtime.register_function(kProjectionUpdate, &projection_stand_in, "projection");
+    f.runtime.memory().store32(kProjectionUpdate + 0x0Cu, 0xC4810010u); // lwc1 f1,0x10(a0)
+    f.runtime.memory().store32(kProjectionUpdate + 0x10u, 0xC480000Cu); // lwc1 f0,0xc(a0)
+    mhfu::settings::current().fov_scale = 1.25f;
+    setenv("MHFU_TRACE_FOV", "1", 1); // says when the update is wrapped
+    f.flip(0.0f, 0.0f);
+    unsetenv("MHFU_TRACE_FOV");
+    check(f.runtime.function_at(kProjectionUpdate) != &projection_stand_in,
+        "a field of view scale wraps the projection update");
+    // The wrapper scales the value the game wrote, then runs the update.
+    write_float(f.runtime.memory(), camera_address + 0x0Cu, 0.8f);
+    psprecomp::AllegrexContext ctx{};
+    ctx.gpr[4] = camera_address;
+    projection_saw = 0.0f;
+    f.runtime.function_at(kProjectionUpdate)(f.runtime, ctx);
+    check(std::abs(projection_saw - 1.0f) < 1.0e-6f, "the projection is built from the scaled field of view");
+    mhfu::settings::current().fov_scale = 1.0f;
 }
 
 void test_frame_rate_independence() {
@@ -500,7 +576,7 @@ void test_mouse_stock_turn() {
 }
 
 // The hunter the camera follows: list word, list object, then the hunter.
-constexpr std::uint32_t kListWord = 0x089CBD04u;
+constexpr std::uint32_t kListWord = mhfu::game::layout::kCameraObject;
 constexpr std::uint32_t kList = 0x08920000u;
 constexpr std::uint32_t kHunter = 0x08910000u;
 constexpr std::uint32_t kHeading = 800u;
@@ -545,7 +621,7 @@ void test_aim_stick_is_not_movement() {
     f.enable();
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_original, "recomp_unit_aim_test");
+    f.runtime.register_function(kAimFunction, &aim_original, "recomp_unit_aim_test");
     f.flip(0.0f, 0.0f);
     constexpr std::uint32_t kButtons = 1152u;
     memory.store32(kHunter + kButtons, 0x00800201u);
@@ -554,14 +630,14 @@ void test_aim_stick_is_not_movement() {
     game_camera_present_aim(127, -40);
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     check(seen_magnitude == 127u, "the aim function is shown a full push");
     check(seen_buttons == 0x00300231u, "right and up replace the stick and D-pad directions; the real button stays");
     check(memory.load16(kHunter + kMagnitude) == 10u, "the movement magnitude is put back");
     check(memory.load32(kHunter + kButtons) == 0x00800201u, "the movement direction is put back");
 
     game_camera_present_aim(0, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches with no push");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches with no push");
     check(seen_magnitude == 10u, "no push leaves the stick the game copied");
     check(seen_buttons == 0x00800201u, "and leaves its direction");
 
@@ -571,7 +647,7 @@ void test_aim_stick_is_not_movement() {
     memory.store8(kHunter + 1380u, 0u);
     memory.store32(kHunter + kButtons, 0x00000241u);
     game_camera_present_aim(-127, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches with the timer clear");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches with the timer clear");
     check(seen_buttons == 0x00800281u, "left on both, and the held D-pad down is replaced");
     check(seen_magnitude == 127u, "a full push with the timer clear too");
     check(memory.load32(kHunter + kButtons) == 0x00000241u, "the held D-pad is put back");
@@ -582,7 +658,7 @@ void test_aim_stick_is_not_movement() {
     memory.store32(kHunter + kButtons, 0x00000001u);
     memory.store16(kHunter + kMagnitude, 10u);
     game_camera_present_aim(127, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches after R is released");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches after R is released");
     check(seen_buttons == 0x00000001u && seen_magnitude == 10u, "with R up the push is not shown to the aim");
 }
 
@@ -590,17 +666,16 @@ void test_aim_stick_is_not_movement() {
 // inside its unit). While its conditions hold, the right stick is pressed on
 // the D-pad, and the camera update resizes the game's 576 step from the stick.
 // The game's weapon switch: the byte at hunter +488 picks an entry of the
-// table at 0x09C0C830, and the bow's entry is the case that calls its code.
-constexpr std::uint32_t kWeaponTable = 0x09C0C830u;
-constexpr std::uint32_t kBowCase = 0x09A8AF98u;
+// table at kWeaponTable, and the bow's entry is the case that calls its code.
+// The cases are 16 bytes apart.
 constexpr std::uint8_t kBow = 10u;
 constexpr std::uint8_t kSwordAndShield = 4u;
 
 void plant_weapon_switch(psprecomp::GuestMemory &memory) {
     for (std::uint32_t weapon = 0; weapon < 11u; ++weapon)
-        memory.store32(kWeaponTable + weapon * 4u, 0x09A8AF08u + weapon * 16u);
+        memory.store32(kWeaponTable + weapon * 4u, kBowCase - kBow * 16u + weapon * 16u);
     memory.store32(kWeaponTable + kBow * 4u, kBowCase);
-    memory.store32(kBowCase, 0x0E6ED3C6u); // jal 0x09BB4F18
+    memory.store32(kBowCase, kBowCaseCall);
 }
 
 void plant_bow_aim(psprecomp::GuestMemory &memory, std::uint8_t weapon = kBow) {
@@ -689,24 +764,26 @@ void test_bow_actions_of_another_weapon() {
 // 0x09AAA158 aims in an action its caller passes (8 from three call sites).
 // It is left unwrapped: an action it once ran in is not aiming, so the right
 // stick stays on the camera through a sword's swing in that action.
+// FUComplete has the same function at 0x09AA5328.
+constexpr std::uint32_t kActionAim = kCameraFreedomUnite ? 0x09AAA158u : 0x09AA5328u;
 void test_action_aim_function() {
     Fixture f;
     f.enable();
     auto &memory = f.runtime.memory();
-    memory.store32(0x09AAA158u, 0x27BDFFF0u);
-    memory.store32(0x09AAA15Cu, 0xAFBF000Cu);
-    memory.store32(0x09AAA160u, 0xAFB00008u);
-    memory.store32(0x09AAA188u, 0x96040324u);
-    memory.store32(0x09AAA18Cu, 0x30A3FFFFu);
-    f.runtime.register_function(0x09AAA158u, &aim_original, "recomp_unit_action_aim_test");
+    memory.store32(kActionAim, 0x27BDFFF0u);
+    memory.store32(kActionAim + 0x04u, 0xAFBF000Cu);
+    memory.store32(kActionAim + 0x08u, 0xAFB00008u);
+    memory.store32(kActionAim + 0x30u, 0x96040324u);
+    memory.store32(kActionAim + 0x34u, 0x30A3FFFFu);
+    f.runtime.register_function(kActionAim, &aim_original, "recomp_unit_action_aim_test");
     plant_hunter(memory, 8u);
     f.flip(0.0f, 0.0f);
-    check(f.runtime.function_at(0x09AAA158u) == &aim_original, "0x09AAA158 is not wrapped");
+    check(f.runtime.function_at(kActionAim) == &aim_original, "the action's aim function is not wrapped");
 
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[5] = 8u;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AAA158u, f.ctx), "the game's function still runs");
+    check(f.runtime.invoke_isolated_aot(kActionAim, f.ctx), "the game's function still runs");
     f.flip(0.0f, 0.0f);
     check(!game_camera_hunter_aiming() && !game_camera_aim_boost(),
         "the action it ran in is not aiming, so the right stick stays on the camera");
@@ -721,7 +798,7 @@ void test_action_1001_without_the_aim_function() {
     f.enable();
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_original, "recomp_unit_aim_1001");
+    f.runtime.register_function(kAimFunction, &aim_original, "recomp_unit_aim_1001");
     plant_hunter(memory, 1001u);
     f.frame(0.0f, 0.0f);
     f.flip(1.0f, 0.0f);
@@ -733,14 +810,14 @@ void test_action_1001_without_the_aim_function() {
 
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     f.flip(0.0f, 0.0f);
     check(game_camera_hunter_aiming() && game_camera_aim_boost(), "once it runs in 1001, the hunter is aiming");
 
     // The game drops the reticle when R is released, but the hunter stays in
     // 1001 and the aim function keeps running. The stick is the camera's then.
     memory.store32(kHunter + 1152u, 0u);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function runs on after R is released");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function runs on after R is released");
     f.flip(0.0f, 0.0f);
     check(!game_camera_hunter_aiming() && !game_camera_aim_boost(), "with R released, 1001 is no longer the aim");
     f.ctx.gpr[4] = parent_address;
@@ -752,7 +829,7 @@ void test_action_1001_without_the_aim_function() {
     memory.store32(kHunter + 1152u, 0x0200u);
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches with R held again");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches with R held again");
     f.flip(0.0f, 0.0f);
     check(game_camera_hunter_aiming(), "and holding R again is the aim");
 
@@ -763,7 +840,7 @@ void test_action_1001_without_the_aim_function() {
 
     memory.store16(kHunter + kAction, 3u);
     f.ctx.gpr[4] = kHunter;
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches in another action");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches in another action");
     memory.store16(kHunter + kAction, 1001u);
     f.flip(0.0f, 0.0f);
     check(!game_camera_hunter_aiming(), "a call made in another action does not count for 1001");
@@ -791,14 +868,14 @@ void test_aim_speed_follows_the_stick() {
     mhfu::settings::current().aim_speed = 90.0f;
     auto &memory = f.runtime.memory();
     for (const CodeWord &word : aim_code_signature()) memory.store32(word.address, word.word);
-    f.runtime.register_function(0x09AA4DD0u, &aim_steps_fast, "recomp_unit_aim_speed");
+    f.runtime.register_function(kAimFunction, &aim_steps_fast, "recomp_unit_aim_speed");
     plant_hunter(memory, 1001u);
     f.flip(0.0f, 0.0f);
     f.ctx.gpr[4] = kHunter;
     f.ctx.gpr[31] = 0x09C00000u;
 
     game_camera_present_aim(127, 0);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches");
     check(memory.load16(kHunter + kHeading) == 10576u, "no stick scale leaves the game's own step");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 10, "and its own pitch step");
     f.flip(0.0f, 0.0f);
@@ -809,7 +886,7 @@ void test_aim_speed_follows_the_stick() {
     f.update();
     check(memory.load16(kHunter + kHeading) == 10000u, "the follow camera's first aim update only learns");
     game_camera_present_aim(127, -40, 0.5f, 0.5f);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches at half deflection");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches at half deflection");
     check(memory.load16(kHunter + kHeading) == 10273u, "half a push is half of Aim speed, not the game's 576");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 8, "and half of the same speed on pitch");
     check(memory.load32(kHunter + kFacing) == (0xABC00000u | 10273u), "the body facing moves with the resized aim");
@@ -819,7 +896,7 @@ void test_aim_speed_follows_the_stick() {
 
     f.flip(1.0f, 0.0f);
     game_camera_present_aim(127, 0, 1.0f, 0.0f);
-    check(f.runtime.invoke_isolated_aot(0x09AA4DD0u, f.ctx), "the aim function dispatches at full deflection");
+    check(f.runtime.invoke_isolated_aot(kAimFunction, f.ctx), "the aim function dispatches at full deflection");
     check(memory.load16(kHunter + kHeading) == 10819u, "a full push is 3 degrees of Aim speed, not the game's 576");
     check(static_cast<std::int8_t>(memory.load8(kHunter + kPitch)) == 18, "an axis with no scale keeps the game's pitch step");
     f.update();
@@ -898,9 +975,12 @@ int main() {
     test_wall_pulls_in_behind_the_hunter();
     test_dispatch_and_write_extent();
     test_pitch_is_handed_whole();
+    test_vertical_snap_option_is_held_off_while_tilting();
     test_pitch_is_not_left_for_the_eye_ease();
     test_signature_mismatch();
     test_hook_waits_for_the_option();
+    test_field_of_view_scale();
+    test_projection_hook_for_field_of_view();
     test_frame_rate_independence();
     test_motion_source();
     test_mouse_stock_turn();

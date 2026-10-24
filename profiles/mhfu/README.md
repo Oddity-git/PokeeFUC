@@ -41,6 +41,67 @@ Tested on macOS (Apple Silicon, Vulkan through MoltenVK), on a Steam Deck in Gam
 
 The encrypted header uses tag `0xC0CB167C`. `generate.sh` translates the resident code (3095 functions, 67 C++ units) and stamps the executable SHA-256. Launch registers that corpus only when the prepared executable has the same hash. The ELF names overlay sections (`game_task.ovl`, `em01.ovl`, `stage000.ovl`, and the rest) but those sections have no file bytes, so they are not part of this corpus. The analog camera's follow driver, its bow and bowgun aim, lock-on, the projection, hiding the HUD and layered armor were read from this executable. The lock-on marker places the monster from the follow camera's eye and look-at. Armor names are read from the text block at `0x089CC560` (head, chest, arms, waist and legs in tables 7, 9, 11, 13 and 15). Portable 3rd, its PSP release (`ULJM-05800`), and other Freedom Unite regions are refused.
 
+## FUComplete (work in progress)
+
+[FUComplete](https://github.com/FUComplete/Patch) is not a Freedom Unite mod: it patches **Monster Hunter Portable 2nd G** (Japan, `ULJM-05500`) with an English translation, built-in event quests and its own mod loader. It is a different executable, so it gets a build of its own, configured with `-DMHFU_TITLE=FUC`:
+
+A Linux release (Flatpak and portable tarball) is on the fork's
+[releases page](https://github.com/Oddity-git/PokeeFUC/releases). To build it
+yourself:
+
+```bash
+cmake -S . -B out/fuc -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSPRECOMP_PROFILE=mhfu -DMHFU_TITLE=FUC
+cmake --build out/fuc --target Pokee -j 2
+out/fuc/bin/Pokee --install "/path/to/MHP2G_FUC.iso"   # the image FUCTool made
+out/fuc/bin/Pokee                                       # first start: writes EBOOT.FUC.ELF; quit
+MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.FUC.ELF" profiles/mhfu/scripts/generate.sh out/fuc
+cmake --build out/fuc --target Pokee -j 2
+profiles/mhfu/scripts/build_overlays.sh out/fuc                      # about 40 minutes, resumable
+profiles/mhfu/packaging/linux/install_user.sh out/fuc --overlays out/fuc/bin/overlays
+```
+
+The first start is needed before generating: FUComplete's loader rewrites the
+executable as the game starts, and writes the result as `EBOOT.FUC.ELF` in the
+data folder. The corpus must come from that file, not from the disc's
+executable.
+
+**FUComplete's changes to the game's code.** Its loader rewrites words of the executable's code when the game starts: jumps from the file I/O into its own code for the file replacer, and the save keys for its Save Region option. Compiled code runs the words it was generated from, so the corpus has to be generated from the executable as the loader leaves it. The first start finds the changes, writes that executable as `EBOOT.FUC.ELF` beside `EBOOT.ELF`, and prints `[fuc] FUComplete's loader changed N words of the game's code`. Generate again from it and rebuild:
+
+```bash
+MHFU_EXECUTABLE="$HOME/.local/share/Pokee/FUC/EBOOT.FUC.ELF" profiles/mhfu/scripts/generate.sh out/fuc
+cmake --build out/fuc --target Pokee -j 2
+```
+
+From then on the game starts from `EBOOT.FUC.ELF`, because the corpus was generated from it. The Save Region patch changes the key the game encrypts its save with, so a save written before the change has the earlier key: every key the game passes is kept in `savedata_keys.txt` in the data folder, and a save that does not match the current key loads with an earlier one (`[savedata] ... was written with a key this game used before`). The game's next save writes it with the current key. `MHFU_FUC_CODE_PATCHES=0` turns the check off.
+
+**FUComplete's options.** The Game tab of the menu has a FUComplete section with every option of `CONFIG.BIN` (in `ms0:/PSP/SAVEDATA/FUCDAT` of the data folder): File Replacer, True Raw, Dos Audio, the field of view, the starting camera height, the minimap's size, the hunting horn tweak, the early Lao-Shan Lung and Shen Gaoren kill, the Guild Hall's full chest and its drink buff. A change is written to the file at once and applies when the game starts again, since FUComplete's loader reads the file at the start. Save Region is shown but not changed there: another region loads no character from the save. Most options make the loader change words of the game's code that the corpus was not generated with. Running from `EBOOT.FUC.ELF`, the file is then left as it is, and the code around each changed word runs in the interpreter (`[fuc] FUComplete's loader changed N words of the code compiled from EBOOT.FUC.ELF`): the corpus is cut into basic blocks that jump to each other directly within a 16 KiB unit, so every block of that unit is interpreted and the rest of the game stays compiled. An overlay the loader patched differently is installed from the library of the same overlay whose code differs least from it, with the code around the differing words interpreted the same way (`[overlay] installed lobby_task ... with 6 words changed since it was compiled`). That needs the code each library was generated from beside it, `<library>.code`, which `install_user.sh` writes from the corpus folders (`tools/overlay_code.py` for another directory). `MHFU_FUC_INTERPRET_CHANGES=0` turns both off. Options that patch nothing the corpus holds, such as the file replacer's files, need neither.
+
+**FUComplete's changes to overlays.** The loader also patches overlays as they load, game_task and lobby_task among them, so they match no library built from `DATA.BIN` and run in the interpreter: slower, and the extras that wrap their functions (the bow and bowgun aim, so a drawn sword and shield counts as aiming) stay off. The FUComplete build dumps every overlay it has no library for into `overlay_dumps` in its data folder (`[overlay] dumped ...`; `MHFU_DUMP_OVERLAYS` names another directory, `0` none). After playing through the village and a quest, build them:
+
+```bash
+profiles/mhfu/scripts/build_overlay_dumps.sh out/fuc
+```
+
+Each library is named after the image's hash, so a patched overlay gets one of its own beside the unpatched one.
+
+The FUComplete build calls itself **PokeeFUC** wherever the player reads its name (window, menu, setup), and its window has the desktop id `io.github.teamgdb.PokeeFUC`, so it is told apart from the standard build installed beside it. On Linux, `install_user.sh` copies a build into `~/.local/share/pokee-fuc` with a launcher, and installs a `.desktop` entry and icon under `~/.local/share` for the application menu, without root. Run it again after a rebuild or when more overlays are built; `--uninstall` removes it. The copy holds code recompiled from your own game: keep it to yourself. See [LINUX.md](../../docs/LINUX.md#install-a-source-build-for-your-user).
+
+What differs from the Freedom Unite build:
+
+| | Freedom Unite (`FU`, default) | FUComplete (`FUC`) |
+| --- | --- | --- |
+| Disc | `ULUS10391`, encrypted `EBOOT.BIN` pinned by hash | `ULJM05500` with FUComplete's `FUC/PRELOAD.BIN`; `EBOOT.BIN` is already a plain ELF, not pinned (every FUComplete version changes it) |
+| Data folder | `Pokee/MHFU` | `Pokee/FUC` |
+| Corpus, overlays, game, analysis | `generated/`, `overlays/`, `game/`, `analysis/` | `generated_fuc/`, `overlays_fuc/`, `game_fuc/`, `analysis_fuc/` |
+| Overlay slots | the four read from Freedom Unite's `DATA.BIN` | the load addresses of the executable's `*.ovl` sections |
+| `DATA.BIN` | obfuscated | stored plain; `databin.py` and `build_overlays.sh` read either |
+| Extras (analog camera, hold to gather, aspect ratio, HUD hiding, UI scaling, damage numbers, gather icon, sharpness gauge, empty item slot, give any rarity, lock-on, item box, layered armor, key quests, Eat in the Guild Hall, Item Sets, Change Equipment) | on | on at FUComplete's own addresses (`host/title.hpp`), except the fast item box, which FUComplete already has |
+| Mods page | the community's `DATA.BIN` mods | off: FUComplete has its own file replacer (`ms0:/PSP/SAVEDATA/FUCDAT/NATIVEPSP`) |
+
+The scripts (`generate.sh`, `build_overlays.sh`, `bootstrap_overlays.sh`, `add_overlay.py`) read the title from the build directory they are given; `prepare_game.sh` reads `MHFU_TITLE` from the environment. FUComplete's own loader copies `PRELOAD.BIN` and `MODLOAD.BIN` to `ms0:/PSP/SAVEDATA/FUCDAT` on the first start and runs them from there; that code is not in the corpus and runs in the interpreter. FUComplete boots to its title, menus, character creation and quests on Linux.
+
+The extras find the same code as in Freedom Unite at FUComplete's addresses: the executable's code sits a few words or 0x2FC lower (0x2948 higher in places), and game_task, lobby_task and game_sub load lower with their code. Each address has its FUComplete value beside Freedom Unite's, picked by the build's title, and each feature still checks the instructions it relies on before it acts, so a different FUComplete version leaves it off instead of writing to the wrong place. The data it reads moved as well: GameSys at 0x089C7508, the camera object at 0x089C6CB4, the entity manager at 0x09D146E0, and the HUD's textures 0x4400 lower (the item atlas at 0x091830A0). FUComplete's own name plate under the clock is 8 pixels shorter than Freedom Unite's, which UI Scaling takes into account.
+
 ## Requirements
 
 - CMake 3.20 or newer, Ninja and a C++20 compiler
@@ -416,6 +477,7 @@ The Android app starts from other defaults where a phone differs, with the same 
 | Video | Display | `video.fullscreen` | | Window or fullscreen |
 | Video | Window size | `video.window_scale` | | ×1–×4 of 480×272; default ×2 |
 | Video | Aspect ratio | `video.aspect` | | `original` (the PSP's shape, black bars; the default), `stretch` (stretched to the window) or `fill` (the game's view takes the window's shape). Older versions wrote `video.keep_aspect`, which is still read and written |
+| Video | Field of view | `video.fov_scale` | `MHFU_FOV_SCALE` | 0.5–2.0 (the menu offers 50–150%), the camera's field of view as a share of the game's own; default 1. It follows what the game sets, in the village and in quests, and applies while the game runs |
 | Video | Scaling filter | `video.sharp_screen` | | Smooth or sharp scaling of the finished picture to the window |
 | Video | Texture filter | `video.sharp_textures` | | Smooth (bilinear) or sharp (nearest) texture sampling |
 | Video | Texture pack | `video.texture_pack` | `MHFU_TEXTURE_PACK` | On (default) or off: draw an installed [HD texture pack](#hd-texture-packs) instead of the game's textures. The footer shows how many textures the pack has and how many are on the GPU, or where the pack was looked for |
@@ -490,10 +552,13 @@ The Android app starts from other defaults where a phone differs, with the same 
 | Mods | Item Sets | `game.item_sets` | `MHFU_ITEM_SETS` | On (default): the item box menu, in the village and the Guild Hall, has a seventh entry, *Item Sets*, after *Combine Items*, to register the pouch as one of 24 sets and load a set again from the box, in the game's own windows. `0` leaves the game's own six entries. See [Item sets](#item-sets) |
 | Mods | Eat in the Guild Hall | `game.hall_meal` | `MHFU_HALL_MEAL` | On (default): seated at a table in the Guild Hall, △ opens your home Felyne Kitchen's menu, as *Order Food* in the house does. Off: △ does nothing at the table, as in the game. See [Eating in the Guild Hall](#eating-in-the-guild-hall) |
 | Mods | Show Key Quests | `game.key_quests` | `MHFU_KEY_QUESTS` | Off (default): the game's own quest names. On: the quests that count towards the next Urgent Quest are named *[Key]* and their name, in the quest lists and wherever else the game shows a quest's name. See [Key quests](#key-quests) |
+| Mods | Scale Guild Hall Quests | `game.hub_scaling` | `MHFU_HUB_SCALING` | Off (default): the game's own health. On: a large monster in a quest started from the offline Gathering Hall keeps 65% of its health, so one hunter finishes it at the village's pace. Village quests and every online hall keep the game's health. `MHFU_HUB_SCALING_HEALTH` sets another percentage (1 to 100). See [Guild Hall scaling](#guild-hall-scaling) |
 | Mods | Use mods | `[general] enabled` in `mods.ini` | `MHFU_NO_MODS` | On (default) or off: every mod off, the game's own files only. See [Mods](#mods) |
 | Mods | A row per mod: On, Priority | `[mod <folder>] enabled`, `rank` in `mods.ini` | | Off (default) or on; a higher rank wins where two mods replace the same file |
 | System | Add a timestamp to the backup name | `saves.backup_timestamp` | | On (default): each backup from *Back up saves…* is a new folder named by its time; off: plain folder names, replaced after asking |
 | System | Remind me to back up after updates | `saves.backup_reminder` | `MHFU_BACKUP_REMINDER` | On (default): the first start of a new release asks you to back up your saves; see [Backups](#where-saves-live-and-how-to-back-them-up). `saves.backup_reminded` records the release that last asked |
+| System | Sync folder | `saves.sync_folder` | `MHFU_SYNC_FOLDER` | The folder both devices can see: a path on a computer, or a `content://` tree picked through Android's folder picker. Empty: not set. See [Syncing saves](#syncing-saves-between-devices) |
+| System | Last sync | `saves.sync_hash`, `saves.sync_time` | | The save hash and the time of the last sync, used to tell which copy changed |
 | Network | Ad hoc play | `network.adhoc` | `MHFU_ADHOC` | Off (default) or on; off, the game reports the wireless switch as off |
 | Network | Server | `network.server` | `MHFU_ADHOC_SERVER` | Host name or address of a PSP ad hoc server, optionally `host:port`; empty by default |
 | Network | Nickname | `network.nickname` | `MHFU_ADHOC_NICKNAME` | The name other players see; empty uses the hunter name |
@@ -568,7 +633,13 @@ The meal is the game's own: Pokee runs the kitchen's menu (`0x09C1CC38` in `game
 
 **Show Key Quests** (Mods, `game.key_quests`, off unless `MHFU_KEY_QUESTS=1`) marks the key quests: on each level of the Village Chief's, Nekoht's and the Guild's quests, the few quests that must be cleared before that level's Urgent Quest is offered. Their names read *[Key]* and the name, for example *[Key] Battle of the Blos*, in the quest lists, the quest's details and wherever else the game shows the name, in every language. The other quests, the Urgent Quests themselves and training, treasure and event quests keep their names. A change applies to a list opened after it, and to one already open once it scrolls.
 
-The game knows which quests are key: each quest's record in the quest packs (`DATA.BIN` entries 5342 to 5352) has bit `0x04` set in its fourth byte, and bit `0x02` on the Urgent Quest. The game loads a pack unchanged and reads a quest's name through offsets in it each time it draws the name. When the game has read a pack, Pokee finds it in memory, byte for byte as on the disc (or as a mod changed it), and points the names of its key quests at copies with the mark, kept in a block of guest memory of its own. Turning it off puts the game's offsets back. `MHFU_TRACE_KEY_QUESTS=1` prints each pack found and how many names were marked. See `game/key_quests.hpp` for what was traced.
+The game knows which quests are key: each quest's record in the quest packs (`DATA.BIN` entries 5342 to 5352 in Freedom Unite, 5310 to 5320 in FUComplete) has bit `0x04` set in its fourth byte, and bit `0x02` on the Urgent Quest. The game reads a quest's name through offsets in the pack each time it draws the name. When the game has read a pack, Pokee finds every copy of it in memory, byte for byte as on the disc (or as a mod changed it), and points the names of its key quests at copies with the mark, kept in a block of guest memory of its own. FUComplete reads a pack into a staging buffer and then copies it to the list's own, so each copy is tagged against its own start: a name offset belongs to one copy, and one sent to another points into nothing. Turning it off puts the game's offsets back. `MHFU_TRACE_KEY_QUESTS=1` prints each pack found, every address, and how many names were marked. See `game/key_quests.hpp` for what was traced.
+
+### Guild Hall scaling
+
+**Scale Guild Hall Quests** (Mods, `game.hub_scaling`, off unless `MHFU_HUB_SCALING=1`) is for playing the Guild's quests alone. The Guild's quests are tuned for four hunters, and the offline Gathering Hall offers the same quests to one. With the switch on, a large monster in a quest started from the offline hall keeps 65% of its health: its most health and its health are cut by the same share when it appears. Village quests never change, and neither does any quest started while an ad hoc session is active, so an online hall is untouched. The percentage is `MHFU_HUB_SCALING_HEALTH` (1 to 100, default 65); a change applies at the next start. The switch applies at the next quest, and turning it off puts back the monsters already in the quest.
+
+The quest itself carries no mark the port can read: the accepted quest's id is not kept in guest memory during the hunt (traced with a scan of every quest id the packs hold, and of copies of a record's fee, reward and HR points). The hall is its own stage, so the gate is the stage that was loaded just before the quest started: the offline Gathering Hall is stage 85, Pokke Village 139, in FUComplete. `MHFU_TRACE_HUB_SCALING=1` prints the stage and whether the scaling applies, then each monster cut and each one put back. See `game/hub_scaling.hpp` for what was traced.
 
 ## Game text
 
@@ -645,7 +716,7 @@ The in-game menu does it (Esc, or L3+R3 on a gamepad; Video section, under *Text
 
 How it works:
 
-- **Keys.** Each texture is hashed once, when the renderer first uploads it, never per draw: `xxh64`, `xxh32` or the older `quick` over its bytes in guest memory, with the dimensions and, for paletted textures, the palette's hash in the key, as the pack's `[options]` choose. `ignoreAddress`, `reduceHash`, `[hashranges]`, `[reducehashranges]`, `[filtering]`, `[games]`, the wildcard keys that leave the address, palette or data hash out, empty entries that keep a texture as it is, and images in the pack's top folder named by their key are all honoured, except that `ignoreAddress` and `reduceHash` are ignored with `quick`, as PPSSPP ignores them. Zipped packs (`textures.zip`) and DDS, KTX2 and ZIM images are not supported; PNG is.
+- **Keys.** Each texture is hashed once, when the renderer first uploads it, never per draw: `xxh64`, `xxh32` or the older `quick` over its bytes in guest memory, with the dimensions and, for paletted textures, the palette's hash in the key, as the pack's `[options]` choose. `ignoreAddress`, `reduceHash`, `[hashranges]`, `[reducehashranges]`, `[filtering]`, `[games]`, the wildcard keys that leave the address, palette or data hash out, empty entries that keep a texture as it is, and images in the pack's top folder named by their key are all honoured, except that `ignoreAddress` and `reduceHash` are ignored with `quick`, as PPSSPP ignores them. Images may be PNG or KTX2 (Basis Universal ETC1S or UASTC, with or without zstd supercompression, as packs made for PPSSPP ship them); a KTX2 image is decoded from its full-size level and mipmapped like a PNG one. Zipped packs (`textures.zip`) and DDS and ZIM images are not supported.
 - **Loading.** Images are read and decoded on background threads; the original texture is drawn until its replacement is on the GPU, usually a frame or two after it first appears. Each image is uploaded with a full set of mip levels, so a large image stays smooth at a distance. Its size does not matter: texture coordinates address the whole texture, so a 4× image covers exactly what the original covered, 2D screens included. A file name a pack spells in another case than the file on disk is still found, which matters on Linux.
 - **Memory.** Images on the GPU are kept within a budget (`MHFU_TEXTURE_PACK_MEMORY`): a quarter of a discrete GPU's own memory, at least 1 GiB and at most 8 GiB (6 GiB on a 24 GB card), and 1 GiB on an integrated GPU, which shares its memory with the system. When a new scene needs more, the images drawn least recently are dropped and loaded again when they are next drawn. The village with a full pack needs about 250 MB.
 - **Loader threads.** A quarter of the CPU's hardware threads, from one to six, decode the pack's images (`MHFU_TEXTURE_PACK_THREADS`): one or two up to 11 hardware threads, six on a 32-thread desktop CPU. The log names both when the pack is loaded: `[texpack] 5120 textures from …; 6 loader threads, 6144 MB of GPU memory`.
@@ -752,6 +823,29 @@ By hand, the same works with the game closed: copy the folder into `ms0/PSP/SAVE
 - **Export save…** copies the game data and the downloaded quests to a folder you choose, as `MHFU saves <date>_<time>/PSP/SAVEDATA/ULUS10391…`, the layout of a memory stick: copy its `PSP` folder to the root of a PSP's memory stick, or import it on another machine. It always makes a new folder.
 - **Back up saves…** copies every save folder of the game, the install data included, to the backups folder, `save-backups` in the [per-user data directory](#installer), or to a folder you choose. With *Add a timestamp to the backup name* (on by default; `saves.backup_timestamp` in `settings.ini`) each backup is a new folder named by its time, holding the save folders: `save-backups/2026-09-19_19-05-12/ULUS10391/`. With it off, the save folders go straight into the chosen folder (`save-backups/ULUS10391/`), and an earlier backup there is replaced only after you confirm. *Open the backups folder* shows it. To restore a backup, import it.
 - **The reminder.** The first time a new release starts and finds saves, it pauses the game for a moment and asks you to back them up. *Back up now* makes a new timestamped folder in `save-backups` (on Android, in a folder you pick), whatever the timestamp setting says, so it never replaces an earlier backup; the next screen says where the backup went and offers to open that folder. *Continue without a backup* starts the game. Either way the reminder does not come back until the next release. The import's review asks the same before it writes anything, with its own *Back up now*. Turn the reminder off with *Remind me to back up after updates*.
+
+### Syncing saves between devices
+
+**Sync saves** (System, *Saves*) keeps one save on this device and another through a folder both can see. The folder holds only this game's save (`PARAM.SFO`, `MHP2NDG.BIN` and its icon), so it can be copied or restored like any save. It is a normal folder on a computer and a folder picked through Android's system picker on a phone, so Google Drive, Syncthing, Nextcloud and a plain shared folder all work.
+
+Set it up once on each device:
+
+1. **Android.** Install the **Google Drive** app (or Syncthing/Nextcloud) and sign in. In PokeeFUC: System, *Saves*, **Set up save sync…**, *Choose the sync folder…*, and pick the Drive folder. The app keeps the folder permission across restarts.
+2. **Computer.** Sync the same Drive folder to a local folder. Google has no Drive client for Linux; use **rclone** (`rclone config`, then `rclone mount gdrive:PokeeFUC ~/PokeeFUC --vfs-cache-mode writes` and keep it running, for example as a systemd user service), **Insync**, or use Syncthing/Nextcloud. In PokeeFUC: System, *Saves*, **Set up save sync…**, *Choose the sync folder…*, and pick that local folder.
+3. On the device with the save you want to keep, choose **Upload this device's save**. On the other device, open **Sync saves** and choose **Sync now**: it downloads the save, and the save it replaces is kept in the save-data backup folder.
+
+After that, **Sync now** compares the two copies by a hash of the save files:
+
+- only this device changed → it uploads;
+- only the folder changed → it downloads (and keeps the earlier save);
+- both changed → it asks: *Keep this device* or *Use the folder's save*; the other copy is kept as a backup;
+- the same save → nothing happens.
+
+*Upload this device's save* and *Use the folder's save* do one direction whatever the comparison says, and keeping the folder's earlier save before an upload goes to `save-backups/sync-<date>_<time>`. The game reads its save at the title screen, so after a download choose *Restart now* before playing, or at least do not save before restarting.
+
+The sync folder is only for this game's save. Do not point it at the data folder itself: that holds the disc image and `EBOOT.FUC.ELF`, which are large and must not be synced. A save folder is a couple of megabytes.
+
+The Flatpak build can write the sync folder you pick anywhere in your home (`--filesystem=home`), because an rclone mount or a Nextcloud folder usually lives there. A folder in Downloads also works.
 
 ### Where saves live and how to back them up
 
@@ -1290,10 +1384,13 @@ The marker does not project through the view a draw uploaded. That view has no t
 | `MHFU_TRACE_ITEM_BAR=1` | With the empty item slot on, one `[item bar]` line per L+○ or L+□ scroll: the direction, the slot before and after, where the game alone would have gone, the empty slot, and the four bytes past the pouch. Also a line each time the selected slot changes |
 | `MHFU_TRACE_ITEM_SETS=1` | One `[item sets]` line when the box menu gets its Item Sets entry, when Item Sets is chosen (with the box record's address), for each set loaded (with whether the box was full and how many items it was short of), registered or deleted, and when the box goes back to its menu |
 | `MHFU_TRACE_KEY_QUESTS=1` | With *Show Key Quests* on, one `[key quests]` line for each quest pack found in memory after the game read it (its entry, its address and how many names were marked), for one not found, and when the switch goes off and the names are put back |
+| `MHFU_TRACE_HUB_SCALING=1` | With *Scale Guild Hall Quests* on, one `[hub] quest start` line when a quest starts with the stage loaded just before it, whether ad hoc was active and whether the scaling applies, then one `[hub] scale` line per large monster, and one when the switch goes off and the monsters are put back |
+| `MHFU_HUB_SCALING_HEALTH=N` | The share of its health a Guild Hall large monster keeps, 1 to 100 (default 65). Read once, at start |
 | `MHFU_TRACE_HALL_MEAL=1` | With *Eat in the Guild Hall* on, one `[hall meal]` line when the kitchen's menu opens at a table in the Guild Hall (with the hunter and the kitchen object), when a meal is paid and served, when one is refused, and when the menu closes and why |
 | `MHFU_TRACE_GATHER=1` | One `[gather]` line when the point under the [gather icon](#gather-icon) changes, or when there is none: its address, id, kind and position. `[gather] carve` gives a body's record address and its halfwords from `+16` when it comes into reach. `[gather] hold` is each repeated press of [Hold to gather](#gather-icon). `[gather] farm` gives the Pokke Farm mining outcrop or bug thicket in reach: its point address, type, index and uses left. `[gather] fishing` gives the fishing spot in reach, its record address and position, or `none` |
 | `MHFU_TRACE_HITS=1` | Each call of the routine that takes health off a monster (the one [damage numbers](#damage-numbers) watch, `0x09AC7A08`) whose return finds the health changed: a `[hit] call` line with the arguments, the saved registers, `ra`, `sp`, the float arguments and the health; the chain of return addresses and the functions they lie in (`ra@start`); the 32 words on the stack, code-looking ones marked `*`; the 16 words behind each argument that points into RAM; and the health before and after. The monster's own update calls the routine every frame without changing anything; such a caller is named once and its calls are not printed. A drop in a monster's health between two frames that no call made is reported as written elsewhere. Works with the setting off. `MHFU_TRACE_HITS_LIMIT` caps the hits printed (default 200). How the attack's own record, with the point of contact and the part struck, is being looked for |
 | `MHFU_TRACE_BODIES=1` | How long a dead monster lies before the game removes it, and which of its fields count that time. A `[bodies] … died` line when a monster on the quest entity list reaches zero health, with its species and stage. When the body leaves the list, its slot comes back to life or changes species, a line with the frames and seconds it lay there, then up to 16 fields from the first 4 KiB of the entity that moved like a timer: in one direction only, at least 20 times, by exactly 1 for a byte or halfword and in even steps for a float, with the frame of its first step (`s16 +0x2A4: 900 -> 0 in 900 changes from frame 3`). A field's first change may be a jump, where the timer starts. Then up to 32 bytes that held still from the death and changed at most four times, the first of them in the body's last 120 frames, the earliest first (`flag +0x3C: 0x1 -> 0x5 at frame 470 of 477 (2 changes)`): a state or flag the removal may follow from. Leaving a quest forgets the bodies without a report. With `MHFU_TRACE_BODIES_WATCH=OFFSET` (such as `0x244`, where a Giaprey's body sinks) and `PSPRECOMP_WATCH_WRITE` set to any address, the first Velociprey, Genprey, Ioprey or Giaprey body has that field watched: every guest write to it is a `[watch-write]` line with the code address that made it. Arming the watch slows every store. How the despawn timer of small monsters is being looked for |
+| `MHFU_TRACE_FOV=1` | The camera's field of view, once whenever it changes: the projection camera's address and value, and, when a Field of view scale is set, when the camera's update is wrapped |
 | `MHFU_TRACE_SHARPNESS=1` | One `[sharpness]` line whenever the [modern sharpness gauge](#modern-sharpness-gauge)'s reading changes: the points and the most, the colour as the gauge finds it and the game's own colour byte (+1522), the colour's start and end, and how full it is. Works with the setting off |
 | `MHFU_TRACE_VIEWS=N` | Every N game frames, one line per distinct view and projection the frame's transformed draws used: how many draws and vertices, the eye position, yaw and pitch, the matrices and the render targets |
 | `MHFU_TRACE_CAMERA=1` | One line per frame for the camera the game itself set: the second stick's offset from centre, the yaw and pitch read out of the frame's busiest view matrix, the turn since the previous frame, the view's up axis (a negative second number is an upside-down picture), and the camera's world position. Reads the game's own camera, so it tells a stepped turn from a continuous one |
@@ -1328,7 +1425,8 @@ The marker does not project through the view a draw uploaded. That view has no t
 | `MHFU_INPUT_SCRIPT` | Scripted keys, mouse motion and buttons, virtual-gamepad buttons and axes, dropped files and window captures, for testing the menu, the setup, the on-screen keyboard and the game's controls without a person at the controls; the syntax is in `host/ui/input_script.hpp`. Its virtual gamepad also becomes the game's pad, in place of a real one that is connected; its keys reach the game through the bindings as well as the interface; with mouse steps the pointer counts as captured without taking the real one; its finger steps are a virtual touch screen, and `drag` moves the interface's pointer as a touch does; `joy` steps attach test joysticks SDL has no mapping for, like a controller it does not know (12 buttons, 4 axes and a hat), and press their buttons, hat and axes. Example: `300:key Escape;330:shot menu;360:pad leftstick+rightstick;400:key W 30;430:mouse 50 0` |
 | `MHFU_CAPTURE_PRESENTS=N` | Each window capture (`shot NAME` in the input script) goes on for N presents in a row, written as `NAME.bmp`, `NAME_1.bmp` and so on: with a [frame rate](#frame-rate) above 30 it shows the frames in between the game's as well, which one capture per game frame never does. With `MHFU_TRACE_INTERPOLATION=presents`, the `[render] window` line of each capture comes just before the `[interp] present` line that says whether it was blended. Each capture waits for its frame, so the run is slower while it lasts |
 | `MHFU_INPUT_LIVE` | A file read while the game runs; each line appended to it is an input-script step timed from when it is read, to drive two instances side by side |
-| `MHFU_DUMP_OVERLAYS` | Directory to dump an overlay that has no library into |
+| `MHFU_DUMP_OVERLAYS` | Directory to dump an overlay that has no library into, as `overlay_<slot>_<name>.bin`; `0` dumps nothing. The FUComplete build dumps into `overlay_dumps` in its data folder when this is unset |
+| `MHFU_FUC_INTERPRET_CHANGES` | `0` leaves code FUComplete's loader changed after the corpus was generated, and overlays that differ from every library in a few words, to the compiled code and the interpreter as before, instead of interpreting only the code around the changed words |
 | `PSPRECOMP_NO_INTERPRETER=1` | Stop at uncompiled code instead of interpreting it |
 | `PSPRECOMP_MAX_DISPATCHES` | Stop after this many dispatches |
 | `PSPRECOMP_HLE_HISTOGRAM=1` | Print import call counts on exit |

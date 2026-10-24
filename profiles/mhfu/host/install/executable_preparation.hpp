@@ -15,6 +15,9 @@ namespace mhfu::install {
 // and checks the result against that release's executable hash. Anything else
 // is refused with psprecomp::Error. Only the installer calls it, with a
 // callback that receives the bytes decrypted so far and the total.
+//
+// A release whose disc already holds a plain executable (FUComplete) gets
+// that ELF back unchanged, once it parses as a PSP executable.
 [[nodiscard]] std::vector<std::uint8_t> prepare_executable(std::span<const std::uint8_t> eboot_bin,
     const std::function<void(std::uint64_t done, std::uint64_t total)> &progress = {});
 

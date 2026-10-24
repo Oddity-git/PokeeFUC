@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -541,6 +542,80 @@ static std::vector<std::uint8_t> make_cross_unit_branch_test_elf() {
     return bytes;
 }
 
+// An executable that calls one PSP import from code in the same automatic
+// unit as the import's stub. Plain executables (FUComplete's patched EBOOT)
+// keep the stubs as `jr ra; nop` right after .text, so the analyzer decodes
+// them as code beside their callers.
+static std::vector<std::uint8_t> make_same_unit_import_test_elf() {
+    constexpr std::size_t kCode = 0x100u;
+    constexpr std::size_t kNames = 0x1B0u;
+    constexpr std::size_t kSections = 0x1D8u;
+    constexpr std::uint32_t kBase = 0x08804000u;
+    std::vector<std::uint8_t> bytes(kSections + 3u * 40u, 0u);
+    bytes[0] = 0x7Fu;
+    bytes[1] = 'E';
+    bytes[2] = 'L';
+    bytes[3] = 'F';
+    bytes[4] = 1u;
+    bytes[5] = 1u;
+    bytes[6] = 1u;
+    put16(bytes, 16u, 2u); // ET_EXEC
+    put16(bytes, 18u, 8u); // EM_MIPS
+    put32(bytes, 20u, 1u);
+    put32(bytes, 24u, kBase);
+    put32(bytes, 28u, 52u);
+    put32(bytes, 32u, static_cast<std::uint32_t>(kSections));
+    put16(bytes, 40u, 52u);
+    put16(bytes, 42u, 32u);
+    put16(bytes, 44u, 1u);
+    put16(bytes, 46u, 40u);
+    put16(bytes, 48u, 3u);
+    put16(bytes, 50u, 2u);
+
+    put32(bytes, 52u, 1u); // PT_LOAD
+    put32(bytes, 56u, static_cast<std::uint32_t>(kCode));
+    put32(bytes, 60u, kBase);
+    put32(bytes, 64u, kBase);
+    put32(bytes, 68u, 0xA8u);
+    put32(bytes, 72u, 0xA8u);
+    put32(bytes, 76u, 7u);
+    put32(bytes, 80u, 16u);
+
+    put32(bytes, kCode + 0x00u, 0x0C000000u | ((kBase + 0x20u) >> 2u & 0x03FFFFFFu)); // jal stub
+    put32(bytes, kCode + 0x04u, 0x00000000u);                                         // nop
+    put32(bytes, kCode + 0x08u, 0x03E00008u);                                         // jr ra
+    put32(bytes, kCode + 0x0Cu, 0x00000000u);                                         // nop
+    put32(bytes, kCode + 0x20u, 0x03E00008u);                                         // stub: jr ra
+    put32(bytes, kCode + 0x24u, 0x00000000u);                                         // nop
+
+    // Module info: gp, then the export and import table ranges.
+    std::memcpy(bytes.data() + kCode + 0x44u, "ImportTest", 10u);
+    put32(bytes, kCode + 0x6Cu, kBase + 0x80u);
+    put32(bytes, kCode + 0x70u, kBase + 0x94u);
+    // One import table: library name, length in words, one NID and its stub.
+    put32(bytes, kCode + 0x80u, kBase + 0xA0u);
+    bytes[kCode + 0x88u] = 5u;
+    put16(bytes, kCode + 0x8Au, 1u);
+    put32(bytes, kCode + 0x8Cu, kBase + 0x98u);
+    put32(bytes, kCode + 0x90u, kBase + 0x20u);
+    put32(bytes, kCode + 0x98u, 0x12345678u);
+    std::memcpy(bytes.data() + kCode + 0xA0u, "TestLib", 7u);
+
+    const char names[] = "\0.rodata.sceModuleInfo\0.shstrtab";
+    std::memcpy(bytes.data() + kNames, names, sizeof(names));
+    put32(bytes, kSections + 40u + 0u, 1u);
+    put32(bytes, kSections + 40u + 4u, 1u); // SHT_PROGBITS
+    put32(bytes, kSections + 40u + 8u, 2u);
+    put32(bytes, kSections + 40u + 12u, kBase + 0x40u);
+    put32(bytes, kSections + 40u + 16u, static_cast<std::uint32_t>(kCode + 0x40u));
+    put32(bytes, kSections + 40u + 20u, 52u);
+    put32(bytes, kSections + 80u + 0u, 23u);
+    put32(bytes, kSections + 80u + 4u, 3u); // SHT_STRTAB
+    put32(bytes, kSections + 80u + 16u, static_cast<std::uint32_t>(kNames));
+    put32(bytes, kSections + 80u + 20u, static_cast<std::uint32_t>(sizeof(names)));
+    return bytes;
+}
+
 static std::vector<std::uint8_t> make_vfpu_branch_test_elf() {
     auto bytes = make_branch_delay_test_elf();
     const std::uint32_t code[] = {
@@ -999,6 +1074,53 @@ static void test_automatic_cfg_and_codegen() {
     }
     require(text.find("ctx.set_gpr(") == std::string::npos,
         "Automatic codegen retained set_gpr helper calls instead of direct constant GPR writes");
+    std::filesystem::remove_all(root);
+#endif
+}
+
+// A call to an import stub must leave the unit for the dispatcher, where the
+// import wrapper is registered, even when the stub was decoded as a label of
+// the same unit. Jumping to that label ran the stub's `jr ra` and skipped the
+// HLE call, so FUComplete's module_start returned without starting the game.
+static void test_automatic_same_unit_import_call() {
+#ifndef PSPRECOMP_CODEGEN_PATH
+    throw std::runtime_error("PSPRECOMP_CODEGEN_PATH was not provided by CMake");
+#else
+    const auto root = std::filesystem::temp_directory_path() / "psprecomp_same_unit_import_test";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    const auto elf_path = root / "same_unit_import.elf";
+    const auto generated_dir = root / "generated";
+    const auto bytes = make_same_unit_import_test_elf();
+    {
+        std::ofstream out(elf_path, std::ios::binary);
+        out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    const std::filesystem::path codegen_path = codegen_tool_path();
+    const std::string command = shell_quote(codegen_path) + " " + shell_quote(elf_path) + " --auto " +
+        shell_quote(generated_dir) + " 0x08804000 64";
+    require(std::system(shell_command(command).c_str()) == 0, "psp_recomp same-unit import fixture generation failed");
+
+    std::string unit;
+    std::string registry;
+    {
+        std::ifstream generated(generated_dir / "generated_unit_0000.cpp");
+        unit.assign((std::istreambuf_iterator<char>(generated)), std::istreambuf_iterator<char>());
+        std::ifstream registered(generated_dir / "generated_registry.cpp");
+        registry.assign((std::istreambuf_iterator<char>(registered)), std::istreambuf_iterator<char>());
+    }
+    require(registry.find("runtime.register_function(0x08804020u, &import_0") != std::string::npos,
+        "Same-unit import fixture did not register its import wrapper");
+    require(unit.find("L_08804020:") != std::string::npos,
+        "Same-unit import fixture no longer decodes the stub as a label of the caller's unit");
+    // The JAL at 0x08804000 writes $ra, then must leave for the wrapper.
+    const auto call = unit.find("ctx.gpr[31] = (0x08804008u);");
+    require(call != std::string::npos, "Same-unit import fixture lost its call");
+    const auto handoff = unit.find("ctx.pc = 0x08804020u;", call);
+    const auto local_jump = unit.find("goto L_08804020;", call);
+    require(handoff != std::string::npos && handoff < local_jump,
+        "A call to an import stub jumped to its label instead of the import wrapper");
     std::filesystem::remove_all(root);
 #endif
 }
@@ -1931,6 +2053,7 @@ int main() {
         test_vfpu_branch_cfg_discovery();
         test_automatic_cfg_and_codegen();
         test_automatic_cross_unit_tail_chaining();
+        test_automatic_same_unit_import_call();
         test_materialized_function_pointer_discovery();
 
         auto relocation_elf = psprecomp::Elf32Image::from_bytes(make_relocation_test_prx(), "synthetic_relocation.prx");

@@ -11,7 +11,7 @@
 namespace mhfu::game::give_rarity {
 namespace {
 
-constexpr std::array<CodeWord, 12> kSignature = {{
+constexpr std::array<CodeWord, 12> kSignatureFreedomUnite = {{
     {kCanGive, 0x27BDFFF0u},    // addiu sp, sp, -16
     {0x08829960u, 0x0E2099CDu}, // jal 0x08826734: the item id
     {0x08829964u, 0x92050586u}, // lbu a1, 1414(s0): the slot
@@ -25,6 +25,22 @@ constexpr std::array<CodeWord, 12> kSignature = {{
     {0x08826744u, 0x0E215A21u}, // jal 0x08856884: the pouch slot
     {0x088568A0u, 0x3421AEA6u}, // ori at, at, 0xAEA6: the pouch
 }};
+constexpr std::array<CodeWord, 12> kSignatureFUComplete = {{
+    {kCanGive, 0x27BDFFF0u},    // addiu sp, sp, -16
+    {0x08829FFCu, 0x0E209BE3u}, // jal 0x08826F8C: the item id
+    {0x0882A000u, 0x92050586u}, // lbu a1, 1414(s0): the slot
+    {0x0882A014u, 0x3C02089Au}, // lui v0, 0x089A
+    {0x0882A018u, 0x2442A23Au}, // addiu v0, v0, -24006: the table's byte 2
+    {0x0882A020u, 0x90420000u}, // lbu v0, 0(v0)
+    {0x0882A024u, 0x28420003u}, // slti v0, v0, 3
+    {0x08817D48u, 0x0E20A7F1u}, // jal 0x08829FC4: the menu entry
+    {0x0881DAB8u, 0x0E20A7F1u}, // jal 0x08829FC4: the choice
+    {0x0881DDA0u, 0x0E20A7F1u}, // jal 0x08829FC4
+    {0x08826F9Cu, 0x0E2159EBu}, // jal 0x088567AC: the pouch slot
+    {0x088567C8u, 0x3421AEA6u}, // ori at, at, 0xAEA6: the pouch
+}};
+constexpr const std::array<CodeWord, 12> &kSignature =
+    kFreedomUniteCode ? kSignatureFreedomUnite : kSignatureFUComplete;
 
 struct State {
     psprecomp::Runtime::RecompiledFunction original{};

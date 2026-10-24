@@ -3,11 +3,14 @@
 // list completion callbacks, blocking audio output); the drawing and the
 // mixing themselves live under gpu/ and audio/.
 #include "hle_common.hpp"
+#include "fuc_code_patches.hpp"
 #include "kernel/fast_forward.hpp"
 #include "kernel/fast_loading.hpp"
 #include "kernel/load_trace.hpp"
 
 #include "overlays.hpp"
+#include "title.hpp"
+#include "adhoc/session.hpp"
 #include "game/body_trace.hpp"
 #include "game/damage_numbers.hpp"
 #include "game/gather_icon.hpp"
@@ -23,6 +26,7 @@
 #include "game/item_sets.hpp"
 #include "game/item_box.hpp"
 #include "game/key_quests.hpp"
+#include "game/hub_scaling.hpp"
 #include "game/layered_armor.hpp"
 #include "mods/mhfu_mods.hpp"
 #include "game/sharpness_gauge.hpp"
@@ -303,22 +307,32 @@ std::uint32_t allocate_key_quest_block(std::uint32_t size) {
 
 void present_frame(Runtime &rt) {
     load_trace::note_flip();
+    // FUComplete's loader changes the game's code while the title runs.
+    if constexpr (kTitle == Title::FUComplete) (void)fuc::frame(rt);
     // Overlays are swapped between frames; re-check before drawing the next one.
     revalidate_overlays(rt);
-    // The menu, drawn below, reads the game's memory between frames.
-    game::attach(rt);
-    // Layered armor puts its wrappers in place here, between two frames.
-    game::layered::frame(rt);
-    game::item_box::frame(rt);
-    game::empty_item_slot::frame(rt);
-    game::give_rarity::frame(rt);
-    game::true_attack::frame(rt);
-    game::true_element::frame(rt);
-    game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
-    game::item_sets::frame(rt);
-    game::hall_meal::frame(rt, &call_guest_with_result);
-    game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
-    game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
+    // These read Freedom Unite's memory (title.hpp); another game's stays
+    // unread, and the menu's pages about the hunter stay empty.
+    if constexpr (kLayeredArmor) {
+        // The menu, drawn below, reads the game's memory between frames.
+        game::attach(rt);
+        // Layered armor puts its wrappers in place here, between two frames.
+        game::layered::frame(rt);
+    }
+    // FUComplete already shortens the item box's pause itself.
+    if constexpr (kFreedomUniteExtras) game::item_box::frame(rt);
+    if constexpr (kSharpnessGauge) game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
+    // The extras ported to FUComplete as well, each at its title's addresses.
+    if constexpr (kGiveRarity) game::give_rarity::frame(rt);
+    if constexpr (kEmptyItemSlot) game::empty_item_slot::frame(rt);
+    if constexpr (kTrueAttack) game::true_attack::frame(rt);
+    if constexpr (kTrueElement) game::true_element::frame(rt);
+    if constexpr (kHallEquipment) game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
+    if constexpr (kItemSets) game::item_sets::frame(rt);
+    if constexpr (kHallMeal) game::hall_meal::frame(rt, &call_guest_with_result);
+    if constexpr (kKeyQuests) game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
+    if constexpr (kHubScaling)
+        game::hub_scaling::frame(rt.memory(), settings::current().hub_scaling, !adhoc_session_active());
 #if defined(MHFU_HAS_RENDERER)
     if (!media().renderer || !media().renderer->available()) {
         perf::end_frame(kernel().now_us());
@@ -340,75 +354,89 @@ void present_frame(Runtime &rt) {
         renderer.upload_frame(
             address, rt.memory().raw_pointer(address, bytes), display.width, display.height, display.buffer_width);
     }
-    const std::optional<game::EyePose> pose = damage_numbers_pose(rt);
-    game::hit_trace::set_clock([] { return kernel().now_us() / 1000u; });
-    game::damage_numbers_frame(settings::current().damage_numbers, &rt.memory(), pose);
-    if (game::body_trace::enabled()) {
-        static game::body_trace::Tracker bodies{game::body_trace::watch_offset()};
-        bodies.frame(rt.memory(), std::cout);
-        if (const std::optional<std::uint32_t> watch = bodies.take_watch()) psprecomp::set_write_watch(*watch, 4u);
-    }
-    // The draws of this frame have already named the camera they used, so the
-    // marker matches the picture about to be shown, aim camera included.
-    ui::set_lock_on_marker(settings::current().lock_on_marker ? camera::lock_on_marker(rt.memory()) : std::nullopt);
-    if (!settings::current().lock_on) {
-        ui::set_hunt_portraits({});
-    } else {
-        camera::refresh_hunt_icons(rt.memory());
-        const camera::LockOnStatus locked = camera::lock_on_status();
-        // Read every frame, so the order of the icons still starts again with
-        // a new quest. They are shown only with the quest HUD: the clock is
-        // gone once the screens after a quest begin. While the player hides
-        // the HUD its clock is not drawn, so the icon stays as before.
-        // MHFU_HUNT_ICON_WITH_HUD=0 shows them whenever a quest runs.
-        static const bool with_hud = [] {
-            const char *value = std::getenv("MHFU_HUNT_ICON_WITH_HUD");
-            return value == nullptr || std::string_view(value) != "0";
-        }();
-        std::vector<camera::HuntMonster> monsters = camera::hunt_monsters(rt.memory());
-        if (with_hud && !gpu::hud::active() && !renderer.quest_hud_up()) monsters.clear();
-        ui::set_hunt_portraits(camera::place_hunt_portraits(monsters, locked.target, locked.locked));
-    }
-    std::optional<game::GatherPose> gather_pose;
-    if (pose)
-        gather_pose =
-            game::GatherPose{pose->eye.x, pose->eye.y, pose->eye.z, pose->look_at.x, pose->look_at.y, pose->look_at.z};
-    // The mark fades, glides between targets, and follows frame interpolation
-    // (game::GatherMotion, gpu/ui_motion.hpp). MHFU_GATHER_ICON_SMOOTH=0
-    // draws it where each game frame puts it.
-    static const bool gather_smooth = [] {
-        const char *value = std::getenv("MHFU_GATHER_ICON_SMOOTH");
-        return value == nullptr || std::string_view(value) != "0";
-    }();
-    static game::GatherMotion gather_motion;
-    std::optional<game::GatherMark> gather =
-        game::gather_mark(rt.memory(), gather_pose, gather_smooth ? &gather_motion : nullptr);
-    // The mark shows the item a point gives, or the monster being carved
-    // (game/gather_art.hpp); the sheets they come from are decoded here.
-    if (gather && gather->glyph == game::GatherGlyph::Carve) {
-        const camera::Vec3 body{gather->world[0], gather->world[1], gather->world[2]};
-        if (const std::optional<std::uint8_t> species = camera::carved_monster(rt.memory(), body)) {
-            gather->art = game::GatherArt::of_monster(*species);
-            camera::refresh_hunt_icons(rt.memory());
-            // MHFU_TRACE_GATHER: whether the icon sheet could be read, once a change.
-            static const bool trace = std::getenv("MHFU_TRACE_GATHER") != nullptr;
-            static int told = -1;
-            const int ready = camera::hunt_icon_sheet().ready ? 1 : 0;
-            if (trace && ready != told) {
-                told = ready;
-                std::cout << "[gather] carving species " << static_cast<unsigned>(*species) << ", icon sheet "
-                          << (ready ? "ready" : "not decoded") << std::endl;
+    // The extras drawn over the world: each runs where its title has it.
+    if constexpr (kDamageNumbers || kLockOn || kGatherIcon) {
+        const std::optional<game::EyePose> pose = damage_numbers_pose(rt);
+        if constexpr (kDamageNumbers) {
+            game::hit_trace::set_clock([] { return kernel().now_us() / 1000u; });
+            game::damage_numbers_frame(settings::current().damage_numbers, &rt.memory(), pose);
+            if (game::body_trace::enabled()) {
+                static game::body_trace::Tracker bodies{game::body_trace::watch_offset()};
+                bodies.frame(rt.memory(), std::cout);
+                if (const std::optional<std::uint32_t> watch = bodies.take_watch())
+                    psprecomp::set_write_watch(*watch, 4u);
             }
         }
-    } else if (gather && gather->art.kind == game::GatherArt::Kind::Item) {
-        gather->icon = game::item_art(rt.memory(), gather->art.item);
+        if constexpr (kLockOn) {
+            // The draws of this frame have already named the camera they used, so the
+            // marker matches the picture about to be shown, aim camera included.
+            ui::set_lock_on_marker(
+                settings::current().lock_on_marker ? camera::lock_on_marker(rt.memory()) : std::nullopt);
+            if (!settings::current().lock_on) {
+                ui::set_hunt_portraits({});
+            } else {
+                camera::refresh_hunt_icons(rt.memory());
+                const camera::LockOnStatus locked = camera::lock_on_status();
+                // Read every frame, so the order of the icons still starts again with
+                // a new quest. They are shown only with the quest HUD: the clock is
+                // gone once the screens after a quest begin. While the player hides
+                // the HUD its clock is not drawn, so the icon stays as before.
+                // MHFU_HUNT_ICON_WITH_HUD=0 shows them whenever a quest runs.
+                static const bool with_hud = [] {
+                    const char *value = std::getenv("MHFU_HUNT_ICON_WITH_HUD");
+                    return value == nullptr || std::string_view(value) != "0";
+                }();
+                std::vector<camera::HuntMonster> monsters = camera::hunt_monsters(rt.memory());
+                if (with_hud && !gpu::hud::active() && !renderer.quest_hud_up()) monsters.clear();
+                ui::set_hunt_portraits(camera::place_hunt_portraits(monsters, locked.target, locked.locked));
+            }
+        }
+        if constexpr (kGatherIcon) {
+            std::optional<game::GatherPose> gather_pose;
+            if (pose)
+                gather_pose = game::GatherPose{
+                    pose->eye.x, pose->eye.y, pose->eye.z, pose->look_at.x, pose->look_at.y, pose->look_at.z};
+            // The mark fades, glides between targets, and follows frame interpolation
+            // (game::GatherMotion, gpu/ui_motion.hpp). MHFU_GATHER_ICON_SMOOTH=0
+            // draws it where each game frame puts it.
+            static const bool gather_smooth = [] {
+                const char *value = std::getenv("MHFU_GATHER_ICON_SMOOTH");
+                return value == nullptr || std::string_view(value) != "0";
+            }();
+            static game::GatherMotion gather_motion;
+            std::optional<game::GatherMark> gather =
+                game::gather_mark(rt.memory(), gather_pose, gather_smooth ? &gather_motion : nullptr);
+            // The mark shows the item a point gives, or the monster being carved
+            // (game/gather_art.hpp); the sheets they come from are decoded here.
+            if (gather && gather->glyph == game::GatherGlyph::Carve) {
+                const camera::Vec3 body{gather->world[0], gather->world[1], gather->world[2]};
+                // The carved monster's icon comes from lock-on's monster list.
+                const std::optional<std::uint8_t> species =
+                    kLockOn ? camera::carved_monster(rt.memory(), body) : std::nullopt;
+                if (species) {
+                    gather->art = game::GatherArt::of_monster(*species);
+                    camera::refresh_hunt_icons(rt.memory());
+                    // MHFU_TRACE_GATHER: whether the icon sheet could be read, once a change.
+                    static const bool trace = std::getenv("MHFU_TRACE_GATHER") != nullptr;
+                    static int told = -1;
+                    const int ready = camera::hunt_icon_sheet().ready ? 1 : 0;
+                    if (trace && ready != told) {
+                        told = ready;
+                        std::cout << "[gather] carving species " << static_cast<unsigned>(*species) << ", icon sheet "
+                                  << (ready ? "ready" : "not decoded") << std::endl;
+                    }
+                }
+            } else if (gather && gather->art.kind == game::GatherArt::Kind::Item) {
+                gather->icon = game::item_art(rt.memory(), gather->art.item);
+            }
+            // Anything without a picture shows the game's red ?.
+            if (gather) {
+                gather->unknown = game::icon_art(rt.memory(), game::kUnknownIcon, game::kUnknownTint);
+                game::refresh_item_atlas(rt.memory());
+            }
+            ui::set_gather_mark(gather);
+        }
     }
-    // Anything without a picture shows the game's red ?.
-    if (gather) {
-        gather->unknown = game::icon_art(rt.memory(), game::kUnknownIcon, game::kUnknownTint);
-        game::refresh_item_atlas(rt.memory());
-    }
-    ui::set_gather_mark(gather);
     ui::draw_over_game();
     renderer.write_back_frame(rt.memory());
     // A load running fast, fast-forward, or Game speed Unlimited flips more
@@ -420,7 +448,7 @@ void present_frame(Runtime &rt) {
     const bool presented = renderer.present(address, kernel().real_time_of(frame_start_us(kernel().last_vblank_us())));
     // The frame's camera has been measured by now, so the hunt for the guest
     // variables behind it can compare RAM against it.
-    probe::camera_frame(rt, media().ge.view_matrix_source());
+    if constexpr (kFreedomUniteExtras) probe::camera_frame(rt, media().ge.view_matrix_source());
     // The game's flip is the camera's frame: the camera update runs once
     // between two flips, however many presents interpolation adds. The stick is
     // already shaped and inverted by the input layer; its rate becomes degrees
@@ -433,19 +461,22 @@ void present_frame(Runtime &rt) {
             (static_cast<int>(renderer.pad().right_y) - 0x80) / 127.0f);
         // A tap of Lock on (camera/lock_on.hpp) waits for the next update
         // of the follow camera, which game_camera_frame makes sure to drive.
-        if (renderer.take_lock_on_press()) camera::lock_on_tap();
+        const bool lock_on_press = renderer.take_lock_on_press();
         camera::set_focus_camera_held(renderer.focus_camera_held());
-        camera::game_camera_frame(rt);
+        if constexpr (kLockOn) {
+            if (lock_on_press) camera::lock_on_tap();
+        }
+        if constexpr (kAnalogCamera) camera::game_camera_frame(rt);
         // The view's shape follows the picture's: the game builds its next
         // projection with the aspect ratio of the target it will draw into.
-        camera::game_aspect_frame(rt, renderer.game_aspect());
+        if constexpr (kGameAspect) camera::game_aspect_frame(rt, renderer.game_aspect());
         camera::advance(seconds, camera::game_camera_degrees_per_second());
     }
     perf::add_render_time(perf::Clock::now() - present_start);
     // A frame ends when its image has been handed to the swapchain, or with
     // frame interpolation when the presents after it are scheduled.
     perf::end_frame(kernel().now_us(), presented);
-    gpu::hud::frame(rt, renderer.frames_presented());
+    if constexpr (kHideHud) gpu::hud::frame(rt, renderer.frames_presented());
     if (renderer.take_hide_hud_toggle()) gpu::hud::toggle();
 
     // Optional frame capture, independent of the window.

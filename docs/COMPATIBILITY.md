@@ -77,6 +77,32 @@ Application sources are identical between these commits: the later commits corre
 
 Game runs used isolated or copied save data and finite deadlines. Captures were inspected, and test processes stopped. macOS used 32 compatible overlays and disabled audio/FFmpeg; Android is an emulator with audio/FFmpeg disabled. Hunts, multiplayer, audio quality and long-session stability were not checked in this pass. The Steam Deck developer binary was installed with a rollback copy; the release installation was unchanged.
 
+## FUComplete build (`MHFU_TITLE=FUC`)
+
+Linux (x86-64, AMD GPU, Mesa), FUComplete patched onto Portable 2nd G with FUCTool, its default configuration. The key quest marks were checked at `0001933`; the other rows were checked at `c65526f`, except the Guild Hall features, which the player has since used. Checked by a player and with scripted runs:
+
+| | Linux |
+| --- | --- |
+| Build, corpus and all overlays, FUComplete's patched game_task and lobby_task included | ✅ |
+| Boot, FUComplete's loader (`PRELOAD.BIN`, `MODLOAD.BIN`), title and menus | ✅ |
+| Character creation, village, a quest | ✅ at 30 fps and 100% speed |
+| FUComplete's changes to the code, run compiled (`EBOOT.FUC.ELF`) | ✅ its file I/O hook ran |
+| A save written before those changes, then saved again | ✅ |
+| Analog camera: turn and tilt, standing and moving, a sword and shield drawn | ✅ |
+| Hold to gather, Empty item slot, Hide HUD, UI Scaling, gather icon, sharpness gauge, damage numbers | ✅ seen in a quest by the player; UI Scaling's name plate fixed in `c65526f`, the sharpness gauge's tables in `40038c5` |
+| Lock-on, its monster icon | ✅ lock-on, seen by the player |
+| Give Any Rarity Item | ❔ needs another hunter |
+| Layered armor | ✅ seen by the player; in the village, every part set to nothing showed the bare hunter |
+| HD texture pack of KTX2 images (Basis Universal UASTC, zstd), a community Portable 2nd G pack | ✅ imported and played by the player; its 6127 entries read, title, loading screen, HUD and village drawn from it in a scripted run |
+| Eat in the Guild Hall, Item Sets, Change Equipment in the Guild Hall | ✅ the player has used all three; Item Sets and Change Equipment choose with ○, as FUComplete's box does. ❔ Change Equipment's sync to other hunters needs a second player |
+| Show Key Quests' `[Key]` marks | ✅ at `0001933`, seen by the player: the Village Chief's 2★ list reads *[Key] Liver of Legend!* beside the other three key quests, and the whole list scrolled without a crash. The packs are DATA.BIN entries 5310 to 5320, read plain |
+| Scale Guild Hall Quests (Mods) | ✅ at `75548bf`, seen by the player: a 1★ Guild Bulldrome quest felt like its village counterpart, and a later village quest printed `[hub] quest start: last stage 139, offline 1, scaling 0` and kept the game's health. ❔ an online hall was not played |
+| Field of view scale (Video, Pokee's own setting) | ✅ at `90f010e`, seen by the player: the camera's view widens and narrows while the game runs, without a restart |
+| FUComplete's options in the menu, a CONFIG.BIN other than the corpus's (File Replacer, True Raw, FoV Minor, horn tweak, Lao/Shen, full chest and drink buff on) | ✅ in a scripted run: written from the menu, read at the next start; the executable's changed word and lobby_task's six run interpreted, the rest compiled, at full speed in the village. ❔ each option's effect in the game |
+| Save sync through a folder (System > Saves > Sync saves) | ❔ new in 0.1.6: the hash, copy and decision checks pass; a real phone-to-computer sync has not been played through yet. The desktop folder path and the Android Drive folder need a two-device check |
+
+**Android arm64 phone** (`android-port`, versionCode 714, `8299f61`): boots from the FUComplete-patched image, the touch controls work, 60/90/120 fps interpolation runs without the vertex burst, and Fill with *Interface at the edges* keeps menus and loot notices whole. ❔ audio quality, a long session, and a full quest on the phone. Save sync's folder picker and persisted Drive permission are new and untested on a phone.
+
 ## Updating this page
 
 Run through [the smoke test](TESTING.md) on the platform, then change the cells you checked in the same pull request as the fix, or in a pull request of their own. Add a row to *Tested hardware* with the commit you tested. A result without a commit cannot be compared with anything later, so it does not go in the table.
